@@ -1,0 +1,165 @@
+@import "tailwindcss";
+
+@theme {
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+
+  /* Shadcn "muted" maps remarkably well to "muted" utilities if we want to preserve semantics */
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+@layer base {
+  :root {
+    /* Warm "paper" light theme — off-white warm background, dark warm ink text.
+       Mirror of the dark "ink" theme below; toggled via `.dark` on <html>. */
+    --background: 40 30% 97%;
+    --foreground: 30 12% 16%;
+
+    --card: 40 33% 99%;
+    --card-foreground: 30 12% 16%;
+
+    --popover: 40 33% 99%;
+    --popover-foreground: 30 12% 16%;
+
+    --primary: 30 12% 14%;
+    --primary-foreground: 40 30% 97%;
+
+    --secondary: 40 16% 90%;
+    --secondary-foreground: 30 12% 22%;
+
+    --muted: 40 16% 90%;
+    --muted-foreground: 35 8% 42%;
+
+    --accent: 40 18% 88%;
+    --accent-foreground: 30 12% 18%;
+
+    --destructive: 4 62% 47%;
+    --destructive-foreground: 40 30% 97%;
+
+    --border: 38 14% 84%;
+    --input: 38 14% 84%;
+    --ring: 35 12% 50%;
+
+    --radius: 0.5rem;
+
+    /* Heading face color (slightly deeper than body text in light mode). */
+    --heading: 30 16% 11%;
+
+    /* Spotify "universe" accent — full color value (consumed directly as
+       var(--accent-spotify), not via hsl()). Other sources get their own
+       anchor hue here later. */
+    --accent-spotify: #1db954;
+
+    /* Observable Plot tip mark vars (theme-aware). */
+    --plot-background: rgb(252 250 247 / 0.97);
+    --plot-color: rgb(40 36 32);
+    --plot-stroke: rgb(210 204 195 / 0.95);
+  }
+
+  .dark {
+    /* Warm "ink" dark theme — neutral warm near-black, off-white text at a
+       calmer contrast than pure white (true white reserved for headings). */
+    --background: 30 9% 7%;
+    --foreground: 40 16% 90%;
+
+    --card: 30 9% 9%;
+    --card-foreground: 40 16% 90%;
+
+    --popover: 30 10% 8%;
+    --popover-foreground: 40 16% 90%;
+
+    --primary: 40 20% 94%;
+    --primary-foreground: 30 10% 10%;
+
+    --secondary: 30 7% 15%;
+    --secondary-foreground: 40 14% 88%;
+
+    --muted: 30 7% 15%;
+    --muted-foreground: 38 10% 62%;
+
+    --accent: 30 7% 16%;
+    --accent-foreground: 40 14% 90%;
+
+    --destructive: 4 55% 40%;
+    --destructive-foreground: 40 16% 92%;
+
+    --border: 30 7% 17%;
+    --input: 30 7% 17%;
+    --ring: 38 14% 70%;
+
+    --heading: 40 24% 96%;
+
+    --plot-background: rgb(24 20 17 / 0.96);
+    --plot-color: rgb(231 226 218);
+    --plot-stroke: rgb(74 68 61 / 0.95);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+  }
+
+  /* Editorial display face for headings; near-white only here. */
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: hsl(var(--heading));
+  }
+
+  /* Observable Plot tooltip readability (theme-aware) */
+  [aria-label="tip"] path {
+    fill: var(--plot-background) !important;
+    stroke: var(--plot-stroke) !important;
+    stroke-width: 1px;
+  }
+
+  [aria-label="tip"] text,
+  [aria-label="tip"] tspan {
+    fill: var(--plot-color) !important;
+  }
+
+  .plot-container,
+  .plot-container svg,
+  .plot-container figure {
+    color: var(--plot-color);
+  }
+}

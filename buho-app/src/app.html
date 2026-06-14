@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+	<!-- Applique le thème avant le premier paint (suit la préférence système ;
+	     aucune persistance, conforme à la promesse privacy). -->
+	<script>
+		try {
+			if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+				document.documentElement.classList.add("dark");
+			}
+		} catch (e) {}
+	</script>
+
+	<title>Buho - Personal Data Visualization</title>
+	<meta name="description"
+		content="Visualize your personal data from Spotify, Google Maps, and WhatsApp. Privacy-first analysis running entirely in your browser." />
+	<meta property="og:title" content="Buho - Personal Data Visualization" />
+	<meta property="og:description"
+		content="Visualize your personal data from Spotify, Google Maps, and WhatsApp directly in your browser. Your data never leaves your device." />
+	<meta property="og:type" content="website" />
+	<meta property="og:image" content="%sveltekit.assets%/og-image.svg" />
+
+	<!-- Fonts -->
+	<link rel="preconnect" href="https://fonts.googleapis.com" />
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+	<link
+		href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap"
+		rel="stylesheet" />
+
+	%sveltekit.head%
+	<script defer src="https://cloud.umami.is/script.js"
+		data-website-id="a4eb803f-ed09-4064-830e-c846f578884d"></script>
+</head>
+
+<body data-sveltekit-preload-data="hover">
+	<div style="display: contents">%sveltekit.body%</div>
+</body>
+
+</html>
