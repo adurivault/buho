@@ -10,7 +10,7 @@
 			description:
 				"Analyze your listening history, top artists, and streaming patterns.",
 			available: true,
-			link: resolve("/spotify/guide"),
+			link: resolve("/spotify/explore"),
 			image: "", // Removed per user request
 		},
 		{

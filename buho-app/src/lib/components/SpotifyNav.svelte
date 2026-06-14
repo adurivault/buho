@@ -3,8 +3,8 @@
   import { resolve } from "$app/paths";
 
   const tabs = [
-    { label: "Guide", href: resolve("/spotify/guide") },
     { label: "Explore", href: resolve("/spotify/explore") },
+    { label: "Guide", href: resolve("/spotify/guide") },
   ];
 
   function isActive(href: string): boolean {

@@ -47,14 +47,6 @@
 </script>
 
 <div class="guide-container w-full max-w-none px-6 pt-10 pb-6">
-    <header class="mb-12 text-center">
-        <h1 class="h1 mb-4">Your Audio Journey</h1>
-        <p class="text-lg text-surface-600 dark:text-surface-300">
-            Scroll to explore your listening history
-        </p>
-        <div class="mt-8 animate-bounce text-primary-500">↓</div>
-    </header>
-
     <main class="space-y-12" data-testid="guide-sections">
         {#each sections as section (section.id)}
             <div id={section.id} data-testid="section-{section.id}">

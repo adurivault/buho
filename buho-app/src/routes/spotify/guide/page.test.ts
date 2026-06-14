@@ -13,11 +13,6 @@ vi.mock('$lib/stores/dataStore.svelte', () => {
 });
 
 describe('Guide Page', () => {
-    it('renders the guide header', () => {
-        render(Page);
-        expect(screen.getByText('Your Audio Journey')).toBeInTheDocument();
-    });
-
     it('renders sections from the registry', () => {
         render(Page);
         expect(screen.getByTestId('section-macro-stats')).toBeInTheDocument();
