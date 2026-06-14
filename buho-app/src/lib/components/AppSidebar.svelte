@@ -20,7 +20,7 @@
     <ul>
       <li>
         <a
-          href={resolve("/spotify/guide")}
+          href={resolve("/spotify/explore")}
           class="nav-link spotify"
           title="Spotify"
           class:active={page.url.pathname.startsWith(resolve("/spotify"))}
