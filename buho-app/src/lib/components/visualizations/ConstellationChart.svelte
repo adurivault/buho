@@ -737,6 +737,18 @@
         tooltip.visible = false;
     }
 
+    // La colonne `timestamp` est stockée en mur-horloge UTC (cf.
+    // insertSpotifyPlays → toISOString), tandis que l'axe Y utilise l'heure
+    // LOCALE (parseSpotify → getHours). On reparse donc le timestamp comme UTC
+    // pour reconstruire l'instant d'origine ; toLocaleString redonne alors
+    // l'heure locale, cohérente avec l'échelle.
+    function formatPlayedAt(playedAt: string): string {
+        const d = new Date(`${playedAt.replace(" ", "T")}Z`);
+        return Number.isNaN(d.getTime())
+            ? playedAt
+            : d.toLocaleString();
+    }
+
     function onMouseMove(event: MouseEvent) {
         if (!mainCanvas || !quadtree) return;
         const [mx, my] = d3.pointer(event, mainCanvas);
@@ -765,7 +777,7 @@
             y: Math.max(0, ty),
             track: hit.original.metadata.track,
             artist: hit.original.metadata.artist,
-            date: new Date(hit.original.metadata.playedAt).toLocaleString(),
+            date: formatPlayedAt(hit.original.metadata.playedAt),
             uri: hit.original.metadata.trackUri,
         };
     }

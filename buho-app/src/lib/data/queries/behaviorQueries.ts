@@ -82,6 +82,7 @@ export async function getMacroStats(filters?: MacroStatsFilters, dateRange?: Dat
 
 export interface ExplorerMacroStats {
     totalMinutes: number;
+    totalPlays: number;
     uniqueArtists: number;
     uniqueAlbums: number;
     uniqueTracks: number;
@@ -89,6 +90,7 @@ export interface ExplorerMacroStats {
 
 const EMPTY_EXPLORER_MACRO_STATS: ExplorerMacroStats = {
     totalMinutes: 0,
+    totalPlays: 0,
     uniqueArtists: 0,
     uniqueAlbums: 0,
     uniqueTracks: 0
@@ -103,6 +105,7 @@ export async function getExplorerMacroStats(filters: FilterState = {}): Promise<
     const sql = `
         SELECT
             CAST(SUM(ms_played) / 60000.0 AS INTEGER) as totalMinutes,
+            CAST(COUNT(*) AS INTEGER) as totalPlays,
             CAST(COUNT(DISTINCT artist_name) AS INTEGER) as uniqueArtists,
             CAST(COUNT(DISTINCT album_name) AS INTEGER) as uniqueAlbums,
             CAST(COUNT(DISTINCT track_uri) AS INTEGER) as uniqueTracks
@@ -118,6 +121,7 @@ export async function getExplorerMacroStats(filters: FilterState = {}): Promise<
         const row = result[0];
         return {
             totalMinutes: Math.round(row.totalMinutes || 0),
+            totalPlays: Math.round(row.totalPlays || 0),
             uniqueArtists: Math.round(row.uniqueArtists || 0),
             uniqueAlbums: Math.round(row.uniqueAlbums || 0),
             uniqueTracks: Math.round(row.uniqueTracks || 0)

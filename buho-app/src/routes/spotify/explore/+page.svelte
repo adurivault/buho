@@ -30,6 +30,7 @@
     let pieSlices = $state<Record<string, DimensionSlice[]>>({});
     let macroStats = $state<ExplorerMacroStats>({
         totalMinutes: 0,
+        totalPlays: 0,
         uniqueArtists: 0,
         uniqueAlbums: 0,
         uniqueTracks: 0,
@@ -373,6 +374,7 @@
         pieSlices = {};
         macroStats = {
             totalMinutes: 0,
+            totalPlays: 0,
             uniqueArtists: 0,
             uniqueAlbums: 0,
             uniqueTracks: 0,
@@ -548,6 +550,12 @@
                     >{macroStats.uniqueTracks.toLocaleString()}</span
                 >
                 <span class="indicator-label">unique tracks</span>
+            </div>
+            <div class="indicator">
+                <span class="indicator-value"
+                    >{macroStats.totalPlays.toLocaleString()}</span
+                >
+                <span class="indicator-label">listens</span>
             </div>
         </div>
 

@@ -76,15 +76,7 @@
 
 <section bind:this={element} class="guide-section py-8">
     <div class="text-content mb-6">
-        <h2 class="text-2xl font-bold mb-2">
-            The rise and fall of your obsessions
-        </h2>
-        <p class="opacity-80 max-w-3xl">
-            Your 20 most-played artists, each with its ridge of listening hours
-            over time, ordered from the earliest discovered (top) to the most
-            recent. The <em>shape</em> tells each story: a brief flame or a lasting
-            love.
-        </p>
+        <h2 class="text-2xl font-bold mb-2">The shape of your obsessions</h2>
     </div>
 
     <div

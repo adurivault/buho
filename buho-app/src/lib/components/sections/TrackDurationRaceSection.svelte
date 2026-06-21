@@ -75,7 +75,10 @@
         return label.length > 46 ? `${label.slice(0, 43)}...` : label;
     }
 
-    function rank(names: Set<string>, value: (name: string) => number): RankedTrack[] {
+    function rank(
+        names: Set<string>,
+        value: (name: string) => number,
+    ): RankedTrack[] {
         const keep = TOP_N + 1;
         const top: RankedTrack[] = [];
 
@@ -89,7 +92,10 @@
             for (let i = 1; i < list.length; i++) {
                 const a = list[i];
                 const b = list[idx];
-                if (a.value < b.value || (a.value === b.value && a.item.localeCompare(b.item) > 0)) {
+                if (
+                    a.value < b.value ||
+                    (a.value === b.value && a.item.localeCompare(b.item) > 0)
+                ) {
                     idx = i;
                 }
             }
@@ -97,7 +103,11 @@
         }
 
         for (const item of names) {
-            const candidate: RankedTrack = { item, value: value(item), rank: TOP_N };
+            const candidate: RankedTrack = {
+                item,
+                value: value(item),
+                rank: TOP_N,
+            };
             if (candidate.value <= 0) continue;
 
             if (top.length < keep) {
@@ -139,7 +149,8 @@
 
         const dateValues: Array<[Date, Map<string, number>]> = [];
         for (const month of months) {
-            const monthValues = monthMap.get(month) ?? new Map<string, number>();
+            const monthValues =
+                monthMap.get(month) ?? new Map<string, number>();
             for (const [item, hours] of monthValues.entries()) {
                 cumulative.set(item, (cumulative.get(item) ?? 0) + hours);
             }
@@ -160,14 +171,18 @@
                     items: rank(
                         names,
                         (name) =>
-                            (a.get(name) ?? 0) * (1 - t) + (b.get(name) ?? 0) * t,
+                            (a.get(name) ?? 0) * (1 - t) +
+                            (b.get(name) ?? 0) * t,
                     ),
                 });
             }
         }
 
         const [lastDate, lastValues] = dateValues[dateValues.length - 1];
-        frames.push({ date: lastDate, items: rank(names, (name) => lastValues.get(name) ?? 0) });
+        frames.push({
+            date: lastDate,
+            items: rank(names, (name) => lastValues.get(name) ?? 0),
+        });
 
         return frames;
     }
@@ -180,7 +195,9 @@
 
     const currentDateLabel = $derived.by(() => {
         const frame =
-            keyframes[Math.max(0, Math.min(currentFrameIndex, keyframes.length - 1))];
+            keyframes[
+                Math.max(0, Math.min(currentFrameIndex, keyframes.length - 1))
+            ];
         return frame ? d3.utcFormat("%b %Y")(frame.date) : "";
     });
 
@@ -223,8 +240,7 @@
         if (svg) return;
 
         const h = chartHeight();
-        x = d3
-            .scaleLinear([0, 1], [MARGIN.left, chartWidth - MARGIN.right]);
+        x = d3.scaleLinear([0, 1], [MARGIN.left, chartWidth - MARGIN.right]);
         y = d3
             .scaleBand<number>()
             .domain(d3.range(TOP_N + 1))
@@ -235,7 +251,10 @@
             .select(chartHost)
             .append("svg")
             .attr("role", "img")
-            .attr("aria-label", "Bar chart race of cumulative listening time by track")
+            .attr(
+                "aria-label",
+                "Bar chart race of cumulative listening time by track",
+            )
             .attr("width", chartWidth)
             .attr("height", h)
             .attr("viewBox", `0 0 ${chartWidth} ${h}`);
@@ -246,7 +265,10 @@
         labelG = chartG.append("g");
         tickerText = svg
             .append("text")
-            .style("font", `bold ${BAR_SIZE}px var(--font-geist-mono, monospace)`)
+            .style(
+                "font",
+                `bold ${BAR_SIZE}px var(--font-geist-mono, monospace)`,
+            )
             .style("font-variant-numeric", "tabular-nums")
             .attr("text-anchor", "end")
             .attr("x", chartWidth - 8)
@@ -271,17 +293,31 @@
         axisG
             .attr("transform", `translate(0,${MARGIN.top})`)
             .transition(transition)
-            .call(d3.axisTop(x).ticks(chartWidth / 170).tickSizeOuter(0).tickSizeInner(-tickSize))
+            .call(
+                d3
+                    .axisTop(x)
+                    .ticks(chartWidth / 170)
+                    .tickSizeOuter(0)
+                    .tickSizeInner(-tickSize),
+            )
             .call((g: any) => g.select(".domain").remove())
-            .call((g: any) => g.selectAll(".tick line").attr("stroke", "rgb(148 163 184 / 0.28)"))
+            .call((g: any) =>
+                g
+                    .selectAll(".tick line")
+                    .attr("stroke", "rgb(148 163 184 / 0.28)"),
+            )
             .call((g: any) => g.selectAll(".tick text").attr("dy", "-0.15em"));
 
         tickerText.attr("x", chartWidth - 8).attr("y", h - 8);
     }
 
-    function bars(frame: RaceKeyframe, prev: Map<string, RankedTrack>, next: Map<string, RankedTrack>, transition: any) {
-        barG
-            .selectAll("rect")
+    function bars(
+        frame: RaceKeyframe,
+        prev: Map<string, RankedTrack>,
+        next: Map<string, RankedTrack>,
+        transition: any,
+    ) {
+        barG.selectAll("rect")
             .data(frame.items.slice(0, TOP_N), (d: any) => d.item)
             .join(
                 (enter: any) =>
@@ -290,15 +326,33 @@
                         .attr("fill", (d: any) => colorForItem(d.item))
                         .attr("height", y.bandwidth())
                         .attr("x", x(0))
-                        .attr("y", (d: any) => y((prev.get(d.item) ?? d).rank) ?? y(TOP_N) ?? 0)
-                        .attr("width", (d: any) => x((prev.get(d.item) ?? d).value) - x(0)),
+                        .attr(
+                            "y",
+                            (d: any) =>
+                                y((prev.get(d.item) ?? d).rank) ??
+                                y(TOP_N) ??
+                                0,
+                        )
+                        .attr(
+                            "width",
+                            (d: any) => x((prev.get(d.item) ?? d).value) - x(0),
+                        ),
                 (update: any) => update,
                 (exit: any) =>
                     exit
                         .transition(transition)
                         .remove()
-                        .attr("y", (d: any) => y((next.get(d.item) ?? d).rank) ?? y(TOP_N) ?? 0)
-                        .attr("width", (d: any) => x((next.get(d.item) ?? d).value) - x(0)),
+                        .attr(
+                            "y",
+                            (d: any) =>
+                                y((next.get(d.item) ?? d).rank) ??
+                                y(TOP_N) ??
+                                0,
+                        )
+                        .attr(
+                            "width",
+                            (d: any) => x((next.get(d.item) ?? d).value) - x(0),
+                        ),
             )
             .call((bar: any) =>
                 bar
@@ -308,7 +362,12 @@
             );
     }
 
-    function labels(frame: RaceKeyframe, prev: Map<string, RankedTrack>, next: Map<string, RankedTrack>, transition: any) {
+    function labels(
+        frame: RaceKeyframe,
+        prev: Map<string, RankedTrack>,
+        next: Map<string, RankedTrack>,
+        transition: any,
+    ) {
         const textTween = (a: number, b: number) => {
             const i = d3.interpolateNumber(a, b);
             return function (this: SVGTextElement, t: number) {
@@ -331,19 +390,19 @@
                         .attr("dy", "0.35em")
                         .style("font-size", "12px");
 
-                    text
-                        .append("tspan")
+                    text.append("tspan")
                         .attr("x", -6)
                         .attr("font-weight", "600")
                         .text((d: any) => truncateLabel(d.item));
 
-                    text
-                        .append("tspan")
+                    text.append("tspan")
                         .attr("fill-opacity", 0.78)
                         .attr("font-weight", "400")
                         .attr("x", 6)
                         .attr("text-anchor", "start")
-                        .text((d: any) => formatHours((prev.get(d.item) ?? d).value));
+                        .text((d: any) =>
+                            formatHours((prev.get(d.item) ?? d).value),
+                        );
 
                     return text;
                 },
@@ -360,15 +419,20 @@
                             g
                                 .select("tspan:last-child")
                                 .tween("text", (d: any) =>
-                                    textTween(d.value, (next.get(d.item) ?? d).value),
+                                    textTween(
+                                        d.value,
+                                        (next.get(d.item) ?? d).value,
+                                    ),
                                 ),
                         ),
             )
             .call((text: any) =>
                 text
                     .transition(transition)
-                    .attr("transform", (d: any) =>
-                        `translate(${x(d.value)},${(y(d.rank) ?? 0) + y.bandwidth() / 2})`,
+                    .attr(
+                        "transform",
+                        (d: any) =>
+                            `translate(${x(d.value)},${(y(d.rank) ?? 0) + y.bandwidth() / 2})`,
                     )
                     .call((g: any) =>
                         g
@@ -378,14 +442,20 @@
                     .call((g: any) =>
                         g
                             .select("tspan:last-child")
-                            .tween("text", function (this: SVGTextElement, d: any) {
-                                const el = this;
-                                const p = prev.get(d.item) ?? d;
-                                const i = d3.interpolateNumber(p.value, d.value);
-                                return (t: number) => {
-                                    el.textContent = formatHours(i(t));
-                                };
-                            }),
+                            .tween(
+                                "text",
+                                function (this: SVGTextElement, d: any) {
+                                    const el = this;
+                                    const p = prev.get(d.item) ?? d;
+                                    const i = d3.interpolateNumber(
+                                        p.value,
+                                        d.value,
+                                    );
+                                    return (t: number) => {
+                                        el.textContent = formatHours(i(t));
+                                    };
+                                },
+                            ),
                     ),
             );
     }
@@ -396,27 +466,29 @@
 
         const frame = keyframes[index];
         const prevFrame = keyframes[Math.max(0, index - 1)] ?? frame;
-        const nextFrame = keyframes[Math.min(keyframes.length - 1, index + 1)] ?? frame;
+        const nextFrame =
+            keyframes[Math.min(keyframes.length - 1, index + 1)] ?? frame;
         const prev = new Map(prevFrame.items.map((d) => [d.item, d]));
         const next = new Map(nextFrame.items.map((d) => [d.item, d]));
 
         x.domain([0, frame.items[0]?.value ?? 1]);
 
-        const transition = svg.transition().duration(duration).ease(d3.easeLinear);
+        const transition = svg
+            .transition()
+            .duration(duration)
+            .ease(d3.easeLinear);
 
         axis(transition);
         bars(frame, prev, next, transition);
         labels(frame, prev, next, transition);
 
-        tickerText
-            .transition(transition)
-            .tween("text", () => {
-                const format = d3.utcFormat("%b %Y");
-                const i = d3.interpolateDate(prevFrame.date, frame.date);
-                return function (this: SVGTextElement, t: number) {
-                    this.textContent = format(i(t));
-                };
-            });
+        tickerText.transition(transition).tween("text", () => {
+            const format = d3.utcFormat("%b %Y");
+            const i = d3.interpolateDate(prevFrame.date, frame.date);
+            return function (this: SVGTextElement, t: number) {
+                this.textContent = format(i(t));
+            };
+        });
 
         try {
             await transition.end();
@@ -453,7 +525,10 @@
 
     function stepFrame(delta: number) {
         if (isPlaying || keyframes.length === 0) return;
-        const nextIndex = Math.max(0, Math.min(currentFrameIndex + delta, keyframes.length - 1));
+        const nextIndex = Math.max(
+            0,
+            Math.min(currentFrameIndex + delta, keyframes.length - 1),
+        );
         currentFrameIndex = nextIndex;
         drawFrame(nextIndex, 220);
     }
@@ -469,7 +544,10 @@
     function renderStaticFrame() {
         if (isPlaying || keyframes.length === 0) return;
         resetChart();
-        drawFrame(Math.max(0, Math.min(currentFrameIndex, keyframes.length - 1)), 0);
+        drawFrame(
+            Math.max(0, Math.min(currentFrameIndex, keyframes.length - 1)),
+            0,
+        );
     }
 
     onMount(() => {
@@ -502,10 +580,9 @@
 
 <section bind:this={element} class="guide-section py-8">
     <div class="text-content mb-6">
-        <h2 class="text-2xl font-bold mb-2">Bar Chart Race: listening time by track</h2>
-        <p class="opacity-80 max-w-2xl">
-            A continuous race of cumulative listening hours per track (track + artist), top 20.
-        </p>
+        <h2 class="text-2xl font-bold mb-2">
+            Bar Chart Race: listening time by track
+        </h2>
     </div>
 
     <div
@@ -514,10 +591,20 @@
     >
         {#if keyframes.length > 0}
             <div class="mb-4 flex items-center gap-3">
-                <button type="button" class="race-btn" onclick={playRace} disabled={isPlaying}>
+                <button
+                    type="button"
+                    class="race-btn"
+                    onclick={playRace}
+                    disabled={isPlaying}
+                >
                     Play
                 </button>
-                <button type="button" class="race-btn" onclick={stopRace} disabled={!isPlaying}>
+                <button
+                    type="button"
+                    class="race-btn"
+                    onclick={stopRace}
+                    disabled={!isPlaying}
+                >
                     Stop
                 </button>
                 <button
@@ -532,7 +619,8 @@
                     type="button"
                     class="race-btn"
                     onclick={() => stepFrame(1)}
-                    disabled={isPlaying || currentFrameIndex === keyframes.length - 1}
+                    disabled={isPlaying ||
+                        currentFrameIndex === keyframes.length - 1}
                 >
                     →
                 </button>
@@ -557,11 +645,15 @@
 
             <div bind:this={chartHost} class="w-full"></div>
         {:else if isVisible}
-            <div class="w-full h-[420px] flex items-center justify-center opacity-50">
+            <div
+                class="w-full h-[420px] flex items-center justify-center opacity-50"
+            >
                 Loading track duration race...
             </div>
         {:else}
-            <div class="w-full h-[420px] flex items-center justify-center opacity-50">
+            <div
+                class="w-full h-[420px] flex items-center justify-center opacity-50"
+            >
                 Scroll to view
             </div>
         {/if}

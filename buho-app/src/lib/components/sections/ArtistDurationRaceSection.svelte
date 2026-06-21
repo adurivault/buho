@@ -578,10 +578,6 @@
         <h2 class="text-2xl font-bold mb-2">
             Bar Chart Race: listening time by artist
         </h2>
-        <p class="opacity-80 max-w-2xl">
-            A continuous race of cumulative listening hours per artist, inspired
-            by the Observable "Bar Chart Race, Explained" pattern.
-        </p>
     </div>
 
     <div
