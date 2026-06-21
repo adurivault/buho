@@ -7,6 +7,7 @@
     import type { DateRange } from "$lib/data/queries/common";
     import { dataStore } from "$lib/stores/dataStore.svelte";
     import { spotifyFilterStore } from "$lib/stores/spotifyFilterStore.svelte";
+    import { RACE_PALETTE } from "$lib/visualizations/racePalette";
     import { onMount } from "svelte";
 
     type RankedArtist = {
@@ -25,7 +26,6 @@
     const FRAME_DURATION_MS = 120;
     const BAR_SIZE = 36;
     const MARGIN = { top: 24, right: 90, bottom: 16, left: 220 };
-    const PALETTE = [...d3.schemeTableau10, ...d3.schemeSet3];
 
     let data = $state<ArtistMonthlyDurationData[]>([]);
     let element = $state<HTMLElement | undefined>(undefined);
@@ -39,7 +39,7 @@
     let stopPlayback = false;
 
     let keyframes = $state<RaceKeyframe[]>([]);
-    let colorScale = d3.scaleOrdinal<string, string>().range(PALETTE);
+    let colorScale = d3.scaleOrdinal<string, string>().range(RACE_PALETTE);
 
     let svg: any = null;
     let chartG: any = null;
@@ -70,14 +70,10 @@
         return `${hours.toFixed(1)}h`;
     }
 
-    function formatMonth(date: Date): string {
-        return date.toLocaleDateString("fr-FR", {
-            year: "numeric",
-            month: "short",
-        });
-    }
-
-    function rank(names: Set<string>, value: (name: string) => number): RankedArtist[] {
+    function rank(
+        names: Set<string>,
+        value: (name: string) => number,
+    ): RankedArtist[] {
         const keep = TOP_N + 1;
         const top: RankedArtist[] = [];
 
@@ -91,7 +87,11 @@
             for (let i = 1; i < list.length; i++) {
                 const a = list[i];
                 const b = list[idx];
-                if (a.value < b.value || (a.value === b.value && a.artist.localeCompare(b.artist) > 0)) {
+                if (
+                    a.value < b.value ||
+                    (a.value === b.value &&
+                        a.artist.localeCompare(b.artist) > 0)
+                ) {
                     idx = i;
                 }
             }
@@ -99,7 +99,11 @@
         }
 
         for (const artist of names) {
-            const candidate: RankedArtist = { artist, value: value(artist), rank: TOP_N };
+            const candidate: RankedArtist = {
+                artist,
+                value: value(artist),
+                rank: TOP_N,
+            };
             if (candidate.value <= 0) continue;
 
             if (top.length < keep) {
@@ -113,7 +117,9 @@
             }
         }
 
-        top.sort((a, b) => b.value - a.value || a.artist.localeCompare(b.artist));
+        top.sort(
+            (a, b) => b.value - a.value || a.artist.localeCompare(b.artist),
+        );
         for (let i = 0; i < top.length; i++) {
             top[i].rank = i;
         }
@@ -141,7 +147,8 @@
 
         const dateValues: Array<[Date, Map<string, number>]> = [];
         for (const month of months) {
-            const artistHours = monthMap.get(month) ?? new Map<string, number>();
+            const artistHours =
+                monthMap.get(month) ?? new Map<string, number>();
             for (const [artist, hours] of artistHours.entries()) {
                 cumulative.set(artist, (cumulative.get(artist) ?? 0) + hours);
             }
@@ -162,14 +169,18 @@
                     items: rank(
                         names,
                         (name) =>
-                            (a.get(name) ?? 0) * (1 - t) + (b.get(name) ?? 0) * t,
+                            (a.get(name) ?? 0) * (1 - t) +
+                            (b.get(name) ?? 0) * t,
                     ),
                 });
             }
         }
 
         const [lastDate, lastValues] = dateValues[dateValues.length - 1];
-        frames.push({ date: lastDate, items: rank(names, (name) => lastValues.get(name) ?? 0) });
+        frames.push({
+            date: lastDate,
+            items: rank(names, (name) => lastValues.get(name) ?? 0),
+        });
 
         return frames;
     }
@@ -182,7 +193,9 @@
 
     const currentDateLabel = $derived.by(() => {
         const frame =
-            keyframes[Math.max(0, Math.min(currentFrameIndex, keyframes.length - 1))];
+            keyframes[
+                Math.max(0, Math.min(currentFrameIndex, keyframes.length - 1))
+            ];
         return frame ? d3.utcFormat("%b %Y")(frame.date) : "";
     });
 
@@ -202,7 +215,7 @@
             colorScale = d3
                 .scaleOrdinal<string, string>()
                 .domain(Array.from(new Set(data.map((d) => d.artist))))
-                .range(PALETTE);
+                .range(RACE_PALETTE);
             currentFrameIndex = Math.max(0, keyframes.length - 1);
             renderStaticFrame();
         } catch (e) {
@@ -225,8 +238,7 @@
         if (svg) return;
 
         const h = chartHeight();
-        x = d3
-            .scaleLinear([0, 1], [MARGIN.left, chartWidth - MARGIN.right]);
+        x = d3.scaleLinear([0, 1], [MARGIN.left, chartWidth - MARGIN.right]);
         y = d3
             .scaleBand<number>()
             .domain(d3.range(TOP_N + 1))
@@ -237,7 +249,10 @@
             .select(chartHost)
             .append("svg")
             .attr("role", "img")
-            .attr("aria-label", "Bar chart race of cumulative listening time by artist")
+            .attr(
+                "aria-label",
+                "Bar chart race of cumulative listening time by artist",
+            )
             .attr("width", chartWidth)
             .attr("height", h)
             .attr("viewBox", `0 0 ${chartWidth} ${h}`);
@@ -248,7 +263,10 @@
         labelG = chartG.append("g");
         tickerText = svg
             .append("text")
-            .style("font", `bold ${BAR_SIZE}px var(--font-geist-mono, monospace)`)
+            .style(
+                "font",
+                `bold ${BAR_SIZE}px var(--font-geist-mono, monospace)`,
+            )
             .style("font-variant-numeric", "tabular-nums")
             .attr("text-anchor", "end")
             .attr("x", chartWidth - 8)
@@ -273,17 +291,31 @@
         axisG
             .attr("transform", `translate(0,${MARGIN.top})`)
             .transition(transition)
-            .call(d3.axisTop(x).ticks(chartWidth / 160).tickSizeOuter(0).tickSizeInner(-tickSize))
+            .call(
+                d3
+                    .axisTop(x)
+                    .ticks(chartWidth / 160)
+                    .tickSizeOuter(0)
+                    .tickSizeInner(-tickSize),
+            )
             .call((g: any) => g.select(".domain").remove())
-            .call((g: any) => g.selectAll(".tick line").attr("stroke", "rgb(148 163 184 / 0.28)"))
+            .call((g: any) =>
+                g
+                    .selectAll(".tick line")
+                    .attr("stroke", "rgb(148 163 184 / 0.28)"),
+            )
             .call((g: any) => g.selectAll(".tick text").attr("dy", "-0.15em"));
 
         tickerText.attr("x", chartWidth - 8).attr("y", h - 8);
     }
 
-    function bars(frame: RaceKeyframe, prev: Map<string, RankedArtist>, next: Map<string, RankedArtist>, transition: any) {
-        barG
-            .selectAll("rect")
+    function bars(
+        frame: RaceKeyframe,
+        prev: Map<string, RankedArtist>,
+        next: Map<string, RankedArtist>,
+        transition: any,
+    ) {
+        barG.selectAll("rect")
             .data(frame.items.slice(0, TOP_N), (d: any) => d.artist)
             .join(
                 (enter: any) =>
@@ -292,15 +324,35 @@
                         .attr("fill", (d: any) => colorForArtist(d.artist))
                         .attr("height", y.bandwidth())
                         .attr("x", x(0))
-                        .attr("y", (d: any) => y((prev.get(d.artist) ?? d).rank) ?? y(TOP_N) ?? 0)
-                        .attr("width", (d: any) => x((prev.get(d.artist) ?? d).value) - x(0)),
+                        .attr(
+                            "y",
+                            (d: any) =>
+                                y((prev.get(d.artist) ?? d).rank) ??
+                                y(TOP_N) ??
+                                0,
+                        )
+                        .attr(
+                            "width",
+                            (d: any) =>
+                                x((prev.get(d.artist) ?? d).value) - x(0),
+                        ),
                 (update: any) => update,
                 (exit: any) =>
                     exit
                         .transition(transition)
                         .remove()
-                        .attr("y", (d: any) => y((next.get(d.artist) ?? d).rank) ?? y(TOP_N) ?? 0)
-                        .attr("width", (d: any) => x((next.get(d.artist) ?? d).value) - x(0)),
+                        .attr(
+                            "y",
+                            (d: any) =>
+                                y((next.get(d.artist) ?? d).rank) ??
+                                y(TOP_N) ??
+                                0,
+                        )
+                        .attr(
+                            "width",
+                            (d: any) =>
+                                x((next.get(d.artist) ?? d).value) - x(0),
+                        ),
             )
             .call((bar: any) =>
                 bar
@@ -310,7 +362,12 @@
             );
     }
 
-    function labels(frame: RaceKeyframe, prev: Map<string, RankedArtist>, next: Map<string, RankedArtist>, transition: any) {
+    function labels(
+        frame: RaceKeyframe,
+        prev: Map<string, RankedArtist>,
+        next: Map<string, RankedArtist>,
+        transition: any,
+    ) {
         const textTween = (a: number, b: number) => {
             const i = d3.interpolateNumber(a, b);
             return function (this: SVGTextElement, t: number) {
@@ -333,19 +390,19 @@
                         .attr("dy", "0.35em")
                         .style("font-size", "12px");
 
-                    text
-                        .append("tspan")
+                    text.append("tspan")
                         .attr("x", -6)
                         .attr("font-weight", "600")
                         .text((d: any) => d.artist);
 
-                    text
-                        .append("tspan")
+                    text.append("tspan")
                         .attr("fill-opacity", 0.78)
                         .attr("font-weight", "400")
                         .attr("x", 6)
                         .attr("text-anchor", "start")
-                        .text((d: any) => formatHours((prev.get(d.artist) ?? d).value));
+                        .text((d: any) =>
+                            formatHours((prev.get(d.artist) ?? d).value),
+                        );
 
                     return text;
                 },
@@ -362,27 +419,38 @@
                             g
                                 .select("tspan:last-child")
                                 .tween("text", (d: any) =>
-                                    textTween(d.value, (next.get(d.artist) ?? d).value),
+                                    textTween(
+                                        d.value,
+                                        (next.get(d.artist) ?? d).value,
+                                    ),
                                 ),
                         ),
             )
             .call((text: any) =>
                 text
                     .transition(transition)
-                    .attr("transform", (d: any) =>
-                        `translate(${x(d.value)},${(y(d.rank) ?? 0) + y.bandwidth() / 2})`,
+                    .attr(
+                        "transform",
+                        (d: any) =>
+                            `translate(${x(d.value)},${(y(d.rank) ?? 0) + y.bandwidth() / 2})`,
                     )
                     .call((g: any) =>
                         g
                             .select("tspan:last-child")
-                            .tween("text", function (this: SVGTextElement, d: any) {
-                                const el = this;
-                                const p = prev.get(d.artist) ?? d;
-                                const i = d3.interpolateNumber(p.value, d.value);
-                                return (t: number) => {
-                                    el.textContent = formatHours(i(t));
-                                };
-                            }),
+                            .tween(
+                                "text",
+                                function (this: SVGTextElement, d: any) {
+                                    const el = this;
+                                    const p = prev.get(d.artist) ?? d;
+                                    const i = d3.interpolateNumber(
+                                        p.value,
+                                        d.value,
+                                    );
+                                    return (t: number) => {
+                                        el.textContent = formatHours(i(t));
+                                    };
+                                },
+                            ),
                     ),
             );
     }
@@ -393,27 +461,29 @@
 
         const frame = keyframes[index];
         const prevFrame = keyframes[Math.max(0, index - 1)] ?? frame;
-        const nextFrame = keyframes[Math.min(keyframes.length - 1, index + 1)] ?? frame;
+        const nextFrame =
+            keyframes[Math.min(keyframes.length - 1, index + 1)] ?? frame;
         const prev = new Map(prevFrame.items.map((d) => [d.artist, d]));
         const next = new Map(nextFrame.items.map((d) => [d.artist, d]));
 
         x.domain([0, frame.items[0]?.value ?? 1]);
 
-        const transition = svg.transition().duration(duration).ease(d3.easeLinear);
+        const transition = svg
+            .transition()
+            .duration(duration)
+            .ease(d3.easeLinear);
 
         axis(transition);
         bars(frame, prev, next, transition);
         labels(frame, prev, next, transition);
 
-        tickerText
-            .transition(transition)
-            .tween("text", () => {
-                const format = d3.utcFormat("%b %Y");
-                const i = d3.interpolateDate(prevFrame.date, frame.date);
-                return function (this: SVGTextElement, t: number) {
-                    this.textContent = format(i(t));
-                };
-            });
+        tickerText.transition(transition).tween("text", () => {
+            const format = d3.utcFormat("%b %Y");
+            const i = d3.interpolateDate(prevFrame.date, frame.date);
+            return function (this: SVGTextElement, t: number) {
+                this.textContent = format(i(t));
+            };
+        });
 
         try {
             await transition.end();
@@ -450,7 +520,10 @@
 
     function stepFrame(delta: number) {
         if (isPlaying || keyframes.length === 0) return;
-        const nextIndex = Math.max(0, Math.min(currentFrameIndex + delta, keyframes.length - 1));
+        const nextIndex = Math.max(
+            0,
+            Math.min(currentFrameIndex + delta, keyframes.length - 1),
+        );
         currentFrameIndex = nextIndex;
         drawFrame(nextIndex, 220);
     }
@@ -466,7 +539,10 @@
     function renderStaticFrame() {
         if (isPlaying || keyframes.length === 0) return;
         resetChart();
-        drawFrame(Math.max(0, Math.min(currentFrameIndex, keyframes.length - 1)), 0);
+        drawFrame(
+            Math.max(0, Math.min(currentFrameIndex, keyframes.length - 1)),
+            0,
+        );
     }
 
     onMount(() => {
@@ -499,10 +575,12 @@
 
 <section bind:this={element} class="guide-section py-8">
     <div class="text-content mb-6">
-        <h2 class="text-2xl font-bold mb-2">Bar Chart Race: listening time by artist</h2>
+        <h2 class="text-2xl font-bold mb-2">
+            Bar Chart Race: listening time by artist
+        </h2>
         <p class="opacity-80 max-w-2xl">
-            A continuous race of cumulative listening hours per artist, inspired by
-            the Observable "Bar Chart Race, Explained" pattern.
+            A continuous race of cumulative listening hours per artist, inspired
+            by the Observable "Bar Chart Race, Explained" pattern.
         </p>
     </div>
 
@@ -512,10 +590,20 @@
     >
         {#if keyframes.length > 0}
             <div class="mb-4 flex items-center gap-3">
-                <button type="button" class="race-btn" onclick={playRace} disabled={isPlaying}>
+                <button
+                    type="button"
+                    class="race-btn"
+                    onclick={playRace}
+                    disabled={isPlaying}
+                >
                     Play
                 </button>
-                <button type="button" class="race-btn" onclick={stopRace} disabled={!isPlaying}>
+                <button
+                    type="button"
+                    class="race-btn"
+                    onclick={stopRace}
+                    disabled={!isPlaying}
+                >
                     Stop
                 </button>
                 <button
@@ -530,7 +618,8 @@
                     type="button"
                     class="race-btn"
                     onclick={() => stepFrame(1)}
-                    disabled={isPlaying || currentFrameIndex === keyframes.length - 1}
+                    disabled={isPlaying ||
+                        currentFrameIndex === keyframes.length - 1}
                 >
                     →
                 </button>
@@ -555,11 +644,15 @@
 
             <div bind:this={chartHost} class="w-full"></div>
         {:else if isVisible}
-            <div class="w-full h-[420px] flex items-center justify-center opacity-50">
+            <div
+                class="w-full h-[420px] flex items-center justify-center opacity-50"
+            >
                 Loading artist duration race...
             </div>
         {:else}
-            <div class="w-full h-[420px] flex items-center justify-center opacity-50">
+            <div
+                class="w-full h-[420px] flex items-center justify-center opacity-50"
+            >
                 Scroll to view
             </div>
         {/if}

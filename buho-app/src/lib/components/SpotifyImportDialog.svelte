@@ -91,11 +91,10 @@
                             Pick your Spotify export (a <code class="text-xs"
                                 >.zip</code
                             >
-                            or <code class="text-xs">.json</code> file). You're
-                            just pointing to a file on your device — Buho reads
-                            it and shows your insights, but the data never leaves
-                            your computer. No upload, no tracking, 100% local and
-                            private.
+                            or <code class="text-xs">.json</code> file). You're just
+                            pointing to a file on your device — Buho reads it and
+                            shows your insights, but the data never leaves your computer.
+                            No upload, no tracking, 100% local and private.
                         </span>
                     </button>
 
@@ -127,8 +126,8 @@
 
                 <p class="mt-1 text-sm text-muted-foreground">
                     It's a quick request to set up. Spotify then prepares your
-                    file and emails you a link — usually within a few days (up
-                    to 30).
+                    file and emails you a link — usually within 24 hours but can
+                    take up to 30 days.
                 </p>
 
                 <ol

@@ -7,6 +7,7 @@
     import type { DateRange } from "$lib/data/queries/common";
     import { dataStore } from "$lib/stores/dataStore.svelte";
     import { spotifyFilterStore } from "$lib/stores/spotifyFilterStore.svelte";
+    import { RACE_PALETTE } from "$lib/visualizations/racePalette";
     import { onMount } from "svelte";
 
     type RankedTrack = {
@@ -25,7 +26,7 @@
     const FRAME_DURATION_MS = 120;
     const BAR_SIZE = 36;
     const MARGIN = { top: 24, right: 90, bottom: 16, left: 320 };
-    const PALETTE = [...d3.schemeTableau10, ...d3.schemeSet3];
+    const PALETTE = RACE_PALETTE;
 
     let data = $state<TrackMonthlyDurationData[]>([]);
     let element = $state<HTMLElement | undefined>(undefined);

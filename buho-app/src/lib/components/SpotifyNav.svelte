@@ -4,7 +4,7 @@
 
   const tabs = [
     { label: "Explore", href: resolve("/spotify/explore") },
-    { label: "Guide", href: resolve("/spotify/guide") },
+    { label: "Other", href: resolve("/spotify/guide") },
   ];
 
   function isActive(href: string): boolean {
