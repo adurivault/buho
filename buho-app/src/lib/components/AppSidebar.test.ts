@@ -38,7 +38,7 @@ describe('AppSidebar', () => {
 		const spotifyLink = screen.getByText('Spotify').closest('a');
 
 		expect(homeLink).toHaveAttribute('href', '/');
-		expect(spotifyLink).toHaveAttribute('href', '/spotify/guide');
+		expect(spotifyLink).toHaveAttribute('href', '/spotify/explore');
 	});
 
 	test('unavailable sources are disabled, not links', () => {

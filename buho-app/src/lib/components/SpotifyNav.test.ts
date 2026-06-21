@@ -22,25 +22,25 @@ vi.mock('$app/paths', () => ({
 }));
 
 describe('SpotifyNav', () => {
-	test('renders Guide and Explore links with correct routes', () => {
+	test('renders Explore and Other links with correct routes', () => {
 		render(SpotifyNav);
 
-		const guideLink = screen.getByRole('link', { name: 'Guide' });
 		const exploreLink = screen.getByRole('link', { name: 'Explore' });
+		const otherLink = screen.getByRole('link', { name: 'Other' });
 
-		expect(guideLink).toHaveAttribute('href', '/spotify/guide');
 		expect(exploreLink).toHaveAttribute('href', '/spotify/explore');
+		expect(otherLink).toHaveAttribute('href', '/spotify/guide');
 	});
 
 	test('marks the current view as active', () => {
 		render(SpotifyNav);
 
-		const guideLink = screen.getByRole('link', { name: 'Guide' });
 		const exploreLink = screen.getByRole('link', { name: 'Explore' });
+		const otherLink = screen.getByRole('link', { name: 'Other' });
 
 		expect(exploreLink).toHaveClass('active');
 		expect(exploreLink).toHaveAttribute('aria-current', 'page');
-		expect(guideLink).not.toHaveClass('active');
-		expect(guideLink).not.toHaveAttribute('aria-current');
+		expect(otherLink).not.toHaveClass('active');
+		expect(otherLink).not.toHaveAttribute('aria-current');
 	});
 });
