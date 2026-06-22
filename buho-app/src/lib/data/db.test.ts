@@ -58,6 +58,41 @@ vi.mock('@duckdb/duckdb-wasm', async () => {
     };
 });
 
+describe('Local time serialization (DST fix)', () => {
+    const originalTz = process.env.TZ;
+
+    afterEach(() => {
+        process.env.TZ = originalTz;
+    });
+
+    it('formats winter and summer instants using the wall-clock hour for that historical date', () => {
+        process.env.TZ = 'Europe/Paris';
+        // Same UTC hour (12:00), but Paris is UTC+1 in January and UTC+2 in July.
+        const winter = new Date(Date.UTC(2024, 0, 15, 12, 0, 0));
+        const summer = new Date(Date.UTC(2024, 6, 15, 12, 0, 0));
+
+        expect(db.formatLocalTimestamp(winter)).toBe('2024-01-15 13:00:00');
+        expect(db.formatLocalTimestamp(summer)).toBe('2024-07-15 14:00:00');
+    });
+
+    it('does not shift the calendar day for local midnight in a positive UTC-offset zone', () => {
+        process.env.TZ = 'Europe/Paris';
+        // Local midnight on Jan 15 is Jan 14 23:00 UTC — toISOString().slice(0, 10)
+        // would have produced "2024-01-14" here, one day off.
+        const localMidnight = new Date(2024, 0, 15, 0, 0, 0);
+
+        expect(db.formatLocalDate(localMidnight)).toBe('2024-01-15');
+    });
+
+    it('zero-pads single-digit month, day, hour, minute and second', () => {
+        process.env.TZ = 'Europe/Paris';
+        const d = new Date(2024, 0, 5, 3, 4, 5);
+
+        expect(db.formatLocalTimestamp(d)).toBe('2024-01-05 03:04:05');
+        expect(db.formatLocalDate(d)).toBe('2024-01-05');
+    });
+});
+
 describe('DuckDB Service', () => {
     beforeEach(() => {
         vi.clearAllMocks();

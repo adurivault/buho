@@ -745,13 +745,12 @@
         tooltip.visible = false;
     }
 
-    // La colonne `timestamp` est stockée en mur-horloge UTC (cf.
-    // insertSpotifyPlays → toISOString), tandis que l'axe Y utilise l'heure
-    // LOCALE (parseSpotify → getHours). On reparse donc le timestamp comme UTC
-    // pour reconstruire l'instant d'origine ; toLocaleString redonne alors
-    // l'heure locale, cohérente avec l'échelle.
+    // La colonne `timestamp` est stockée en mur-horloge LOCALE (cf.
+    // insertSpotifyPlays → formatLocalTimestamp), cohérente avec l'axe Y. Le
+    // format "YYYY-MM-DD HH:MM:SS" n'a pas de suffixe de zone : new Date()
+    // l'interprète déjà comme heure locale.
     function formatPlayedAt(playedAt: string): string {
-        const d = new Date(`${playedAt.replace(" ", "T")}Z`);
+        const d = new Date(playedAt.replace(" ", "T"));
         return Number.isNaN(d.getTime()) ? playedAt : d.toLocaleString();
     }
 
