@@ -2,6 +2,7 @@
 // src/lib/stores/dataStore.svelte.ts
 import JSZip from 'jszip';
 import { parseSpotifyData } from '$lib/data/parseSpotify';
+import { parseGoogleMapsData } from '$lib/data/parseGoogleMaps';
 import * as db from '$lib/data/db';
 import { spotifyFilterStore } from '$lib/stores/spotifyFilterStore.svelte';
 import { trackEvent, bucket } from '$lib/analytics';
@@ -247,6 +248,74 @@ class DataStore {
             this.setError({
                 message: e instanceof Error ? e.message : 'Failed to process files',
                 link: '/guide/export-tutorial'
+            });
+            this.loading = null;
+        }
+    }
+
+    /**
+     * Handles Google Maps Timeline upload (JSON or ZIP files).
+     * Mirrors handleFilesUpload but parses into google_maps_segments.
+     */
+    async handleLocationFilesUpload(files: FileList) {
+        this.setLoading({ status: 'reading', message: 'Reading files...' });
+
+        try {
+            const allData: unknown[] = [];
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                this.setLoading({
+                    status: 'processing',
+                    message: `Processing ${file.name} (${i + 1}/${files.length})...`
+                });
+
+                if (file.name.endsWith('.zip')) {
+                    const zipData = await extractJsonFromZip(file);
+                    for (const item of zipData) {
+                        allData.push(item);
+                    }
+                } else if (file.name.endsWith('.json')) {
+                    const text = await file.text();
+                    try {
+                        const data = JSON.parse(text);
+                        if (Array.isArray(data)) {
+                            for (const item of data) {
+                                allData.push(item);
+                            }
+                        }
+                    } catch {
+                        // Skip invalid JSON files silently
+                    }
+                }
+            }
+
+            if (allData.length === 0) {
+                throw new Error('No valid Google Maps data found in the selected files');
+            }
+
+            this.setLoading({ status: 'parsing', message: 'Parsing location history...' });
+            const segments = parseGoogleMapsData(allData as Parameters<typeof parseGoogleMapsData>[0]);
+
+            if (segments.length === 0) {
+                throw new Error('No valid location segments found');
+            }
+
+            this.setLoading({ status: 'importing', message: `Importing ${segments.length} segments...` });
+            await db.initDuckDB();
+            await db.dropTable('google_maps_segments');
+            await db.insertLocationSegments(segments);
+
+            this.loadUserData('google-maps');
+            this.loading = null;
+
+            trackEvent('upload', { source: 'google-maps', files: files.length, tracks: bucket(segments.length) });
+
+        } catch (e) {
+            console.error(e);
+            trackEvent('upload-error', { source: 'google-maps', reason: e instanceof Error ? e.message : 'unknown' });
+            this.setError({
+                message: e instanceof Error ? e.message : 'Failed to process files'
             });
             this.loading = null;
         }

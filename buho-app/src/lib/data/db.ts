@@ -1,4 +1,5 @@
 import type { SpotifyPlay } from '$lib/types/spotify';
+import type { LocationSegment } from '$lib/types/googleMaps';
 import * as duckdb from '@duckdb/duckdb-wasm';
 import duckdb_wasm from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url';
 import mvp_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url';
@@ -222,5 +223,64 @@ export async function insertSpotifyPlays(plays: SpotifyPlay[]): Promise<void> {
     await conn.query(`INSERT INTO ${TABLE_NAME} SELECT DISTINCT * FROM read_json_auto('${tempFile}')`);
 
     // Clear temp file content
+    await db.registerFileText(tempFile, '');
+}
+
+/**
+ * Insert Google Maps location segments into the google_maps_segments table.
+ * Mirrors insertSpotifyPlays. The column named `timestamp` matches
+ * spotify_plays so the generic explorer filter helpers work unchanged.
+ *
+ * Unlike Spotify, the timestamps are already local wall-clock strings produced
+ * by parseGoogleMapsData (the per-event offset is resolved there), so they are
+ * inserted as-is rather than reformatted from a Date.
+ *
+ * @throws {Error} If database is not initialized.
+ */
+export async function insertLocationSegments(segments: LocationSegment[]): Promise<void> {
+    const TABLE_NAME = 'google_maps_segments';
+
+    const SCHEMA = `
+        timestamp TIMESTAMP,
+        date DATE,
+        end_timestamp TIMESTAMP,
+        duration_seconds DOUBLE,
+        lat DOUBLE,
+        lon DOUBLE,
+        segment_type VARCHAR,
+        activity_type VARCHAR,
+        semantic_type VARCHAR,
+        place_id VARCHAR,
+        distance_meters DOUBLE
+    `;
+
+    await createTable(TABLE_NAME, SCHEMA);
+
+    validateIdentifier(TABLE_NAME, 'table');
+    if (!db || !conn) throw new Error('DB not initialized');
+    if (segments.length === 0) return;
+
+    // Keys ordered to match the schema columns: read_json_auto + SELECT * map
+    // positionally, so order matters.
+    const snakeData = segments.map((s) => ({
+        timestamp: s.timestamp,
+        date: s.date,
+        end_timestamp: s.endTimestamp,
+        duration_seconds: s.durationSeconds,
+        lat: s.lat,
+        lon: s.lon,
+        segment_type: s.segmentType,
+        activity_type: s.activityType,
+        semantic_type: s.semanticType,
+        place_id: s.placeId,
+        distance_meters: s.distanceMeters,
+    }));
+    const jsonContent = JSON.stringify(snakeData);
+    const tempFile = `import_${TABLE_NAME}_${Date.now()}.json`;
+
+    await db.registerFileText(tempFile, jsonContent);
+
+    await conn.query(`INSERT INTO ${TABLE_NAME} SELECT DISTINCT * FROM read_json_auto('${tempFile}')`);
+
     await db.registerFileText(tempFile, '');
 }
