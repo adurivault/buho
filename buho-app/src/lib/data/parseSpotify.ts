@@ -75,8 +75,6 @@ export function parseSpotifyData(jsonData: RawSpotifyEntry[]): SpotifyPlay[] {
         plays.push({
             timestamp,
             date,
-            hour: timestamp.getHours(),
-            minute: timestamp.getMinutes(),
             msPlayed: entry.ms_played,
             // For podcasts: use episode name as track, show name as artist
             trackName: isPodcast ? (entry.episode_name ?? null) : (entry.master_metadata_track_name ?? null),

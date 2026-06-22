@@ -216,7 +216,7 @@ export async function getReasonStartEndFlow(dateRange?: DateRange): Promise<Reas
 // Connectable points are a visual abstraction of behavior/timeline
 export interface ConnectablePoint {
     x: number;      // timestamp
-    y: number;      // hour of day + minute/60
+    y: number;      // hour of day, fractional (hour + minute/60 + second/3600)
     matched: boolean; // true when the point satisfies the active dimension filters
     metadata: {
         track: string;
@@ -262,7 +262,7 @@ function buildFilterCondition(column: string, value: unknown): string | null {
 
     let sqlCol = column;
     if (column === 'dayofweek') sqlCol = 'DAYOFWEEK(timestamp)';
-    else if (column === 'hour_of_day') sqlCol = '(hour + (minute / 60.0))';
+    else if (column === 'hour_of_day') sqlCol = '(hour(timestamp) + (minute(timestamp) / 60.0))';
 
     if (value instanceof Set) {
         const literals = Array.from(value)
@@ -363,7 +363,7 @@ export async function getAllConnectablePoints(dateRange?: DateRange): Promise<Co
     const sql = `
         SELECT
             CAST(epoch(timestamp) * 1000 AS BIGINT) as x,
-            CAST(hour + (minute / 60.0) AS DOUBLE) as y,
+            CAST(hour(timestamp) + (minute(timestamp) / 60.0) + (second(timestamp) / 3600.0) AS DOUBLE) as y,
             track_name as track,
             artist_name as artist,
             CAST(timestamp AS VARCHAR) as playedAt,
@@ -438,7 +438,7 @@ export async function getExplorerConnectablePoints(filters: FilterState = {}): P
         SELECT
             -- Horizontal position is day-based (no hour/minute jitter on x-axis)
             CAST(epoch(DATE(timestamp)) * 1000 AS BIGINT) as x,
-            CAST(hour + (minute / 60.0) AS DOUBLE) as y,
+            CAST(hour(timestamp) + (minute(timestamp) / 60.0) + (second(timestamp) / 3600.0) AS DOUBLE) as y,
             track_name as track,
             artist_name as artist,
             CAST(timestamp AS VARCHAR) as playedAt,
@@ -500,7 +500,7 @@ export async function getExplorerBasePoints(): Promise<ExplorerBasePoint[]> {
     const sql = `
         SELECT
             CAST(epoch(DATE(timestamp)) * 1000 AS BIGINT) as x,
-            CAST(hour + (minute / 60.0) AS DOUBLE) as y,
+            CAST(hour(timestamp) + (minute(timestamp) / 60.0) + (second(timestamp) / 3600.0) AS DOUBLE) as y,
             track_name as track,
             artist_name as artist,
             CAST(timestamp AS VARCHAR) as playedAt,

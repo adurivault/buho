@@ -191,7 +191,7 @@ export async function getArtistAnalysis(limit = 100, dateRange?: DateRange): Pro
                 ms_played as msPlayed,
                 CAST(epoch(timestamp) AS DOUBLE) as tsEpochSeconds,
                 DATE(timestamp) as playDate,
-                hour as hourOfDay,
+                hour(timestamp) as hourOfDay,
                 COALESCE(NULLIF(TRIM(reason_start), ''), 'unknown') as reasonStart,
                 COALESCE(NULLIF(TRIM(reason_end), ''), 'unknown') as reasonEnd,
                 CASE WHEN shuffle = true THEN 1 ELSE 0 END as isShuffle,

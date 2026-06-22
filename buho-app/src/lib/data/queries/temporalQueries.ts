@@ -46,7 +46,7 @@ export async function getDailyAnalysis(dateRange?: DateRange): Promise<DailyAnal
                 COALESCE(track_uri, '__unknown_track__') as trackKey,
                 COALESCE(NULLIF(TRIM(reason_start), ''), 'unknown') as reasonStart,
                 COALESCE(NULLIF(TRIM(reason_end), ''), 'unknown') as reasonEnd,
-                hour as hourOfDay,
+                hour(timestamp) as hourOfDay,
                 CASE WHEN shuffle = true THEN 1 ELSE 0 END as isShuffle,
                 CASE WHEN skipped = true THEN 1 ELSE 0 END as isSkipped
             FROM spotify_plays

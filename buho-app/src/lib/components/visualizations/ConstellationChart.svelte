@@ -744,9 +744,7 @@
     // l'heure locale, cohérente avec l'échelle.
     function formatPlayedAt(playedAt: string): string {
         const d = new Date(`${playedAt.replace(" ", "T")}Z`);
-        return Number.isNaN(d.getTime())
-            ? playedAt
-            : d.toLocaleString();
+        return Number.isNaN(d.getTime()) ? playedAt : d.toLocaleString();
     }
 
     function onMouseMove(event: MouseEvent) {

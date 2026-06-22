@@ -141,8 +141,6 @@ export async function insertSpotifyPlays(plays: SpotifyPlay[]): Promise<void> {
     const SCHEMA = `
         timestamp TIMESTAMP,
         date DATE,
-        hour INTEGER,
-        minute INTEGER,
         ms_played INTEGER,
         track_name VARCHAR,
         artist_name VARCHAR,
@@ -177,8 +175,6 @@ export async function insertSpotifyPlays(plays: SpotifyPlay[]): Promise<void> {
     const snakeData = plays.map((play) => ({
         timestamp: play.timestamp.toISOString().replace('T', ' ').replace('Z', ''),
         date: play.date.toISOString().slice(0, 10),
-        hour: play.hour,
-        minute: play.minute,
         ms_played: play.msPlayed,
         track_name: play.trackName,
         artist_name: play.artistName,

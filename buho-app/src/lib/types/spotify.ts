@@ -1,8 +1,6 @@
 export interface SpotifyPlay {
     timestamp: Date;
     date: Date; // day only (for grouping)
-    hour: number; // 0-23
-    minute: number; // 0-59
     msPlayed: number;
     trackName: string | null;
     artistName: string | null;
