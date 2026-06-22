@@ -164,6 +164,11 @@
         };
     });
 
+    // Capturé une fois au montage : suffisant pour le cas courant (changement
+    // de moniteur/zoom en cours de session non géré, complexité non justifiée).
+    const dpr =
+        typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+
     let mainCanvas: HTMLCanvasElement | null = null;
     let xCanvas: HTMLCanvasElement | null = null;
     let yCanvas: HTMLCanvasElement | null = null;
@@ -455,6 +460,7 @@
     function drawMain() {
         if (!mainCtx) return;
         const ctx = mainCtx;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         const [x0, x1] = xRange;
         const [y0, y1] = yRange;
 
@@ -575,6 +581,7 @@
     function drawBottomPanel() {
         if (!xCtx) return;
         const ctx = xCtx;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         const heightPx = panel.bottomHeight;
         const { left: x0, right: x1, top, bottom } = bottomPanelBounds;
 
@@ -661,6 +668,7 @@
     function drawLeftPanel() {
         if (!yCtx) return;
         const ctx = yCtx;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         const widthPx = panel.sideWidth;
         const { top: y0, bottom: y1, left, right } = sidePanelBounds;
 
@@ -1045,8 +1053,8 @@
     <div class="y-area">
         <canvas
             bind:this={yCanvas}
-            width={panel.sideWidth}
-            height={panel.mainHeight}
+            width={panel.sideWidth * dpr}
+            height={panel.mainHeight * dpr}
         ></canvas>
         <svg
             bind:this={yBrushLayer}
@@ -1058,8 +1066,8 @@
     <div class="main-area">
         <canvas
             bind:this={mainCanvas}
-            width={panel.mainWidth}
-            height={panel.mainHeight}
+            width={panel.mainWidth * dpr}
+            height={panel.mainHeight * dpr}
         ></canvas>
         <button class="reset-btn" type="button" onclick={resetView}
             >Reset view</button
@@ -1084,8 +1092,8 @@
     <div class="x-area">
         <canvas
             bind:this={xCanvas}
-            width={panel.mainWidth}
-            height={panel.bottomHeight}
+            width={panel.mainWidth * dpr}
+            height={panel.bottomHeight * dpr}
         ></canvas>
         <svg
             bind:this={xBrushLayer}
