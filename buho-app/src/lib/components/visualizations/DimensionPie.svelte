@@ -1,18 +1,20 @@
 <script lang="ts">
     import * as d3 from "d3";
     import type { DimensionSlice } from "$lib/data/queries/dimensionQueries";
-    import { spotifyExplorerFilters } from "$lib/stores/spotifyExplorerFilters.svelte";
-    import type { FilterScalar } from "$lib/types/filters";
     import { stickyColor } from "$lib/utils/dimensionColors";
 
     interface Props {
         title: string;
-        /** Clé du store cross-filtering, ex. "ip_addr". */
+        /** Clé de dimension (sert à la coloration sticky), ex. "ip_addr". */
         filterKey: string;
         slices: DimensionSlice[];
         size?: number;
         /** Formatage de la valeur pour l'affichage (tooltip), ex. jour de semaine. */
         format?: (value: string) => string;
+        /** Valeur actuellement sélectionnée (null = aucune). */
+        selectedValue?: string | null;
+        /** Sélection/désélection d'une part (null = désélection). */
+        onSelect?: (value: string | null) => void;
         /** Affiche le toggle « color by » (colore la constellation par cette dimension). */
         colorByEnabled?: boolean;
         /** Cette dimension est-elle la source de couleur active ? */
@@ -27,6 +29,8 @@
         slices,
         size = 132,
         format = (v: string) => v,
+        selectedValue = null,
+        onSelect,
         colorByEnabled = false,
         colorByActive = false,
         onToggleColorBy,
@@ -36,25 +40,9 @@
     let hostEl = $state<HTMLDivElement>();
     let tooltip = $state({ visible: false, x: 0, y: 0, label: "", value: "" });
 
-    function selectedValue(): string | null {
-        const v = spotifyExplorerFilters.activeFilters[filterKey];
-        if (v === undefined || v === null) return null;
-        if (v instanceof Set) {
-            const a = [...v];
-            return a.length ? String(a[0]) : null;
-        }
-        if (Array.isArray(v)) return v.length ? String(v[0]) : null;
-        if (typeof v === "object") return null;
-        return String(v as FilterScalar);
-    }
-
     function toggle(value: string) {
         if (value === "Other") return; // pas filtrable
-        if (selectedValue() === value) {
-            spotifyExplorerFilters.removeFilter(filterKey);
-        } else {
-            spotifyExplorerFilters.setFilter(filterKey, value);
-        }
+        onSelect?.(selectedValue === value ? null : value);
     }
 
     function formatMinutes(m: number): string {
@@ -78,7 +66,7 @@
         if (slices.length === 0) return;
 
         const radius = size / 2;
-        const selected = selectedValue();
+        const selected = selectedValue;
 
         const fill = (s: DimensionSlice) => stickyColor(filterKey, s.value);
 
@@ -123,7 +111,7 @@
 
     $effect(() => {
         const _slices = slices;
-        const _filters = spotifyExplorerFilters.activeFilters;
+        const _selected = selectedValue;
         const _size = size;
         render();
     });

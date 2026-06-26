@@ -3,17 +3,20 @@
     import * as d3 from "d3";
     import type { ConnectablePoint } from "$lib/data/queries/behaviorQueries";
     import { OTHER_COLOR } from "$lib/utils/dimensionColors";
-    import {
-        openSpotify,
-        hasOpenModifier,
-        MODIFIER_LABEL,
-    } from "$lib/utils/spotify";
+    import { hasOpenModifier } from "$lib/utils/spotify";
     import { vizColors } from "$lib/visualizations/themeColors";
     import { themeStore } from "$lib/stores/themeStore.svelte";
 
     interface ColorCategory {
         value: string;
         color: string;
+    }
+
+    /** Tooltip content for a hovered point, built by the caller from metadata. */
+    interface TooltipInfo {
+        title?: string;
+        lines?: string[];
+        hint?: string;
     }
 
     interface Props {
@@ -34,6 +37,15 @@
         // et les barcharts satellites sont colorés/empilés par cette dimension.
         colorField?: string | null;
         colorCategories?: ColorCategory[];
+        // Tooltip content for the hovered point, derived from its metadata.
+        // When omitted, no tooltip is shown.
+        formatTooltip?: (metadata: Record<string, unknown>) => TooltipInfo;
+        // ⌘/Ctrl+click handler. Receives the clicked point's metadata; returns
+        // true if it handled the click (the chart then prevents default).
+        onPointClick?: (
+            metadata: Record<string, unknown>,
+            event: MouseEvent,
+        ) => boolean;
     }
 
     let {
@@ -46,6 +58,8 @@
         matchVersion = 0,
         colorField = null,
         colorCategories = [],
+        formatTooltip,
+        onPointClick,
     }: Props = $props();
 
     const colorActive = $derived(!!colorField && colorCategories.length > 0);
@@ -190,11 +204,14 @@
         visible: false,
         x: 0,
         y: 0,
-        track: "",
-        artist: "",
-        date: "",
-        uri: null as string | null,
+        meta: null as Record<string, unknown> | null,
     });
+
+    const tooltipInfo = $derived(
+        tooltip.visible && tooltip.meta && formatTooltip
+            ? formatTooltip(tooltip.meta)
+            : null,
+    );
 
     const panel = $derived.by(() => {
         const mainWidth = Math.max(280, width - layout.sideWidth - layout.gap);
@@ -745,15 +762,6 @@
         tooltip.visible = false;
     }
 
-    // La colonne `timestamp` est stockée en mur-horloge LOCALE (cf.
-    // insertSpotifyPlays → formatLocalTimestamp), cohérente avec l'axe Y. Le
-    // format "YYYY-MM-DD HH:MM:SS" n'a pas de suffixe de zone : new Date()
-    // l'interprète déjà comme heure locale.
-    function formatPlayedAt(playedAt: string): string {
-        const d = new Date(playedAt.replace(" ", "T"));
-        return Number.isNaN(d.getTime()) ? playedAt : d.toLocaleString();
-    }
-
     function onMouseMove(event: MouseEvent) {
         if (!mainCanvas || !quadtree) return;
         const [mx, my] = d3.pointer(event, mainCanvas);
@@ -780,20 +788,18 @@
             visible: true,
             x: Math.max(0, tx),
             y: Math.max(0, ty),
-            track: hit.original.metadata.track,
-            artist: hit.original.metadata.artist,
-            date: formatPlayedAt(hit.original.metadata.playedAt),
-            uri: hit.original.metadata.trackUri,
+            meta: hit.original.metadata,
         };
     }
 
-    /** ⌘/Ctrl+clic sur un point : ouvre le titre survolé sur Spotify. */
+    /** ⌘/Ctrl+clic sur un point : délégué à l'appelant (ex. ouvrir sur Spotify). */
     function onClick(event: MouseEvent) {
-        if (!hasOpenModifier(event) || !mainCanvas || !quadtree) return;
+        if (!hasOpenModifier(event) || !mainCanvas || !quadtree || !onPointClick)
+            return;
         const [mx, my] = d3.pointer(event, mainCanvas);
         const hit = quadtree.find(mx, my, 12);
         if (!hit) return;
-        if (openSpotify(hit.original.metadata.trackUri)) {
+        if (onPointClick(hit.original.metadata, event)) {
             event.preventDefault();
             event.stopPropagation();
         }
@@ -1071,18 +1077,19 @@
         <button class="reset-btn" type="button" onclick={resetView}
             >Reset view</button
         >
-        {#if tooltip.visible}
+        {#if tooltipInfo}
             <div
                 class="tooltip"
                 style={`left:${tooltip.x}px; top:${tooltip.y}px;`}
             >
-                <strong>{tooltip.track}</strong>
-                <span>{tooltip.artist}</span>
-                <span>{tooltip.date}</span>
-                {#if tooltip.uri}
-                    <span class="hint"
-                        >{MODIFIER_LABEL}+click to play on Spotify</span
-                    >
+                {#if tooltipInfo.title}
+                    <strong>{tooltipInfo.title}</strong>
+                {/if}
+                {#each tooltipInfo.lines ?? [] as line}
+                    <span>{line}</span>
+                {/each}
+                {#if tooltipInfo.hint}
+                    <span class="hint">{tooltipInfo.hint}</span>
                 {/if}
             </div>
         {/if}

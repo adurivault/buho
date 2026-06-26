@@ -213,17 +213,14 @@ export async function getReasonStartEndFlow(dateRange?: DateRange): Promise<Reas
     }
 }
 
-// Connectable points are a visual abstraction of behavior/timeline
+// Connectable points are a visual abstraction of behavior/timeline.
+// `metadata` is opaque to the chart: each caller fills it with whatever its
+// tooltip/click callbacks read (Spotify: track/artist/playedAt/trackUri).
 export interface ConnectablePoint {
     x: number;      // timestamp
     y: number;      // hour of day, fractional (hour + minute/60 + second/3600)
     matched: boolean; // true when the point satisfies the active dimension filters
-    metadata: {
-        track: string;
-        artist: string;
-        playedAt: string; // ISO date string
-        trackUri: string | null; // spotify:track:<id> — pour ouvrir le titre sur Spotify
-    };
+    metadata: Record<string, unknown>;
 }
 
 const VALID_SQL_IDENTIFIER = /^[a-z_][a-z0-9_]*$/i;

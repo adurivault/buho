@@ -16,8 +16,8 @@
 		{
 			title: "Google Maps",
 			description: "Visualize your location history and travel patterns.",
-			available: false,
-			link: "#",
+			available: true,
+			link: resolve("/google-maps/explore"),
 			image: "",
 		},
 		{

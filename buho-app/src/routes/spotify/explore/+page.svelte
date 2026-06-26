@@ -19,6 +19,8 @@
     import { spotifyExplorerFilters } from "$lib/stores/spotifyExplorerFilters.svelte";
     import { formatDurationLong } from "$lib/utils/duration";
     import { stickyColor } from "$lib/utils/dimensionColors";
+    import { firstFilterValue } from "$lib/utils/filters";
+    import { MODIFIER_LABEL, openSpotify } from "$lib/utils/spotify";
 
     // Les points de la constellation sont chargés UNE fois (raw : pas de proxy
     // réactif sur 167k objets). Le flag `matched` est recalculé en JS en place,
@@ -73,6 +75,28 @@
     const dbReady = $derived(
         dataStore.source === "spotify" && !dataStore.isLoading,
     );
+
+    // La colonne `timestamp` est stockée en mur-horloge LOCALE (cf.
+    // insertSpotifyPlays → formatLocalTimestamp). Le format "YYYY-MM-DD HH:MM:SS"
+    // n'a pas de suffixe de zone : new Date() l'interprète déjà comme heure locale.
+    function formatPlayedAt(playedAt: string): string {
+        const d = new Date(playedAt.replace(" ", "T"));
+        return Number.isNaN(d.getTime()) ? playedAt : d.toLocaleString();
+    }
+
+    function constellationTooltip(m: Record<string, unknown>) {
+        return {
+            title: m.track as string,
+            lines: [m.artist as string, formatPlayedAt(m.playedAt as string)],
+            hint: m.trackUri
+                ? `${MODIFIER_LABEL}+click to play on Spotify`
+                : undefined,
+        };
+    }
+
+    function constellationPointClick(m: Record<string, unknown>): boolean {
+        return openSpotify(m.trackUri as string | null);
+    }
 
     /** Set<string> des valeurs d'un filtre, ou null si non applicable (range, etc.). */
     function filterValueSet(f: FilterState, key: string): Set<string> | null {
@@ -595,6 +619,8 @@
                         {timeDomain}
                         colorField={colorByDim?.field ?? null}
                         {colorCategories}
+                        formatTooltip={constellationTooltip}
+                        onPointClick={constellationPointClick}
                         bind:viewTimeDomain
                         bind:viewHourDomain
                     />
@@ -638,6 +664,11 @@
                     slices={pieSlices[pd.key] ?? []}
                     size={pieSize}
                     format={pd.format}
+                    selectedValue={firstFilterValue(activeFilters, pd.key)}
+                    onSelect={(v) =>
+                        v === null
+                            ? spotifyExplorerFilters.removeFilter(pd.key)
+                            : spotifyExplorerFilters.setFilter(pd.key, v)}
                     colorByEnabled
                     colorByActive={colorBy === pd.key}
                     onToggleColorBy={() => toggleColorBy(pd.key)}

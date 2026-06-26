@@ -31,24 +31,23 @@ describe('AppSidebar', () => {
 		expect(screen.getByText(/WhatsApp/)).toBeInTheDocument();
 	});
 
-	test('home and spotify links point to correct routes', () => {
+	test('home, spotify and google maps links point to correct routes', () => {
 		render(AppSidebar);
 
 		const homeLink = screen.getByText('Home').closest('a');
 		const spotifyLink = screen.getByText('Spotify').closest('a');
+		const mapsLink = screen.getByText(/Google Maps/).closest('a');
 
 		expect(homeLink).toHaveAttribute('href', '/');
 		expect(spotifyLink).toHaveAttribute('href', '/spotify/explore');
+		expect(mapsLink).toHaveAttribute('href', '/google-maps/explore');
 	});
 
 	test('unavailable sources are disabled, not links', () => {
 		render(AppSidebar);
 
-		const googleMaps = screen.getByText(/Google Maps/).closest('.nav-link');
 		const whatsapp = screen.getByText(/WhatsApp/).closest('.nav-link');
 
-		expect(googleMaps?.tagName).not.toBe('A');
-		expect(googleMaps).toHaveAttribute('aria-disabled', 'true');
 		expect(whatsapp?.tagName).not.toBe('A');
 		expect(whatsapp).toHaveAttribute('aria-disabled', 'true');
 	});
