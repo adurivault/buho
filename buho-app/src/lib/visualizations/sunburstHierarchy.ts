@@ -69,7 +69,11 @@ function nodePlays(node: SunburstNode): number {
  * `level` est la profondeur des enfants traités (0 = artistes, 1 = albums, …),
  * utilisée pour nommer le bucket.
  */
-export function bucketByDegree(node: SunburstNode, level = 0): SunburstNode {
+export function bucketByDegree(
+    node: SunburstNode,
+    level = 0,
+    otherNames: string[] = OTHER_NAMES
+): SunburstNode {
     if (!node.children) return { ...node };
 
     const threshold = nodeTotal(node) / 360 * THRESHOLD_DEGREES;
@@ -82,16 +86,78 @@ export function bucketByDegree(node: SunburstNode, level = 0): SunburstNode {
             otherMinutes += childTotal;
             otherPlays += nodePlays(child);
         } else {
-            kept.push(bucketByDegree(child, level + 1));
+            kept.push(bucketByDegree(child, level + 1, otherNames));
         }
     }
     if (otherMinutes > 0) {
         kept.push({
-            name: OTHER_NAMES[Math.min(level, OTHER_NAMES.length - 1)],
+            name: otherNames[Math.min(level, otherNames.length - 1)] ?? 'Other',
             isOther: true,
             value: otherMinutes,
             playCount: otherPlays
         });
     }
     return { ...node, children: kept };
+}
+
+/**
+ * Build a hierarchy from rows that carry an ordered `path` of level values plus
+ * a `value`. Levels may be null (e.g. a foreign point has a country but no
+ * region): the path is followed only up to the first null, and the value lands
+ * on the deepest known node. A node that is BOTH a destination (rows end there)
+ * and a parent (deeper rows exist) gets a placeholder "—" leaf for its direct
+ * value, so d3.sum (leaves only) doesn't drop it. Generic counterpart of
+ * buildSunburstHierarchy, used by the Google Maps geo sunburst.
+ */
+export interface PathRow {
+    path: (string | null | undefined)[];
+    value: number;
+}
+
+export function buildPathHierarchy(rows: PathRow[], rootName: string): SunburstNode {
+    const root: SunburstNode = { name: rootName, children: [] };
+    const nodeByKey = new Map<string, SunburstNode>([['', root]]);
+
+    for (const row of rows) {
+        const known: string[] = [];
+        for (const level of row.path) {
+            if (level === null || level === undefined || level === '') break;
+            known.push(level);
+        }
+        if (known.length === 0) continue;
+
+        let parent = root;
+        const prefix: string[] = [];
+        for (const name of known) {
+            prefix.push(name);
+            const key = JSON.stringify(prefix);
+            let node = nodeByKey.get(key);
+            if (!node) {
+                node = { name, children: [] };
+                nodeByKey.set(key, node);
+                parent.children!.push(node);
+            }
+            parent = node;
+        }
+        parent.value = (parent.value ?? 0) + row.value;
+    }
+
+    normalizePathNode(root);
+    // The root stays a container even when empty (normalize would otherwise turn
+    // a childless node into a leaf).
+    if (!root.children) root.children = [];
+    return root;
+}
+
+/** Turn empty-children nodes into leaves; split mixed nodes via a "—" leaf. */
+function normalizePathNode(node: SunburstNode): void {
+    if (!node.children || node.children.length === 0) {
+        node.children = undefined;
+        return;
+    }
+    if (node.value && node.value > 0) {
+        node.children.push({ name: '—', value: node.value });
+        node.value = undefined;
+    }
+    for (const child of node.children) normalizePathNode(child);
 }

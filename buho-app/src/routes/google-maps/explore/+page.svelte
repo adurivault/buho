@@ -2,11 +2,16 @@
     import { onDestroy, untrack } from "svelte";
     import ConstellationChart from "$lib/components/visualizations/ConstellationChart.svelte";
     import DimensionPie from "$lib/components/visualizations/DimensionPie.svelte";
+    import SunburstExplorer from "$lib/components/visualizations/SunburstExplorer.svelte";
     import {
         getGoogleMapsConstellationTimeDomain,
         getGoogleMapsExplorerBasePoints,
         type LocationBasePoint,
     } from "$lib/data/queries/googleMapsQueries";
+    import {
+        buildPathHierarchy,
+        type SunburstNode,
+    } from "$lib/visualizations/sunburstHierarchy";
     import type { DimensionSlice } from "$lib/data/queries/dimensionQueries";
     import type { FilterScalar, FilterState } from "$lib/types/filters";
     import LoadingOverlay from "$lib/components/LoadingOverlay.svelte";
@@ -31,8 +36,15 @@
     let initialLoad = $state(true);
     let containerWidth = $state(0);
     let containerHeight = $state(0);
+    let sunburstWidth = $state(0);
+    let sunburstHeight = $state(0);
     let viewportHeight = $state(0);
     let timeDomain = $state<[number, number] | null>(null);
+
+    // Hiérarchie géo du sunburst (pays → région → département → ville), construite
+    // en JS depuis les base points comme les pies (cf. computeSunburstTree).
+    let sunburstTree = $state.raw<SunburstNode>({ name: "All locations" });
+    let prevSunburstSig = "";
 
     const pieSize = $derived(
         Math.max(56, Math.min(120, Math.round(viewportHeight * 0.1) - 20)),
@@ -72,7 +84,37 @@
         { key: "semantic_type", field: "fSemanticType" },
         { key: "dayofweek", field: "dow" },
         { key: "year", field: "year" },
+        // Geo dims drive the sunburst's cross-filtering (constellation + pies).
+        { key: "country", field: "country" },
+        { key: "region", field: "region" },
+        { key: "department", field: "department" },
+        { key: "nearest_city", field: "nearestCity" },
+        { key: "arrondissement", field: "arrondissement" },
     ];
+
+    // Sunburst hierarchy config: depth (1-based) → store filter key, and the keys
+    // the sunburst owns (excluded from its OWN data so it stays full under them).
+    const GEO_KEY_BY_DEPTH = {
+        1: "country",
+        2: "region",
+        3: "department",
+        4: "nearest_city",
+        5: "arrondissement",
+    };
+    const GEO_OTHER_LABELS = [
+        "Other countries",
+        "Other regions",
+        "Other departments",
+        "Other cities",
+        "Other arrondissements",
+    ];
+    const GEO_KEYS = new Set([
+        "country",
+        "region",
+        "department",
+        "nearest_city",
+        "arrondissement",
+    ]);
 
     function dowLabel(v: string): string {
         // DuckDB DAYOFWEEK : 0 = dimanche … 6 = samedi.
@@ -124,6 +166,14 @@
         const d = new Date(playedAt.replace(" ", "T"));
         return Number.isNaN(d.getTime()) ? playedAt : d.toLocaleString();
     }
+    /** Geo breakdown line, most specific → least, deduped (city == department). */
+    function geoLine(m: Record<string, unknown>): string {
+        const parts = [m.arrondissement, m.nearestCity, m.department, m.region, m.country]
+            .map((v) => (v == null ? "" : String(v)))
+            .filter((v) => v && v !== "Unknown");
+        return parts.filter((v, i) => v !== parts[i - 1]).join(" · ");
+    }
+
     function constellationTooltip(m: Record<string, unknown>) {
         const seg = m.segmentType as string;
         const detail =
@@ -136,13 +186,13 @@
                 : seg === "stationary"
                   ? "Visit"
                   : "Move";
-        return {
-            title,
-            lines: [
-                formatPlayedAt(m.playedAt as string),
-                formatDuration(Number(m.durationMinutes) || 0),
-            ],
-        };
+        const lines = [
+            formatPlayedAt(m.playedAt as string),
+            formatDuration(Number(m.durationMinutes) || 0),
+        ];
+        const location = geoLine(m);
+        if (location) lines.push(location);
+        return { title, lines };
     }
 
     /** Dimensions actuellement filtrées + leur Set de valeurs. */
@@ -281,6 +331,68 @@
         };
     }
 
+    // Sunburst data: aggregate base points into a country→region→department→city
+    // tree, in JS like the pies. It EXCLUDES the geo dims from its own filter (so
+    // selecting a zone keeps the hierarchy full, the selection is shown via zoom/
+    // highlight) but respects every other active dim + the brush window.
+    function computeSunburstTree(): SunburstNode {
+        const pts = basePoints;
+        const active = activeDims(
+            googleMapsExplorerFilters.activeFilters,
+        ).filter((d) => !GEO_KEYS.has(d.key));
+        const tWin = viewTimeDomain;
+        const hWin = viewHourDomain;
+        const agg = new Map<string, { path: (string | null)[]; minutes: number }>();
+
+        for (let i = 0; i < pts.length; i++) {
+            const p = pts[i];
+            if (tWin && (p.x < tWin[0] || p.x > tWin[1])) continue;
+            if (hWin && (p.y < hWin[0] || p.y > hWin[1])) continue;
+            let ok = true;
+            for (const d of active) {
+                if (!d.vals.has(p[d.field] as string)) {
+                    ok = false;
+                    break;
+                }
+            }
+            if (!ok) continue;
+
+            // 'Unknown' = missing level → truncates the path (cf. buildPathHierarchy).
+            const country = p.country === "Unknown" ? null : p.country;
+            if (!country) continue; // no country → outside the geo hierarchy
+            const region = p.region === "Unknown" ? null : p.region;
+            const department = p.department === "Unknown" ? null : p.department;
+            const city = p.nearestCity === "Unknown" ? null : p.nearestCity;
+            const arr = p.arrondissement === "Unknown" ? null : p.arrondissement;
+            const path = [country, region, department, city, arr];
+            const key = JSON.stringify(path);
+            let e = agg.get(key);
+            if (!e) {
+                e = { path, minutes: 0 };
+                agg.set(key, e);
+            }
+            e.minutes += p.mins;
+        }
+
+        const rows = [...agg.values()].map((e) => ({ path: e.path, value: e.minutes }));
+        return buildPathHierarchy(rows, "All locations");
+    }
+
+    /** Signature of inputs affecting the sunburst DATA (geo dims excluded). */
+    function sunburstSig(): string {
+        const f = googleMapsExplorerFilters.activeFilters;
+        const rest: FilterState = {};
+        for (const k in f) if (!GEO_KEYS.has(k)) rest[k] = f[k];
+        return JSON.stringify([rest, basePoints.length]);
+    }
+
+    function maybeRecomputeSunburst() {
+        const sig = sunburstSig();
+        if (sig === prevSunburstSig) return;
+        prevSunburstSig = sig;
+        sunburstTree = computeSunburstTree();
+    }
+
     let recomputeRaf = 0;
     function scheduleRecompute() {
         if (recomputeRaf) return;
@@ -288,6 +400,7 @@
             recomputeRaf = 0;
             computeAllPieSlices();
             computeMacro();
+            maybeRecomputeSunburst();
         });
     }
 
@@ -324,6 +437,8 @@
         };
         initialLoad = true;
         prevMatchSig = "";
+        sunburstTree = { name: "All locations" };
+        prevSunburstSig = "";
     }
 
     // Chargement des points : UNE fois quand la source est prête.
@@ -500,6 +615,34 @@
                     {/if}
                 </div>
             </article>
+
+            <aside class="chart-placeholder sunburst" aria-label="Location sunburst">
+                <div
+                    class="sunburst-host"
+                    bind:clientWidth={sunburstWidth}
+                    bind:clientHeight={sunburstHeight}
+                >
+                    {#if initialLoad}
+                        <div
+                            class="loading-wrapper relative w-full h-full flex items-center justify-center"
+                        >
+                            <LoadingOverlay message="Locating places..." />
+                        </div>
+                    {:else if sunburstWidth > 0 && sunburstHeight > 0}
+                        <SunburstExplorer
+                            data={sunburstTree}
+                            width={sunburstWidth}
+                            height={sunburstHeight}
+                            filters={googleMapsExplorerFilters}
+                            keyByDepth={GEO_KEY_BY_DEPTH}
+                            rootLabel="All locations"
+                            formatValue={(m) => formatDuration(m)}
+                            otherLabels={GEO_OTHER_LABELS}
+                            testId="location-sunburst-explorer"
+                        />
+                    {/if}
+                </div>
+            </aside>
         </section>
 
         {#if !initialLoad}
@@ -623,8 +766,9 @@
         min-height: 0;
         display: grid;
         gap: 1rem;
-        grid-template-columns: 1fr;
+        grid-template-columns: 1.5fr 1fr;
         grid-template-rows: minmax(0, 1fr);
+        grid-template-areas: "constellation sunburst";
     }
 
     .chart-placeholder {
@@ -639,6 +783,7 @@
     }
 
     .constellation {
+        grid-area: constellation;
         min-width: 0;
     }
 
@@ -648,13 +793,41 @@
         min-height: 0;
     }
 
+    .sunburst {
+        grid-area: sunburst;
+        min-width: 0;
+        position: relative;
+    }
+
+    .sunburst-host {
+        width: 100%;
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* Sous une certaine largeur, on empile constellation + sunburst (cf. Spotify). */
     @media (max-width: 1023px) {
         .explorer-page {
             height: auto;
             min-height: 100%;
         }
 
+        .explorer-grid {
+            grid-template-columns: 1fr;
+            grid-template-rows: auto auto;
+            grid-template-areas:
+                "constellation"
+                "sunburst";
+        }
+
         .constellation-host {
+            min-height: 26rem;
+        }
+
+        .sunburst-host {
             min-height: 26rem;
         }
     }
