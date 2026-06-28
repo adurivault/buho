@@ -16,6 +16,11 @@ export interface LocationBasePoint extends ConnectablePoint {
     mins: number; // segment duration in minutes
     distanceMeters: number; // 0 for stationary / missing
     placeId: string; // '' when absent
+    country: string; // geo attribution; 'Unknown' when absent
+    region: string;
+    department: string;
+    nearestCity: string;
+    arrondissement: string; // Paris/Lyon/Marseille only; 'Unknown' otherwise
 }
 
 /**
@@ -37,6 +42,11 @@ export async function getGoogleMapsExplorerBasePoints(): Promise<LocationBasePoi
             CAST(duration_seconds / 60.0 AS DOUBLE) as mins,
             CAST(COALESCE(distance_meters, 0) AS DOUBLE) as distanceMeters,
             COALESCE(CAST(place_id AS VARCHAR), '') as placeId,
+            COALESCE(country, 'Unknown') as country,
+            COALESCE(region, 'Unknown') as region,
+            COALESCE(department, 'Unknown') as department,
+            COALESCE(nearest_city, 'Unknown') as nearestCity,
+            COALESCE(arrondissement, 'Unknown') as arrondissement,
             lat,
             lon
         FROM google_maps_segments
@@ -58,6 +68,11 @@ export async function getGoogleMapsExplorerBasePoints(): Promise<LocationBasePoi
                 playedAt: row.playedAt,
                 lat: Number(row.lat),
                 lon: Number(row.lon),
+                country: row.country || 'Unknown',
+                region: row.region || 'Unknown',
+                department: row.department || 'Unknown',
+                nearestCity: row.nearestCity || 'Unknown',
+                arrondissement: row.arrondissement || 'Unknown',
             },
             fSegmentType: row.fSegmentType || 'Unknown',
             fActivityType: row.fActivityType || 'Unknown',
@@ -67,6 +82,11 @@ export async function getGoogleMapsExplorerBasePoints(): Promise<LocationBasePoi
             mins: Number(row.mins) || 0,
             distanceMeters: Number(row.distanceMeters) || 0,
             placeId: row.placeId || '',
+            country: row.country || 'Unknown',
+            region: row.region || 'Unknown',
+            department: row.department || 'Unknown',
+            nearestCity: row.nearestCity || 'Unknown',
+            arrondissement: row.arrondissement || 'Unknown',
         }));
     } catch (error) {
         console.error('Error fetching Google Maps base points:', error);

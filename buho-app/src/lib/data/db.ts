@@ -115,6 +115,40 @@ export async function createTable(name: string, schema: string): Promise<void> {
     await connection.query(`CREATE TABLE IF NOT EXISTS ${name} (${schema})`);
 }
 
+// Load the `spatial` extension (ST_Contains, ST_Point, …). Lazy and idempotent:
+// only the Google Maps path needs GIS, so Spotify-only users never pay the
+// one-time extension fetch from extensions.duckdb.org.
+let spatialLoaded = false;
+export async function loadSpatial(): Promise<void> {
+    if (spatialLoaded) return;
+    const connection = await getConnection();
+    await connection.query('INSTALL spatial');
+    await connection.query('LOAD spatial');
+    spatialLoaded = true;
+}
+
+/**
+ * Register `rows` as a temporary JSON file and run a single statement that reads
+ * from it. `buildSql` receives a `read_json_auto('…')` source expression. Use
+ * this when the insert needs SQL-side transformation that the plain insertData
+ * path can't express — e.g. building GEOMETRY via ST_GeomFromGeoJSON / ST_Point.
+ */
+export async function withJsonRows(
+    rows: unknown[],
+    buildSql: (source: string) => string,
+): Promise<void> {
+    if (!db || !conn) throw new Error('DB not initialized');
+    if (rows.length === 0) return;
+
+    const tempFile = `import_geo_${Date.now()}_${Math.random().toString(36).slice(2)}.json`;
+    await db.registerFileText(tempFile, JSON.stringify(rows));
+    try {
+        await conn.query(buildSql(`read_json_auto('${tempFile}')`));
+    } finally {
+        await db.registerFileText(tempFile, '');
+    }
+}
+
 export async function insertData<T>(table: string, data: T[]): Promise<void> {
     validateIdentifier(table, 'table');
     if (!db || !conn) throw new Error('DB not initialized');
@@ -240,6 +274,9 @@ export async function insertSpotifyPlays(plays: SpotifyPlay[]): Promise<void> {
 export async function insertLocationSegments(segments: LocationSegment[]): Promise<void> {
     const TABLE_NAME = 'google_maps_segments';
 
+    // Geo columns (country…city_km) are declared up front so the explorer's base
+    // points query can always read them; attributeZones fills them in afterwards,
+    // leaving them NULL if geo attribution is skipped or fails.
     const SCHEMA = `
         timestamp TIMESTAMP,
         date DATE,
@@ -251,7 +288,13 @@ export async function insertLocationSegments(segments: LocationSegment[]): Promi
         activity_type VARCHAR,
         semantic_type VARCHAR,
         place_id VARCHAR,
-        distance_meters DOUBLE
+        distance_meters DOUBLE,
+        country VARCHAR,
+        region VARCHAR,
+        department VARCHAR,
+        nearest_city VARCHAR,
+        city_km DOUBLE,
+        arrondissement VARCHAR
     `;
 
     await createTable(TABLE_NAME, SCHEMA);
@@ -280,7 +323,12 @@ export async function insertLocationSegments(segments: LocationSegment[]): Promi
 
     await db.registerFileText(tempFile, jsonContent);
 
-    await conn.query(`INSERT INTO ${TABLE_NAME} SELECT DISTINCT * FROM read_json_auto('${tempFile}')`);
+    // Explicit column list: the source JSON has only the 11 base fields; the geo
+    // columns default to NULL until attributeZones populates them.
+    await conn.query(`INSERT INTO ${TABLE_NAME} (
+        timestamp, date, end_timestamp, duration_seconds, lat, lon,
+        segment_type, activity_type, semantic_type, place_id, distance_meters
+    ) SELECT DISTINCT * FROM read_json_auto('${tempFile}')`);
 
     await db.registerFileText(tempFile, '');
 }

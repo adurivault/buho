@@ -4,6 +4,8 @@ import JSZip from 'jszip';
 import { parseSpotifyData } from '$lib/data/parseSpotify';
 import { parseGoogleMapsData } from '$lib/data/parseGoogleMaps';
 import * as db from '$lib/data/db';
+import { loadGeoAssets } from '$lib/data/geo/loadGeoAssets';
+import { attributeZones } from '$lib/data/geo/attributeZones';
 import { spotifyFilterStore } from '$lib/stores/spotifyFilterStore.svelte';
 import { trackEvent, bucket } from '$lib/analytics';
 
@@ -305,6 +307,16 @@ class DataStore {
             await db.initDuckDB();
             await db.dropTable('google_maps_segments');
             await db.insertLocationSegments(segments);
+
+            this.setLoading({ status: 'locating', message: 'Locating points...' });
+            try {
+                await db.loadSpatial();
+                await loadGeoAssets();
+                await attributeZones();
+            } catch (geoError) {
+                // Best-effort: segments stay usable even if zone attribution fails.
+                console.error('Geo attribution failed:', geoError);
+            }
 
             this.loadUserData('google-maps');
             this.loading = null;
