@@ -1,9 +1,9 @@
 /**
- * Palette partagée des bar chart races (artistes, titres…).
+ * Shared palette for the bar chart races (artists, tracks…).
  *
- * Couleurs Tailwind ordonnées le long de la roue chromatique
- * (rouge → orange → … → violet → rose). Niveau 300, identique en thème
- * clair et sombre.
+ * Tailwind colors ordered along the color wheel
+ * (red → orange → … → violet → pink). Level 300, identical in light and dark
+ * themes.
  */
 export const RACE_PALETTE = [
     "#fca5a5", // red-300

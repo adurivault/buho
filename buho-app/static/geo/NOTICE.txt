@@ -1,0 +1,7 @@
+Data sources & licenses (modified: simplified)
+==============================================
+FRA ADM1: Institut national de l'information géographique et forestière (IGN-F) — Etalab Open License 2.0
+FRA ADM2: Institut national de l'information géographique et forestière (IGN-F) — Etalab Open License 2.0
+FR arrondissements: OpenDataSoft georef-france (IGN/INSEE) — Open Licence / Licence Ouverte
+Cities: GeoNames — CC-BY 4.0
+World regions/countries & oceans: Natural Earth — public domain

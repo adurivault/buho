@@ -2,9 +2,9 @@
 //
 // Headless end-to-end test of the geo-attribution SQL. DuckDB-WASM's worker
 // bundle can't run in JSDOM, but the `duckdb-node-blocking` bundle runs the same
-// wasm core (+ the real `spatial` extension) synchronously in Node. We feed
-// synthetic reference zones/cities + user points and assert the exact SQL from
-// attributionSql.ts (shared with the runtime) attributes them correctly.
+// wasm core (+ the real `spatial` extension) synchronously in Node. We feed a
+// synthetic "leaf" geo_zones layer + cities + user points and assert the exact
+// SQL from attributionSql.ts (shared with the runtime) attributes them correctly.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -28,28 +28,38 @@ beforeAll(async () => {
     conn = db.connect();
     conn.query('LOAD spatial');
 
-    // Reference zones: France/UK countries, Île-de-France region, Paris department.
-    conn.query(`CREATE TABLE geo_zones (level VARCHAR, country_code VARCHAR, zone_id VARCHAR, name VARCHAR, geom GEOMETRY)`);
+    // Leaf layer: each polygon = finest unit, hierarchy in columns. A Paris
+    // arrondissement leaf, a Rhône department leaf, a Madrid region leaf, a rural
+    // FR department leaf, and one ocean leaf.
+    conn.query(`CREATE TABLE geo_zones (level VARCHAR, country_code VARCHAR, country VARCHAR,
+        region VARCHAR, department VARCHAR, arrondissement VARCHAR, geom GEOMETRY)`);
     conn.query(`INSERT INTO geo_zones VALUES
-      ('country','FRA','FRA','France',         ST_GeomFromText('POLYGON((-5 42, 8 42, 8 51, -5 51, -5 42))')),
-      ('country','GBR','GBR','United Kingdom', ST_GeomFromText('POLYGON((-8 51, 2 51, 2 58, -8 58, -8 51))')),
-      ('region','FRA','IDF','Île-de-France',   ST_GeomFromText('POLYGON((1.4 48.1, 3.6 48.1, 3.6 49.2, 1.4 49.2, 1.4 48.1))')),
-      ('department','FRA','75','Paris',        ST_GeomFromText('POLYGON((2.2 48.8, 2.5 48.8, 2.5 48.9, 2.2 48.9, 2.2 48.8))'))`);
+      ('arrondissement','FRA','France','Île-de-France','Paris','Paris 4e Arrondissement',
+        ST_GeomFromText('POLYGON((2.2 48.8, 2.5 48.8, 2.5 48.9, 2.2 48.9, 2.2 48.8))')),
+      ('department','FRA','France','Auvergne-Rhône-Alpes','Rhône',NULL,
+        ST_GeomFromText('POLYGON((4.7 45.7, 5.0 45.7, 5.0 45.9, 4.7 45.9, 4.7 45.7))')),
+      ('department','FRA','France','Occitanie','Tarn-et-Garonne',NULL,
+        ST_GeomFromText('POLYGON((0.5 43.5, 1.5 43.5, 1.5 44.5, 0.5 44.5, 0.5 43.5))')),
+      ('region','ESP','Spain','Madrid',NULL,NULL,
+        ST_GeomFromText('POLYGON((-4 40, -3 40, -3 41, -4 41, -4 40))')),
+      ('ocean','OCEAN','Test Sea',NULL,NULL,NULL,
+        ST_GeomFromText('POLYGON((-1 -1, 0 -1, 0 0, -1 0, -1 -1))'))`);
 
-    conn.query(`CREATE TABLE geo_cities (name VARCHAR, country_code VARCHAR, admin1 VARCHAR, population INTEGER, lat DOUBLE, lon DOUBLE, geom GEOMETRY)`);
+    conn.query(`CREATE TABLE geo_cities (name VARCHAR, country_code VARCHAR, population INTEGER, geom GEOMETRY)`);
     conn.query(`INSERT INTO geo_cities VALUES
-      ('Paris','FRA','IDF',2100000,48.8566,2.3522, ST_Point(2.3522,48.8566)),
-      ('Lyon','FRA','ARA',500000,45.7600,4.8400,  ST_Point(4.8400,45.7600)),
-      ('London','GBR','ENG',8900000,51.5074,-0.1278, ST_Point(-0.1278,51.5074))`);
+      ('Paris','FRA',2100000, ST_Point(2.3522,48.8566)),
+      ('Lyon','FRA',500000,  ST_Point(4.8400,45.7600)),
+      ('Madrid','ESP',3200000, ST_Point(-3.7038,40.4168))`);
 
-    // User points (mirrors google_maps_segments lat/lon).
     conn.query(`CREATE TABLE google_maps_segments (lat DOUBLE, lon DOUBLE, place_id VARCHAR, label VARCHAR)`);
     conn.query(`INSERT INTO google_maps_segments VALUES
       (48.8566, 2.3522, 'p1', 'paris'),
       (45.7600, 4.8400, 'p2', 'lyon'),
-      (51.5074,-0.1278, 'p3', 'london'),
-      (0.0,     0.0,    NULL, 'ocean'),
-      (44.0,    1.0,    NULL, 'rural-fr')`);
+      (40.4168,-3.7038, 'p3', 'madrid'),
+      (40.5000,-2.9700, NULL, 'coastal'),
+      (-0.5000,-0.5000, NULL, 'ocean'),
+      (44.0000, 1.0000, NULL, 'rural'),
+      (60.0000,60.0000, NULL, 'nowhere')`);
 
     for (const sql of ATTRIBUTION_STATEMENTS) conn.query(sql);
 });
@@ -62,40 +72,56 @@ function row(label: string) {
     return q(`SELECT * FROM google_maps_segments WHERE label = '${label}'`)[0];
 }
 
-describe('geo attribution (headless DuckDB spatial)', () => {
-    it('attributes Paris to country/region/department/city', () => {
+describe('geo attribution (headless DuckDB spatial, leaf model)', () => {
+    it('reads the full hierarchy from an arrondissement leaf', () => {
         const r = row('paris');
         expect(r.country).toBe('France');
         expect(r.region).toBe('Île-de-France');
         expect(r.department).toBe('Paris');
+        expect(r.arrondissement).toBe('Paris 4e Arrondissement');
         expect(r.nearest_city).toBe('Paris');
-        expect(r.city_km).toBeLessThan(1);
     });
 
-    it('attributes Lyon to France + nearest city, no region/department', () => {
+    it('reads a department leaf (no arrondissement)', () => {
         const r = row('lyon');
         expect(r.country).toBe('France');
-        expect(r.region).toBeNull();
-        expect(r.department).toBeNull();
+        expect(r.region).toBe('Auvergne-Rhône-Alpes');
+        expect(r.department).toBe('Rhône');
+        expect(r.arrondissement).toBeNull();
         expect(r.nearest_city).toBe('Lyon');
     });
 
-    it('attributes a UK point to its country and city only', () => {
-        const r = row('london');
-        expect(r.country).toBe('United Kingdom');
-        expect(r.region).toBeNull();
-        expect(r.nearest_city).toBe('London');
+    it('reads a foreign region leaf (department null)', () => {
+        const r = row('madrid');
+        expect(r.country).toBe('Spain');
+        expect(r.region).toBe('Madrid');
+        expect(r.department).toBeNull();
+        expect(r.nearest_city).toBe('Madrid');
     });
 
-    it('leaves an ocean point fully null', () => {
+    it('coastal buffer: a point just offshore inherits the nearest leaf', () => {
+        const r = row('coastal');
+        expect(r.country).toBe('Spain');
+        expect(r.region).toBe('Madrid');
+    });
+
+    it('ocean fallback: country = sea name, no region', () => {
         const r = row('ocean');
-        expect(r.country).toBeNull();
+        expect(r.country).toBe('Test Sea');
+        expect(r.region).toBeNull();
         expect(r.nearest_city).toBeNull();
     });
 
-    it('applies the 30 km guard: rural FR point gets country but no city', () => {
-        const r = row('rural-fr');
+    it('applies the 30 km guard: rural FR gets the zone but no city', () => {
+        const r = row('rural');
         expect(r.country).toBe('France');
+        expect(r.department).toBe('Tarn-et-Garonne');
+        expect(r.nearest_city).toBeNull();
+    });
+
+    it('leaves a point in no leaf fully null', () => {
+        const r = row('nowhere');
+        expect(r.country).toBeNull();
         expect(r.nearest_city).toBeNull();
     });
 

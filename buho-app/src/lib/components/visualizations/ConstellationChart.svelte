@@ -26,15 +26,15 @@
         timeDomain?: [number, number] | null;
         viewTimeDomain?: [number, number] | null;
         viewHourDomain?: [number, number] | null;
-        // Optionnel : quand l'appelant garde une référence `data` stable et ne
-        // fait que muter le flag `matched` en place, il bumpe ce compteur pour
-        // déclencher un redraw sans reconstruire scaledData/quadtree (cf.
-        // /spotify/explore). Laisser à 0 → comportement historique.
+        // Optional: when the caller keeps a stable `data` reference and only
+        // mutates the `matched` flag in place, it bumps this counter to trigger a
+        // redraw without rebuilding scaledData/quadtree (cf. /spotify/explore).
+        // Leave at 0 → historical behavior.
         matchVersion?: number;
-        // Coloration par dimension. `colorField` = champ brut porté par les points
-        // (ex. "platform") ; `colorCategories` = valeurs ordonnées + couleurs (la
-        // dernière étant typiquement "Other"). Quand fournis, les points matched
-        // et les barcharts satellites sont colorés/empilés par cette dimension.
+        // Coloring by dimension. `colorField` = raw field carried by the points
+        // (e.g. "platform"); `colorCategories` = ordered values + colors (the last
+        // typically being "Other"). When provided, the matched points and the
+        // satellite barcharts are colored/stacked by this dimension.
         colorField?: string | null;
         colorCategories?: ColorCategory[];
         // Tooltip content for the hovered point, derived from its metadata.
@@ -64,8 +64,8 @@
 
     const colorActive = $derived(!!colorField && colorCategories.length > 0);
 
-    // value → couleur et value → index de segment (pour l'empilement). Une valeur
-    // inconnue retombe sur "Other" si présent, sinon sur la dernière catégorie.
+    // value → color and value → segment index (for stacking). An unknown value
+    // falls back to "Other" if present, otherwise to the last category.
     const colorMap = $derived.by(() => {
         const m = new Map<string, string>();
         for (const c of colorCategories) m.set(c.value, c.color);
@@ -93,26 +93,26 @@
     function segmentIndex(point: ConnectablePoint): number {
         const i = valueIndex.get(pointColorValue(point));
         if (i !== undefined) return i;
-        return otherIndex; // -1 si pas de bucket "Other" → ignoré dans l'empilement
+        return otherIndex; // -1 if no "Other" bucket → ignored in the stacking
     }
 
-    // --- Animation de coloration (balayage des barcharts) ----------------
-    // À l'entrée en mode coloration (ou au changement de dimension), un front
-    // balaie les barcharts satellites — les dates de gauche à droite, les heures
-    // de haut en bas — et chaque barre se colore à son passage, avec un léger
-    // « pop » d'épaisseur. Le scatterplot n'est PAS animé (trop coûteux : 167k
-    // points re-triés par frame). `colorAnimProgress` = 1 au repos (tout coloré).
-    const COLOR_ANIM_MS = 800; // durée du balayage de bout en bout
-    const POP_SPAN = 0.15; // largeur (en progression) de la fenêtre de pop
-    // La progression va jusqu'à 1 + POP_SPAN : ce surplus laisse la vague de pop
-    // de la dernière barre (seuil t≈1) se terminer au lieu d'être coupée net.
+    // --- Coloring animation (barchart sweep) -----------------------------
+    // On entering coloring mode (or on dimension change), a front sweeps the
+    // satellite barcharts — dates left to right, hours top to bottom — and each
+    // bar colors as it's reached, with a slight thickness "pop". The scatterplot
+    // is NOT animated (too costly: 167k points re-sorted per frame).
+    // `colorAnimProgress` = 1 at rest (everything colored).
+    const COLOR_ANIM_MS = 800; // duration of the end-to-end sweep
+    const POP_SPAN = 0.15; // width (in progress units) of the pop window
+    // Progress goes up to 1 + POP_SPAN: this surplus lets the pop wave of the last
+    // bar (threshold t≈1) finish instead of being cut off abruptly.
     const COLOR_ANIM_END = 1 + POP_SPAN;
     let colorAnimProgress = COLOR_ANIM_END;
     let colorAnimRaf: number | null = null;
     let colorAnimStart = 0;
 
     function startColorAnim() {
-        // Respecte les préférences système : pas de balayage si réduit.
+        // Respects system preferences: no sweep if reduced motion.
         if (
             typeof window !== "undefined" &&
             window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
@@ -129,7 +129,7 @@
                 (performance.now() - colorAnimStart) / COLOR_ANIM_MS,
             );
             colorAnimProgress = d3.easeQuadOut(t) * COLOR_ANIM_END;
-            // Seuls les barcharts sont animés (le scatterplot reste figé/coloré).
+            // Only the barcharts are animated (the scatterplot stays static/colored).
             drawBottomPanel();
             drawLeftPanel();
             if (t < 1) {
@@ -142,8 +142,8 @@
         colorAnimRaf = requestAnimationFrame(step);
     }
 
-    // Amplitude de pop [0,1] pour une barre dont le seuil de révélation est `t`
-    // (0 = première révélée, 1 = dernière). Nul hors de la fenêtre de passage.
+    // Pop amplitude [0,1] for a bar whose reveal threshold is `t`
+    // (0 = first revealed, 1 = last). Zero outside the sweep window.
     function barPop(t: number): number {
         const phase = (colorAnimProgress - t) / POP_SPAN;
         if (phase < 0 || phase > 1) return 0;
@@ -165,8 +165,8 @@
     const OUT_OF_BRUSH_BAR_COLOR = "#6b645c";
     const UNMATCHED_POINT_COLOR = "#6b645c";
     const UNMATCHED_POINT_ALPHA = 0.22;
-    // Chrome des panneaux canvas — suit le thème (toggle light/dark). Le canvas
-    // manipule des chaînes de couleur, on relit donc les tokens à chaque draw.
+    // Canvas panel chrome — follows the theme (light/dark toggle). The canvas
+    // manipulates color strings, so we re-read the tokens on every draw.
     const panelColors = $derived.by(() => {
         void themeStore.theme;
         const c = vizColors();
@@ -178,8 +178,8 @@
         };
     });
 
-    // Capturé une fois au montage : suffisant pour le cas courant (changement
-    // de moniteur/zoom en cours de session non géré, complexité non justifiée).
+    // Captured once on mount: enough for the common case (monitor/zoom change
+    // mid-session not handled, complexity not justified).
     const dpr =
         typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
 
@@ -349,7 +349,7 @@
     const monthlyBars = $derived.by(() => {
         void matchVersion; // recompute when `matched` is mutated in place
         const counts = new Map<number, number>();
-        // En mode coloration : décompte par catégorie (segments[idx]) par mois.
+        // In coloring mode: count by category (segments[idx]) per month.
         const segs = colorActive ? new Map<number, number[]>() : null;
         for (const point of data) {
             if (!point.matched) continue;
@@ -539,9 +539,9 @@
 
         ctx.globalAlpha = 0.7;
         if (colorActive) {
-            // Regroupe les points matched par couleur en un seul passage pour
-            // minimiser les changements de fillStyle (un draw par catégorie).
-            // Le scatterplot n'est pas balayé : tout est coloré directement.
+            // Group the matched points by color in a single pass to minimize
+            // fillStyle changes (one draw per category).
+            // The scatterplot is not swept: everything is colored directly.
             const buckets = new Map<string, ScaledPoint[]>();
             for (const point of scaledData) {
                 if (!point.original.matched) continue;
@@ -639,14 +639,14 @@
                 monthCenterMs >= viewXDomain[0] &&
                 monthCenterMs <= viewXDomain[1];
 
-            // Balayage gauche → droite : 0 = bord gauche (révélé en premier).
+            // Sweep left → right: 0 = left edge (revealed first).
             const cx = bx + bw / 2;
             const t = (cx - x0) / (x1 - x0);
             const revealed = colorAnimProgress >= t;
 
             if (colorActive && isInWindow && bar.segments && revealed) {
-                // Empilement de bas en haut — seulement dans la fenêtre de brush.
-                // Pop au passage du front : un peu plus haut et plus large.
+                // Stacking bottom to top — only within the brush window.
+                // Pop as the front passes: a bit taller and wider.
                 const pop = barPop(t);
                 const sV = 1 + pop * 0.18;
                 const sH = 1 + pop * 0.3;
@@ -699,7 +699,7 @@
             .domain([0, maxCount])
             .range([left, right]);
 
-        // Les barres horaires partent du bord droit vers la gauche.
+        // The hour bars start from the right edge and go left.
         const xForCount = (c: number) => right - (countScale(c) - left);
         for (const bar of hourBars) {
             const yStart = sideYScale(bar.startHour);
@@ -710,14 +710,14 @@
             const isInWindow =
                 hourCenter >= viewYDomain[0] && hourCenter <= viewYDomain[1];
 
-            // Balayage bas → haut : 0 = en bas (révélé en premier).
+            // Sweep bottom → top: 0 = bottom (revealed first).
             const yc = sideYScale(hourCenter);
             const t = (y1 - yc) / (y1 - y0);
             const revealed = colorAnimProgress >= t;
 
             if (colorActive && isInWindow && bar.segments && revealed) {
-                // Empilement coloré au passage du front, avec un pop : un peu plus
-                // épais (hauteur) et un peu plus long.
+                // Colored stacking as the front passes, with a pop: a bit thicker
+                // (height) and a bit longer.
                 const pop = barPop(t);
                 const sV = 1 + pop * 0.3;
                 const sL = 1 + pop * 0.18;
@@ -792,7 +792,7 @@
         };
     }
 
-    /** ⌘/Ctrl+clic sur un point : délégué à l'appelant (ex. ouvrir sur Spotify). */
+    /** ⌘/Ctrl+click on a point: delegated to the caller (e.g. open on Spotify). */
     function onClick(event: MouseEvent) {
         if (!hasOpenModifier(event) || !mainCanvas || !quadtree || !onPointClick)
             return;
@@ -860,9 +860,9 @@
             .brushX()
             .handleSize(2)
             .extent(brushExtent)
-            // "brush" : mise à jour live pendant le drag. On émet aussi le
-            // domaine downstream pour que le sunburst s'actualise en direct ; le
-            // consommateur throttle la cadence (cf. +page).
+            // "brush": live update during the drag. We also emit the domain
+            // downstream so the sunburst updates in real time; the consumer
+            // throttles the cadence (cf. +page).
             .on("brush", (event) => {
                 const nextX = xFromSelection(event);
                 if (!nextX) return;
@@ -871,7 +871,7 @@
                 viewTimeDomain = nextX;
                 scheduleRender();
             })
-            // "end" : valeur finale au relâchement (garantit le dernier état).
+            // "end": final value on release (guarantees the last state).
             .on("end", (event) => {
                 const nextX = xFromSelection(event);
                 if (!nextX) return;
@@ -1004,8 +1004,8 @@
         scheduleRender();
     });
 
-    // Redraw seul quand `matched` a été muté en place (référence `data` stable).
-    // scaledData/quadtree ne lisent pas matchVersion → pas de reconstruction.
+    // Redraw only when `matched` was mutated in place (stable `data` reference).
+    // scaledData/quadtree don't read matchVersion → no rebuild.
     $effect(() => {
         void matchVersion;
         void colorActive;
@@ -1014,14 +1014,14 @@
         if (domainsInitialized) scheduleRender();
     });
 
-    // Redraw du chrome canvas au changement de thème (light/dark).
+    // Redraw the canvas chrome on theme change (light/dark).
     $effect(() => {
         void themeStore.theme;
         if (domainsInitialized) scheduleRender();
     });
 
-    // Déclenche le balayage à l'entrée en mode coloration ou au changement de
-    // dimension colorée (pas au brush ni au réordonnancement des catégories).
+    // Triggers the sweep on entering coloring mode or on colored-dimension change
+    // (not on brush or on category reordering).
     let prevColorField: string | null = null;
     $effect(() => {
         const f = colorField;

@@ -27,7 +27,7 @@
         /** Raw hierarchy (pre-bucketing); rebuilt into arcs on change. */
         data: SunburstNode;
         width: number;
-        /** Hauteur disponible : le sunburst reste carré, dimensionné sur min(width, height). */
+        /** Available height: the sunburst stays square, sized on min(width, height). */
         height?: number;
         /** Cross-filtering store (spotify/google-maps share the interface). */
         filters: ExplorerFilterStore;
@@ -84,9 +84,9 @@
 
     const chartSize = $derived(Math.max(280, Math.min(760, width, height)));
 
-    // Sélections D3 conservées entre les rendus pour pouvoir mettre à jour le
-    // surlignage (dim) SANS reconstruire tout le SVG : reconstruire ~10k arcs à
-    // chaque clic est ce qui bloquait le thread principal.
+    // D3 selections kept between renders so we can update the highlight (dim)
+    // WITHOUT rebuilding the whole SVG: rebuilding ~10k arcs on every click is
+    // what was blocking the main thread.
     type ArcSel = d3.Selection<SVGPathElement, RectNode, SVGGElement, unknown>;
     type LabelSel = d3.Selection<SVGTextElement, RectNode, SVGGElement, unknown>;
     let pathSel: ArcSel | null = null;
@@ -97,10 +97,10 @@
     let centerValueSel: d3.Selection<SVGTSpanElement, unknown, null, undefined> | null = null;
     let centerCircleSel: d3.Selection<SVGCircleElement, unknown, null, undefined> | null = null;
 
-    // État du zoom. `focusKey` (chemin du nœud centré) survit aux reconstructions
-    // dues au brush temporel ; `focusNode` est la ref du nœud focalisé dans le
-    // rendu courant ; `zooming` empêche updateHighlight de court-circuiter
-    // l'animation de zoom en cours.
+    // Zoom state. `focusKey` (path of the centered node) survives the rebuilds
+    // caused by the time brush; `focusNode` is the ref of the focused node in the
+    // current render; `zooming` prevents updateHighlight from short-circuiting the
+    // ongoing zoom animation.
     const ZOOM_MS = 750;
     let focusKey = "";
     let focusNode: RectNode | null = null;
@@ -108,12 +108,12 @@
     let zooming = false;
     let zoomToken = 0;
 
-    // Échelle de couleur persistante (palette ancrée vert) : keyée par le nom du
-    // nœud de profondeur 1 avec un domaine qui grandit à la demande → une
-    // catégorie garde sa couleur quand la fenêtre temporelle change.
+    // Persistent color scale (green-anchored palette): keyed by the name of the
+    // depth-1 node with a domain that grows on demand → a category keeps its color
+    // when the time window changes.
     const colorScale = createSunburstColorScale();
 
-    /** Clé stable d'un nœud (chemin) pour le data-join. */
+    /** Stable key of a node (path) for the data-join. */
     function nodeKey(d: RectNode): string {
         return d
             .ancestors()
@@ -130,7 +130,7 @@
         return d.y1 <= 3 && d.y0 >= 1 && (d.y1 - d.y0) * (d.x1 - d.x0) > 0.03;
     }
 
-    /** Position d'un arc tel qu'affiché quand `focus` est au centre (zoom). */
+    /** Position of an arc as displayed when `focus` is at the center (zoom). */
     function transformArc(node: RectNode, focus: RectNode): ArcDatum {
         const span = focus.x1 - focus.x0 || 1;
         return {
@@ -162,7 +162,7 @@
         return name.length > max ? `${name.slice(0, max - 1)}…` : name;
     }
 
-    /** Valeurs d'un filtre normalisées en Set<string>, ou null si non applicable. */
+    /** A filter's values normalized to a Set<string>, or null if not applicable. */
     function filterValues(state: FilterState, key: string): Set<string> | null {
         const v = state[key];
         if (v === undefined || v === null) return null;
@@ -177,9 +177,9 @@
     }
 
     /**
-     * Un nœud est "en sélection" si, pour chaque filtre actif à un niveau ≤
-     * profondeur du nœud, son ancêtre à ce niveau correspond. Les nœuds plus
-     * hauts que le filtre (ancêtres de la sélection) restent allumés.
+     * A node is "in the selection" if, for every active filter at a level ≤ the
+     * node's depth, its ancestor at that level matches. Nodes higher than the
+     * filter (ancestors of the selection) stay lit.
      */
     function nodeMatches(node: RectNode, state: FilterState): boolean {
         for (const [depthStr, key] of Object.entries(keyByDepth)) {
@@ -193,7 +193,7 @@
         return true;
     }
 
-    /** Filtre = chemin jusqu'à `node`. Racine → tout effacé. */
+    /** Filter = path up to `node`. Root → everything cleared. */
     function setFiltersToPath(node: RectNode) {
         for (const key of SELECTABLE_KEYS) filters.removeFilter(key);
         if (node.depth === 0) return;
@@ -204,12 +204,12 @@
         }
     }
 
-    // Le filtre est la source de vérité ; le zoom le suit (cf. $effect plus bas).
-    // Les handlers ne font donc QUE poser le filtre.
+    // The filter is the source of truth; the zoom follows it (cf. $effect below).
+    // So the handlers ONLY set the filter.
 
     /**
-     * Clic sur un arc : filtre sur son chemin (→ le zoom suivra). Un onLeafOpen
-     * optionnel (ex. ⌘+clic pour ouvrir sur Spotify) court-circuite le filtre.
+     * Click on an arc: filter on its path (→ the zoom will follow). An optional
+     * onLeafOpen (e.g. ⌘+click to open on Spotify) short-circuits the filter.
      */
     function onArcClick(event: MouseEvent, p: RectNode) {
         if (p.data.isOther) return;
@@ -220,7 +220,7 @@
         setFiltersToPath(p);
     }
 
-    /** Clic central : remonte d'un niveau, ou efface tout à la racine. */
+    /** Center click: go up one level, or clear everything at the root. */
     function onCenterClick() {
         const focus = focusNode;
         if (focus && focus.depth > 0) {
@@ -242,9 +242,9 @@
     }
 
     /**
-     * Focus de zoom voulu d'après les filtres actifs : le nœud le plus profond du
-     * chemin qui possède des enfants (on ne zoome pas dans une feuille).
-     * Renvoie sa clé ("" = racine).
+     * Desired zoom focus based on the active filters: the deepest node of the
+     * path that has children (we don't zoom into a leaf).
+     * Returns its key ("" = root).
      */
     function desiredFocusKey(): string {
         if (!rootNode) return "";
@@ -303,7 +303,7 @@
         return colorScale(node.data.name);
     }
 
-    /** Crée un arc (listeners + couleur + position de départ). Partagé render/zoom. */
+    /** Creates an arc (listeners + color + starting position). Shared by render/zoom. */
     function configureArcEnter(
         enter: d3.Selection<d3.EnterElement, RectNode, SVGGElement, unknown>,
         arc: d3.Arc<unknown, ArcDatum>,
@@ -351,8 +351,8 @@
             .size([2 * Math.PI, hierarchy.height + 1])(hierarchy) as RectNode;
         rootNode = root;
 
-        // Retrouve le focus de zoom courant dans la nouvelle hiérarchie (le brush
-        // a pu reconstruire les nœuds) ; sinon on retombe à la racine.
+        // Find the current zoom focus in the new hierarchy (the brush may have
+        // rebuilt the nodes); otherwise fall back to the root.
         let focus: RectNode = root;
         if (focusKey) {
             const found = (root.descendants() as RectNode[]).find(
@@ -371,7 +371,7 @@
             .attr("height", w)
             .style("font", "11px sans-serif");
 
-        // Groupes persistants : créés une fois, puis mis à jour par data-join keyé.
+        // Persistent groups: created once, then updated by a keyed data-join.
         let gArcs = svg.select<SVGGElement>("g.arcs");
         if (gArcs.empty()) gArcs = svg.append("g").attr("class", "arcs");
         let gLabels = svg.select<SVGGElement>("g.labels");
@@ -385,11 +385,11 @@
         gLabels.attr("fill", colors.foreground);
         labelGroupSel = gLabels;
 
-        // Stoppe une éventuelle transition de zoom en cours avant de rebinder.
+        // Stop any ongoing zoom transition before rebinding.
         gArcs.selectAll("path").interrupt();
         gLabels.selectAll("text").interrupt();
 
-        // DOM allégé : on ne matérialise QUE les arcs visibles au focus courant.
+        // Lean DOM: we only materialize the arcs visible at the current focus.
         const nodes = root.descendants().slice(1) as RectNode[];
         const visibleNodes = nodes.filter((d) => arcVisible(d.current));
 
@@ -452,8 +452,8 @@
     }
 
     /**
-     * Met à jour le surlignage (opacités) + le libellé central sans reconstruire
-     * le SVG. On ne touche pas aux opacités pendant une transition de zoom.
+     * Updates the highlight (opacities) + the center label without rebuilding the
+     * SVG. We don't touch the opacities during a zoom transition.
      */
     function updateHighlight() {
         if (!pathSel || !labelSel) return;
@@ -493,8 +493,8 @@
     }
 
     /**
-     * Zoome (transition fluide) pour centrer `focus`. Anime current → target sur
-     * les arcs existants, rebind les labels visibles à la cible.
+     * Zooms (smooth transition) to center `focus`. Animates current → target on
+     * the existing arcs, rebinds the visible labels to the target.
      */
     function zoomTo(focus: RectNode) {
         if (!svgEl || !rootNode || !labelGroupSel) return;
@@ -609,7 +609,7 @@
             .catch(() => {});
     }
 
-    // Rebuild complet du SVG seulement quand les données ou la taille changent.
+    // Full SVG rebuild only when the data or the size changes.
     $effect(() => {
         const _data = data;
         const _size = chartSize;
@@ -617,7 +617,7 @@
         render();
     });
 
-    // Le zoom suit le filtre (source de vérité).
+    // The zoom follows the filter (source of truth).
     $effect(() => {
         const _filters = filters.activeFilters;
         if (!rootNode || !pathSel) return;
@@ -632,7 +632,7 @@
         if (target) zoomTo(target);
     });
 
-    // Changement de filtre : on met juste à jour les opacités (pas de rebuild).
+    // Filter change: we just update the opacities (no rebuild).
     $effect(() => {
         const _filters = filters.activeFilters;
         updateHighlight();

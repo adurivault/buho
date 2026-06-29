@@ -1,82 +1,82 @@
-# PRD — Visualisation géographique Google Maps
+# PRD — Google Maps geographic visualization
 
-> Statut : proposition · Source : exports Google Timeline (déjà parsés dans `google_maps_segments`)
-> Périmètre : carte interactive + attribution de chaque point à des zones géographiques multi-échelles.
+> Status: proposal · Source: Google Timeline exports (already parsed into `google_maps_segments`)
+> Scope: interactive map + attribution of each point to multi-scale geographic zones.
 
-## 1. Contexte & objectif
+## 1. Context & goal
 
-Buho visualise des données personnelles **100% côté navigateur** : aucune donnée utilisateur ne sort. Les exports Google Timeline sont déjà chargés dans la table DuckDB `google_maps_segments` (voir `lib/data/parseGoogleMaps.ts`). Les routes `/google-maps/guide` (narration) et `/google-maps/explore` (vues coordonnées) existent mais sont vides côté visualisation.
+Buho visualizes personal data **100% client-side**: no user data leaves the browser. The Google Timeline exports are already loaded into the DuckDB table `google_maps_segments` (see `lib/data/parseGoogleMaps.ts`). The routes `/google-maps/guide` (narrative) and `/google-maps/explore` (coordinated views) exist but are empty on the visualization side.
 
-Objectif de cet incrément :
+Goal of this increment:
 
-1. **Afficher** les points GPS sur un fond de carte élégant, zoomable, interactif, gratuit.
-2. **Attribuer** chaque point à des zones géographiques à plusieurs échelles : pays → région → département → ville → lieu (place).
+1. **Display** the GPS points on an elegant, zoomable, interactive, free basemap.
+2. **Attribute** each point to geographic zones at several scales: country → region → department → city → place.
 
-## 2. Promesse produit & invariants (non négociables)
+## 2. Product promise & invariants (non-negotiable)
 
-- **Aucun envoi réseau de données utilisateur.** Les coordonnées GPS ne quittent jamais le navigateur. → Toute API de reverse-geocoding en ligne (Nominatim, Google, Mapbox) est **exclue**. L'attribution des zones se fait **en local**.
-- **Pas de persistance** des données utilisateur (ni localStorage, IndexedDB, etc.).
-- Distinction clé : les **frontières administratives** et les **villes** sont des **données de référence publiques**, pas des données utilisateur. Les servir en statique (CDN/hébergement) ne touche pas l'invariant — c'est comme servir le bundle JS.
-- Nuances réseau acceptées, à documenter (voir §9) : les tuiles du fond de carte révèlent le *viewport* (pas les données) au fournisseur de tuiles ; l'extension spatiale DuckDB est téléchargée au runtime (du *code*, pas des données).
+- **No network egress of user data.** GPS coordinates never leave the browser. → Any online reverse-geocoding API (Nominatim, Google, Mapbox) is **excluded**. Zone attribution happens **locally**.
+- **No persistence** of user data (no localStorage, IndexedDB, etc.).
+- Key distinction: **administrative boundaries** and **cities** are **public reference data**, not user data. Serving them statically (CDN/hosting) doesn't touch the invariant — it's like serving the JS bundle.
+- Accepted network nuances, to be documented (see §9): basemap tiles reveal the *viewport* (not the data) to the tile provider; the DuckDB spatial extension is downloaded at runtime (*code*, not data).
 
-## 3. Décisions techniques arrêtées
+## 3. Settled technical decisions
 
-| Sujet | Décision | Vérifié |
+| Topic | Decision | Verified |
 | --- | --- | --- |
-| Calcul des zones | **DuckDB spatial** (`ST_Contains` pour les polygones, `ST_Distance` pour la ville la plus proche), 100% en SQL dans le navigateur | ✅ `LOAD spatial` OK sur DuckDB-WASM **v1.4.3** (bundle du projet) ; `ST_Contains` et `ST_GeomFromGeoJSON` validés |
-| Fond de carte | **MapLibre GL JS** + tuiles **OpenFreeMap** (gratuit, sans clé, sans quota), style sombre | — |
-| Rendu des points | **deck.gl** en overlay (un export Timeline = 10⁵–10⁶ points) | — |
-| Niveau admin le plus fin | **Département / comté (ADM2)** ; la commune (polygones) est hors périmètre v1 | — |
-| Niveau « ville » | **Ville la plus proche** via points GeoNames `cities5000` (pas de polygones communes) | — |
+| Zone computation | **DuckDB spatial** (`ST_Contains` for polygons, `ST_Distance` for nearest city), 100% in SQL in the browser | ✅ `LOAD spatial` OK on DuckDB-WASM **v1.4.3** (the project's bundle); `ST_Contains` and `ST_GeomFromGeoJSON` validated |
+| Basemap | **MapLibre GL JS** + **OpenFreeMap** tiles (free, no key, no quota), dark style | — |
+| Point rendering | **deck.gl** as an overlay (one Timeline export = 10⁵–10⁶ points) | — |
+| Finest admin level | **Department / county (ADM2)**; the municipality (polygons) is out of v1 scope | — |
+| "City" level | **Nearest city** via GeoNames `cities5000` points (no municipality polygons) | — |
 
-## 4. Sources de données
+## 4. Data sources
 
-Tout est **eager** (chargé une fois, pas de lazy-loading) : on reste sous ADM2, donc les volumes tiennent.
+Everything is **eager** (loaded once, no lazy-loading): we stay below ADM2, so the volumes hold.
 
-| Couche | Source | Échelle | ~# features | Poids (trimé + gzip) | Licence |
+| Layer | Source | Scale | ~# features | Weight (trimmed + gzip) | License |
 | --- | --- | --- | --- | --- | --- |
-| Pays (ADM0) | Natural Earth | monde | ~250 | ~50–120 Ko | Domaine public |
-| Région (ADM1) | Natural Earth | monde | ~3 600 | ~0,5–2 Mo | Domaine public |
-| Département / comté (ADM2) | geoBoundaries (ou sources nationales : `france-geojson`, US Census) | pays curatés (FR d'abord, puis UK/US/DE/ES/IT) | variable | quelques Mo | CC-BY (créditer) / domaine public |
-| Ville | GeoNames `cities5000` | monde | ~52 000 | ~1,5–2 Mo | CC-BY (créditer) |
+| Countries (ADM0) | Natural Earth | world | ~250 | ~50–120 KB | Public domain |
+| Region (ADM1) | Natural Earth | world | ~3,600 | ~0.5–2 MB | Public domain |
+| Department / county (ADM2) | geoBoundaries (or national sources: `france-geojson`, US Census) | curated countries (FR first, then UK/US/DE/ES/IT) | variable | a few MB | CC-BY (credit) / public domain |
+| City | GeoNames `cities5000` | world | ~52,000 | ~1.5–2 MB | CC-BY (credit) |
 
-Notes :
-- Les frontières sont transportées en **TopoJSON** (~80% plus léger que GeoJSON), ré-exploé côté client avec `topojson-client`, puis donné à `ST_GeomFromGeoJSON`. Le cas lourd (futures communes) passerait en **GeoParquet**.
-- **Simplification agressive assumée** (mapshaper / Visvalingam) : pour du point-in-polygon, une erreur de quelques centaines de mètres au bord d'une zone est sans conséquence sur des analytics perso.
-- GeoNames porte `name, lat, lon, country, admin1, population` → la ville la plus proche fournit *gratuitement* région + population (pour la narration).
+Notes:
+- Boundaries are transported as **TopoJSON** (~80% lighter than GeoJSON), re-expanded client-side with `topojson-client`, then handed to `ST_GeomFromGeoJSON`. The heavy case (future municipalities) would move to **GeoParquet**.
+- **Aggressive simplification assumed** (mapshaper / Visvalingam): for point-in-polygon, an error of a few hundred meters at a zone edge is inconsequential for personal analytics.
+- GeoNames carries `name, lat, lon, country, admin1, population` → the nearest city provides region + population *for free* (for the narrative).
 
-## 5. Flux de données
+## 5. Data flow
 
 ```
-export ZIP → parseGoogleMaps → google_maps_segments (lat/lon, déjà en place)
+ZIP export → parseGoogleMaps → google_maps_segments (lat/lon, already in place)
                                         │
-        (assets statiques)              │  init / au chargement de la source
+        (static assets)                 │  init / on source load
   geo_zones (ADM0/1/2)  ─────────┐      ▼
   geo_cities (cities5000) ───────┴─►  spatial joins (DuckDB)
                                         │
                                         ▼
-                              segment_geo : pour chaque point →
+                              segment_geo: for each point →
                               country / region / department / nearest_city / place_id
                                         │
                          ┌──────────────┴───────────────┐
                          ▼                               ▼
                 /google-maps/guide              /google-maps/explore
-              (sections narratives)        (carte MapLibre + cross-filtering)
+              (narrative sections)         (MapLibre map + cross-filtering)
 ```
 
-## 6. Schéma DuckDB
+## 6. DuckDB schema
 
 ```sql
--- Polygones administratifs (chargés depuis les assets au runtime)
+-- Administrative polygons (loaded from the assets at runtime)
 CREATE TABLE geo_zones (
   level        VARCHAR,   -- 'country' | 'region' | 'department'
   country_code VARCHAR,   -- ISO 3166-1 alpha-3
-  zone_id      VARCHAR,   -- identifiant stable de la zone
+  zone_id      VARCHAR,   -- stable zone identifier
   name         VARCHAR,
   geom         GEOMETRY
 );
 
--- Points villes (GeoNames cities5000)
+-- City points (GeoNames cities5000)
 CREATE TABLE geo_cities (
   name         VARCHAR,
   country_code VARCHAR,
@@ -87,71 +87,71 @@ CREATE TABLE geo_cities (
   geom         GEOMETRY   -- ST_Point(lon, lat)
 );
 
--- Résultat enrichi, calculé une fois après le chargement de la source
+-- Enriched result, computed once after the source is loaded
 CREATE TABLE segment_geo (
-  segment_id   BIGINT,    -- rowid stable de google_maps_segments
+  segment_id   BIGINT,    -- stable rowid of google_maps_segments
   country      VARCHAR,
   region       VARCHAR,
-  department   VARCHAR,   -- NULL hors pays curatés
-  nearest_city VARCHAR,   -- NULL au-delà du rayon max
+  department   VARCHAR,   -- NULL outside curated countries
+  nearest_city VARCHAR,   -- NULL beyond the max radius
   city_km      DOUBLE,
-  place_id     VARCHAR    -- repris de l'export (stationary uniquement)
+  place_id     VARCHAR    -- carried over from the export (stationary only)
 );
 ```
 
-## 7. Logique d'attribution
+## 7. Attribution logic
 
-### Zones administratives (pays / région / département)
-Spatial join `ST_Contains(zone.geom, ST_Point(lon, lat))` par niveau. Valable pour **tous** les points, y compris en trajet.
+### Administrative zones (country / region / department)
+Spatial join `ST_Contains(zone.geom, ST_Point(lon, lat))` per level. Valid for **all** points, including in transit.
 
-### Ville la plus proche
-1. Pré-filtrer les villes candidates **au pays du point** (déjà connu via le join ADM0) → de 52k villes à quelques dizaines/centaines.
-2. `ST_Distance` (ou `ST_Distance_Sphere` pour annoncer « à 12 km de Lyon »), garder le min.
-3. **Garde-fou** : si la ville la plus proche est au-delà d'un **rayon max** (proposition : 30 km), `nearest_city = NULL` (zone rurale) — sinon un point en pleine campagne se rattache trompeusement à une ville lointaine.
+### Nearest city
+1. Pre-filter candidate cities **to the point's country** (already known via the ADM0 join) → from 52k cities down to a few dozen/hundred.
+2. `ST_Distance` (or `ST_Distance_Sphere` to announce "12 km from Lyon"), keep the min.
+3. **Guardrail**: if the nearest city is beyond a **max radius** (proposal: 30 km), `nearest_city = NULL` (rural area) — otherwise a point out in the countryside is misleadingly attached to a distant city.
 
-### Lieux (places)
-L'export ne porte que `placeId` (opaque) + `semanticType` (Home/Work…) sur les segments `stationary`. **La résolution `placeId → nom/adresse` passe par la Places API → réseau → interdit.** Donc, côté client, un « lieu » se limite à :
-- les libellés sémantiques de l'export (Home/Work) ;
-- le `placeId` comme **clé de regroupement opaque** (« tu es allé 47× à ce lieu », sans nom) ;
-- le niveau ville (ci-dessus) comme substitut au lieu nommé.
+### Places
+The export only carries `placeId` (opaque) + `semanticType` (Home/Work…) on `stationary` segments. **Resolving `placeId → name/address` goes through the Places API → network → forbidden.** So, client-side, a "place" is limited to:
+- the export's semantic labels (Home/Work);
+- the `placeId` as an **opaque grouping key** ("you went 47× to this place", without a name);
+- the city level (above) as a substitute for the named place.
 
-**Option (phase ultérieure) — backfill du `placeId`** sur les points sans place, par voisinage **temporel + spatial** : si un point est encadré par deux visits du **même** lieu → on propage ce lieu (trou dans un séjour) ; sinon on ne « snappe » que les extrémités proches d'une visit ; sinon `NULL` (en trajet). Implémentable en window functions (`LAST_VALUE(... IGNORE NULLS)`). À ne faire que si la valeur produit est avérée.
+**Option (later phase) — backfill the `placeId`** onto points without a place, by **temporal + spatial** neighborhood: if a point is bracketed by two visits to the **same** place → propagate that place (gap within a stay); otherwise only "snap" the endpoints close to a visit; otherwise `NULL` (in transit). Implementable with window functions (`LAST_VALUE(... IGNORE NULLS)`). To be done only if the product value is proven.
 
-## 8. Fond de carte & rendu
+## 8. Basemap & rendering
 
-- **MapLibre GL JS** + style sombre, source **OpenFreeMap** (zéro config, zéro clé).
-- **deck.gl** `ScatterplotLayer` en overlay pour les points bruts ; agrégations (heatmap/hexbin) pour les vues d'ensemble.
-- L'`/explore` reste cohérent avec le pattern Spotify : cross-filtering entre la carte et les autres vues (filtres dans un store dédié, type `googleMapsExplorerFilters`).
-- **Évolution privacy (optionnelle)** : remplacer OpenFreeMap par **Protomaps `.pmtiles`** auto-hébergé en statique → même le viewport ne fuite plus. Changement de config, pas d'architecture.
+- **MapLibre GL JS** + dark style, **OpenFreeMap** source (zero config, zero key).
+- **deck.gl** `ScatterplotLayer` as an overlay for raw points; aggregations (heatmap/hexbin) for overview views.
+- `/explore` stays consistent with the Spotify pattern: cross-filtering between the map and the other views (filters in a dedicated store, like `googleMapsExplorerFilters`).
+- **Privacy evolution (optional)**: replace OpenFreeMap with self-hosted **Protomaps `.pmtiles`** as static → even the viewport stops leaking. A config change, not an architecture one.
 
-## 9. Découpage en lots
+## 9. Batching
 
-**Phase 1 — MVP carte + zonage grossier**
-- Fond MapLibre + OpenFreeMap, points en deck.gl.
-- `geo_zones` ADM0/ADM1 (Natural Earth, monde, eager) + `geo_cities` (GeoNames cities5000).
-- `segment_geo` : country + region + nearest_city.
-- Premières sections Guide + carte Explore.
+**Phase 1 — map MVP + coarse zoning**
+- MapLibre + OpenFreeMap basemap, points in deck.gl.
+- `geo_zones` ADM0/ADM1 (Natural Earth, world, eager) + `geo_cities` (GeoNames cities5000).
+- `segment_geo`: country + region + nearest_city.
+- First Guide sections + Explore map.
 
-**Phase 2 — départements + lieux**
-- ADM2 pour pays curatés (FR, puis UK/US/DE/ES/IT).
-- Agrégation par `placeId` (fréquentation) + libellés Home/Work.
+**Phase 2 — departments + places**
+- ADM2 for curated countries (FR, then UK/US/DE/ES/IT).
+- Aggregation by `placeId` (frequency) + Home/Work labels.
 
-**Phase 3 — optionnel / si valeur avérée**
-- Backfill `placeId` sur les points de trajet/séjour.
-- Polygones communes (lazy-par-pays, GeoParquet) pour la vraie précision FR.
-- Tuiles Protomaps auto-hébergées + extension spatiale auto-hébergée (offline complet).
+**Phase 3 — optional / if value is proven**
+- `placeId` backfill on transit/stay points.
+- Municipality polygons (lazy-per-country, GeoParquet) for true FR precision.
+- Self-hosted Protomaps tiles + self-hosted spatial extension (fully offline).
 
-## 10. Risques & points à vérifier
+## 10. Risks & things to verify
 
-- **Perf du spatial join à grande échelle** : N points × polygones. OK à l'échelle pays/région/département. **Index RTREE DuckDB à valider** uniquement si on passe aux communes (phase 3) — non testé à ce jour.
-- **Extension spatiale = fetch CDN au runtime** (~quelques Mo depuis `extensions.duckdb.org`). N'enfreint pas l'invariant (code, pas données) mais suppose d'être en ligne au premier chargement. Mitigation : auto-héberger le `.duckdb_extension.wasm` (phase 3).
-- **Tuiles = viewport visible par le fournisseur.** Acceptable, à documenter ; Protomaps le supprime (phase 3).
-- **Volume mémoire navigateur** : `cities5000` (~52k points) + ADM1 monde + ADM2 pays curatés, à charger en plus des tables existantes. À surveiller, attendu raisonnable (< quelques Mo en mémoire géométrique).
-- **Attribution licences** : créditer geoBoundaries et GeoNames (CC-BY) dans l'app.
+- **Perf of the spatial join at scale**: N points × polygons. OK at the country/region/department scale. **DuckDB RTREE index to validate** only if we move to municipalities (phase 3) — untested to date.
+- **Spatial extension = runtime CDN fetch** (~a few MB from `extensions.duckdb.org`). Doesn't breach the invariant (code, not data) but assumes being online at first load. Mitigation: self-host the `.duckdb_extension.wasm` (phase 3).
+- **Tiles = viewport visible to the provider.** Acceptable, to document; Protomaps removes it (phase 3).
+- **Browser memory volume**: `cities5000` (~52k points) + world ADM1 + curated-country ADM2, loaded on top of the existing tables. To monitor, expected reasonable (< a few MB of geometry memory).
+- **License attribution**: credit geoBoundaries and GeoNames (CC-BY) in the app.
 
-## 11. Décisions produit ouvertes
+## 11. Open product decisions
 
-1. **Niveau admin le plus fin v1 = département (ADM2)** — confirmé ? (la commune reste hors périmètre).
-2. **Liste des pays curatés** pour l'ADM2 au-delà de la France.
-3. **Rayon max** de rattachement « ville la plus proche » (proposition : 30 km).
-4. Faut-il **Home/Work** dès la phase 2, ou se contenter du regroupement opaque par `placeId` ?
+1. **Finest admin level v1 = department (ADM2)** — confirmed? (the municipality stays out of scope).
+2. **List of curated countries** for ADM2 beyond France.
+3. **Max radius** for "nearest city" attachment (proposal: 30 km).
+4. Do we want **Home/Work** as early as phase 2, or settle for opaque grouping by `placeId`?

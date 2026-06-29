@@ -121,7 +121,7 @@ export async function getTopItemsByDimensions(filters: FilterState = {}): Promis
     }
 }
 
-// Colonnes autorisées pour un breakdown (interpolées en SQL ⇒ whitelist stricte).
+// Allowed columns for a breakdown (interpolated into SQL ⇒ strict whitelist).
 const ALLOWED_BREAKDOWN_COLUMNS = new Set([
     'ip_addr',
     'country',

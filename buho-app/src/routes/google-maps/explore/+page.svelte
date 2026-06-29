@@ -21,8 +21,8 @@
     import { firstFilterValue } from "$lib/utils/filters";
     import { stickyColor } from "$lib/utils/dimensionColors";
 
-    // Points chargés UNE fois (raw). `matched` recalculé en JS en place, `matchVersion`
-    // déclenche un redraw sans reconstruire le quadtree (cf. /spotify/explore).
+    // Points loaded ONCE (raw). `matched` recomputed in JS in place, `matchVersion`
+    // triggers a redraw without rebuilding the quadtree (cf. /spotify/explore).
     let basePoints = $state.raw<LocationBasePoint[]>([]);
     let matchVersion = $state(0);
     let pieSlices = $state<Record<string, DimensionSlice[]>>({});
@@ -41,8 +41,8 @@
     let viewportHeight = $state(0);
     let timeDomain = $state<[number, number] | null>(null);
 
-    // Hiérarchie géo du sunburst (pays → région → département → ville), construite
-    // en JS depuis les base points comme les pies (cf. computeSunburstTree).
+    // Geo hierarchy of the sunburst (country → region → department → city), built
+    // in JS from the base points like the pies (cf. computeSunburstTree).
     let sunburstTree = $state.raw<SunburstNode>({ name: "All locations" });
     let prevSunburstSig = "";
 
@@ -62,7 +62,7 @@
         dataStore.source === "google-maps" && !dataStore.isLoading,
     );
 
-    /** Set<string> des valeurs d'un filtre, ou null si non applicable (range, etc.). */
+    /** Set<string> of a filter's values, or null if not applicable (range, etc.). */
     function filterValueSet(f: FilterState, key: string): Set<string> | null {
         const v = f[key];
         if (v === undefined || v === null) return null;
@@ -142,7 +142,7 @@
 
     const TOP_N = 15;
 
-    // --- Coloration par dimension ----------------------------------------
+    // --- Coloring by dimension -------------------------------------------
     let colorBy = $state<string | null>(null);
     const colorByDim = $derived(
         colorBy ? (PIE_DIMS.find((d) => d.key === colorBy) ?? null) : null,
@@ -160,8 +160,8 @@
     }
 
     // --- Tooltip ---------------------------------------------------------
-    // La colonne `timestamp` est l'heure murale LOCALE (cf. parseGoogleMaps) ;
-    // "YYYY-MM-DD HH:MM:SS" sans suffixe de zone est lu par new Date() en local.
+    // The `timestamp` column is the LOCAL wall-clock time (cf. parseGoogleMaps);
+    // "YYYY-MM-DD HH:MM:SS" with no zone suffix is read by new Date() as local.
     function formatPlayedAt(playedAt: string): string {
         const d = new Date(playedAt.replace(" ", "T"));
         return Number.isNaN(d.getTime()) ? playedAt : d.toLocaleString();
@@ -195,7 +195,7 @@
         return { title, lines };
     }
 
-    /** Dimensions actuellement filtrées + leur Set de valeurs. */
+    /** Currently filtered dimensions + their Set of values. */
     function activeDims(f: FilterState) {
         const out: { key: string; field: DimField; vals: Set<string> }[] = [];
         for (const d of MATCH_DIMS) {
@@ -242,8 +242,8 @@
         return slices;
     }
 
-    // Répartition de toutes les pies en un passage JS (chaque pie exclut son
-    // propre filtre ; la fenêtre temps/heure du brush s'applique partout).
+    // Breakdown of all pies in a single JS pass (each pie excludes its own
+    // filter; the brush's time/hour window applies everywhere).
     function computeAllPieSlices() {
         const pts = basePoints;
         const next: Record<string, DimensionSlice[]> = {};
@@ -295,8 +295,8 @@
         pieSlices = next;
     }
 
-    // Indicateurs : un passage JS strict (toutes les dimensions actives doivent
-    // passer) + fenêtre du brush. Distances/durées sommées sur les segments retenus.
+    // Indicators: a strict JS pass (all active dimensions must pass) + the brush
+    // window. Distances/durations summed over the retained segments.
     function computeMacro() {
         const pts = basePoints;
         const active = activeDims(googleMapsExplorerFilters.activeFilters);
@@ -441,7 +441,7 @@
         prevSunburstSig = "";
     }
 
-    // Chargement des points : UNE fois quand la source est prête.
+    // Loading the points: ONCE when the source is ready.
     let basePointsLoaded = false;
     $effect(() => {
         const ready = dbReady;
@@ -455,7 +455,7 @@
         void loadBasePoints();
     });
 
-    // Surlignage : recalcul JS de `matched` quand la sélection change.
+    // Highlight: JS recompute of `matched` when the selection changes.
     $effect(() => {
         if (!dbReady) return;
         const sig = matchSig(activeFilters);
@@ -467,7 +467,7 @@
         });
     });
 
-    // Pies + macro : recalcul JS immédiat dès que points/sélection/fenêtre changent.
+    // Pies + macro: immediate JS recompute whenever points/selection/window change.
     $effect(() => {
         const _b = basePoints;
         const _m = matchVersion;
@@ -808,7 +808,7 @@
         justify-content: center;
     }
 
-    /* Sous une certaine largeur, on empile constellation + sunburst (cf. Spotify). */
+    /* Below a certain width, stack constellation + sunburst (cf. Spotify). */
     @media (max-width: 1023px) {
         .explorer-page {
             height: auto;

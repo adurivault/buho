@@ -1,53 +1,53 @@
-# Buho — Instructions projet
+# Buho — Project instructions
 
-Buho est une webapp de visualisation de données personnelles (exports Spotify, et à terme Google Maps / WhatsApp), **100% client-side** : aucune donnée utilisateur ne quitte le navigateur. C'est la promesse centrale du produit — toute contribution doit la respecter.
+Buho is a web app for visualizing personal data (Spotify exports, and eventually Google Maps / WhatsApp), **100% client-side**: no user data ever leaves the browser. This is the product's central promise — every contribution must respect it.
 
 ## Stack
 
-- **SvelteKit 2 + Svelte 5 (runes)**, adapter-static (site statique, pas de SSR de données)
-- **DuckDB-WASM** : les exports sont chargés dans une table `spotify_plays` en mémoire, toutes les agrégations se font en SQL dans le navigateur
-- **Observable Plot + D3** pour les graphes, Canvas 2D pour la constellation
-- **Tailwind 4**, thème sombre
-- **Vitest + Testing Library** pour les tests (colocalisés en `*.test.ts`)
+- **SvelteKit 2 + Svelte 5 (runes)**, adapter-static (static site, no data SSR)
+- **DuckDB-WASM**: exports are loaded into an in-memory `spotify_plays` table, all aggregations happen in SQL in the browser
+- **Observable Plot + D3** for charts, Canvas 2D for the constellation
+- **Tailwind 4**, dark theme
+- **Vitest + Testing Library** for tests (colocated as `*.test.ts`)
 
-## Layout du repo
+## Repo layout
 
-| Chemin | Rôle |
+| Path | Role |
 | --- | --- |
-| `buho-app/` | L'application SvelteKit (tout le code actif) |
-| `docs/` | Documentation générée du projet |
+| `buho-app/` | The SvelteKit application (all active code) |
+| `docs/` | Generated project documentation |
 
-## Architecture de l'app (`buho-app/src`)
+## App architecture (`buho-app/src`)
 
-Flux de données : upload ZIP → `lib/stores/dataStore.svelte.ts` (JSZip → `lib/data/parseSpotify.ts` → insertion DuckDB) → couche requêtes → composants.
+Data flow: ZIP upload → `lib/stores/dataStore.svelte.ts` (JSZip → `lib/data/parseSpotify.ts` → DuckDB insertion) → query layer → components.
 
-- `lib/data/db.ts` : init DuckDB-WASM, `query<T>(sql, params)` qui renvoie des lignes en camelCase
-- `lib/data/queries/` : toutes les requêtes SQL, organisées par thème (artist, track, temporal, behavior, discovery, dimension). `common.ts` porte les helpers de filtres de dates
-- `lib/visualizations/plots/` : factories Observable Plot pures (données → élément SVG), même découpage thématique
-- `lib/components/sections/` : sections du mode Guide (une visu narrative chacune)
-- `lib/components/visualizations/` : composants lourds de l'Explorer (ConstellationChart en Canvas, BarChartSatellite)
-- `lib/stores/` : stores Svelte 5 en `.svelte.ts` — `dataStore` (source chargée), `spotifyFilterStore` (plage de dates du Guide), `spotifyExplorerFilters` (filtres multi-dimensions de l'Explorer)
+- `lib/data/db.ts`: DuckDB-WASM init, `query<T>(sql, params)` returning rows in camelCase
+- `lib/data/queries/`: all SQL queries, organized by theme (artist, track, temporal, behavior, discovery, dimension). `common.ts` holds the date-filter helpers
+- `lib/visualizations/plots/`: pure Observable Plot factories (data → SVG element), same thematic split
+- `lib/components/sections/`: Guide-mode sections (one narrative viz each)
+- `lib/components/visualizations/`: the Explorer's heavy components (ConstellationChart on Canvas, BarChartSatellite)
+- `lib/stores/`: Svelte 5 stores as `.svelte.ts` — `dataStore` (loaded source), `spotifyFilterStore` (Guide date range), `spotifyExplorerFilters` (the Explorer's multi-dimension filters)
 
-Chaque source de données a deux routes : `/spotify/guide` (narration scrollable ; sections enregistrées dans `routes/spotify/guide/sections.ts`) et `/spotify/explore` (vues coordonnées avec cross-filtering).
+Each data source has two routes: `/spotify/guide` (scrollable narration; sections registered in `routes/spotify/guide/sections.ts`) and `/spotify/explore` (coordinated views with cross-filtering).
 
-## Invariants à respecter
+## Invariants to respect
 
-1. **Aucun envoi réseau de données utilisateur.** Tout le traitement reste dans le navigateur.
-2. **Pas de persistance** : pas de localStorage, sessionStorage, IndexedDB ni cookies pour les données. C'est vérifié par un test (`lib/stores/stores.test.ts`). Si une persistance opt-in est ajoutée un jour, c'est une décision produit explicite, pas un choix technique.
-3. **SQL** : noms de tables/colonnes validés par `validateIdentifier` dans `db.ts` ; privilégier les prepared statements pour les valeurs.
-4. Les nombres affichés utilisent `toLocaleString()` sans locale (locale du navigateur). Les tests doivent donc être indépendants de la locale.
+1. **No network egress of user data.** All processing stays in the browser.
+2. **No persistence**: no localStorage, sessionStorage, IndexedDB, or cookies for data. This is checked by a test (`lib/stores/stores.test.ts`). If opt-in persistence is ever added, it's an explicit product decision, not a technical choice.
+3. **SQL**: table/column names validated by `validateIdentifier` in `db.ts`; prefer prepared statements for values.
+4. Displayed numbers use `toLocaleString()` with no locale (browser locale). Tests must therefore be locale-independent.
 
-## Commandes
+## Commands
 
 ```bash
 cd buho-app
-npm run dev      # serveur de dev Vite
-npm test         # suite Vitest complète
+npm run dev      # Vite dev server
+npm test         # full Vitest suite
 npm run check    # svelte-check (types)
-npm run build    # build statique
+npm run build    # static build
 ```
 
 ## Conventions
 
-- Ne jamais créditer une IA dans les messages de commit (pas de Co-Authored-By, pas de "Generated with…")
-- UI en anglais, discussions et docs internes souvent en français
+- **English everywhere.** All code, comments, identifiers, docs, commit messages, and UI strings must be in English. Spoken/written discussion with the maintainer may be in French, but nothing committed to the repo should be.
+- Never credit an AI in commit messages (no Co-Authored-By, no "Generated with…")

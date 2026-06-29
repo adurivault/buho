@@ -5,16 +5,15 @@ export interface SunburstNode {
     isOther?: boolean;
     playCount?: number;
     value?: number;
-    trackUri?: string | null; // porté par les feuilles "titre" pour ouvrir sur Spotify
+    trackUri?: string | null; // carried by the "track" leaves to open on Spotify
     children?: SunburstNode[];
 }
 
 const OTHER_NAMES = ['Other artists', 'Other albums', 'Other tracks'];
-const THRESHOLD_DEGREES = 0.5; // Seuil de bucketing en degrés (part du parent < ½/360 ⇒ "Other")
+const THRESHOLD_DEGREES = 0.5; // Bucketing threshold in degrees (share of parent < ½/360 ⇒ "Other")
 /**
- * Transforme les lignes plates artiste/album/titre (non bucketées) en arbre
- * complet pour d3.hierarchy. Le regroupement "Other" est fait ensuite par
- * bucketByDegree.
+ * Transforms the flat artist/album/track rows (un-bucketed) into a full tree for
+ * d3.hierarchy. The "Other" grouping is done afterwards by bucketByDegree.
  */
 export function buildSunburstHierarchy(data: ArtistSunburstRow[]): SunburstNode {
     const root: SunburstNode = { name: 'All artists', children: [] };
@@ -45,7 +44,7 @@ export function buildSunburstHierarchy(data: ArtistSunburstRow[]): SunburstNode 
     return root;
 }
 
-/** Total des minutes d'un sous-arbre (les valeurs ne sont portées que par les feuilles). */
+/** Total minutes of a subtree (values are carried only by the leaves). */
 export function nodeTotal(node: SunburstNode): number {
     if (!node.children) return node.value ?? 0;
     return node.children.reduce((sum, child) => sum + nodeTotal(child), 0);
@@ -57,17 +56,18 @@ function nodePlays(node: SunburstNode): number {
 }
 
 /**
- * Replie, à chaque niveau, les enfants qui pèsent moins d'1° du cercle de leur
- * parent (part < total(parent) / 360) dans une feuille "Other …". Le seuil est
- * donc relatif au parent : comme un nœud zoomé occupe tout le cercle, "part du
- * parent < 1/360" équivaut à "moins d'1° de la vue affichée" une fois zoomé.
+ * Folds, at each level, the children that weigh less than 1° of their parent's
+ * circle (share < total(parent) / 360) into an "Other …" leaf. The threshold is
+ * therefore relative to the parent: since a zoomed node fills the whole circle,
+ * "share of parent < 1/360" is equivalent to "less than 1° of the displayed view"
+ * once zoomed.
  *
- * Le bucketing est statique (calculé une seule fois), ce qui permet de garder
- * UNE partition fixe et donc la transition de zoom d3 classique (interpolation
- * current → target), au lieu de reconstruire l'arbre à chaque clic.
+ * The bucketing is static (computed once), which lets us keep ONE fixed partition
+ * and thus the classic d3 zoom transition (current → target interpolation),
+ * instead of rebuilding the tree on every click.
  *
- * `level` est la profondeur des enfants traités (0 = artistes, 1 = albums, …),
- * utilisée pour nommer le bucket.
+ * `level` is the depth of the processed children (0 = artists, 1 = albums, …),
+ * used to name the bucket.
  */
 export function bucketByDegree(
     node: SunburstNode,

@@ -1,18 +1,17 @@
 /**
- * Helpers pour ouvrir un élément du catalogue Spotify depuis une URI d'export.
+ * Helpers to open a Spotify catalog item from an export URI.
  *
- * Les exports Spotify portent des URIs de la forme `spotify:track:<id>`. On les
- * convertit en URL web (`https://open.spotify.com/track/<id>`) qui ouvre le
- * lecteur web et redirige vers l'app native si elle est installée.
+ * Spotify exports carry URIs of the form `spotify:track:<id>`. We convert them to
+ * a web URL (`https://open.spotify.com/track/<id>`) that opens the web player and
+ * redirects to the native app if installed.
  *
- * Respect de l'invariant vie privée : aucune donnée utilisateur n'est envoyée.
- * On ne fait qu'ouvrir, sur clic explicite, un identifiant public du catalogue
- * Spotify dans un nouvel onglet.
+ * Respects the privacy invariant: no user data is sent. We merely open, on an
+ * explicit click, a public Spotify catalog identifier in a new tab.
  */
 
 const URI_PATTERN = /^spotify:(track|episode|album|artist):([A-Za-z0-9]+)$/;
 
-/** `spotify:track:ID` → `https://open.spotify.com/track/ID`, ou null si invalide. */
+/** `spotify:track:ID` → `https://open.spotify.com/track/ID`, or null if invalid. */
 export function spotifyUriToUrl(uri: string | null | undefined): string | null {
     if (!uri) return null;
     const match = URI_PATTERN.exec(uri);
@@ -21,7 +20,7 @@ export function spotifyUriToUrl(uri: string | null | undefined): string | null {
     return `https://open.spotify.com/${type}/${id}`;
 }
 
-/** Ouvre l'élément Spotify dans un nouvel onglet. Renvoie false si l'URI est inutilisable. */
+/** Opens the Spotify item in a new tab. Returns false if the URI is unusable. */
 export function openSpotify(uri: string | null | undefined): boolean {
     const url = spotifyUriToUrl(uri);
     if (!url || typeof window === 'undefined') return false;
@@ -29,14 +28,14 @@ export function openSpotify(uri: string | null | undefined): boolean {
     return true;
 }
 
-/** Touche modificatrice à afficher dans les hints ("⌘" sur Mac/iOS, "Ctrl" ailleurs). */
+/** Modifier key to show in hints ("⌘" on Mac/iOS, "Ctrl" elsewhere). */
 export const MODIFIER_LABEL =
     typeof navigator !== 'undefined' &&
     /Macintosh|Mac OS X|iPhone|iPad|iPod/.test(navigator.userAgent)
         ? '⌘'
         : 'Ctrl';
 
-/** Vrai si l'event porte le modificateur "ouvrir dans Spotify" (⌘ ou Ctrl). */
+/** True if the event carries the "open in Spotify" modifier (⌘ or Ctrl). */
 export function hasOpenModifier(event: { metaKey: boolean; ctrlKey: boolean }): boolean {
     return event.metaKey || event.ctrlKey;
 }

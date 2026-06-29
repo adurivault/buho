@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* Don't scan static assets for class names: the multi-MB geo data files
+   (static/geo/*.topojson, cities5000.json) otherwise make Tailwind v4's content
+   scanner peg the CPU and freeze the dev server. No utility classes live in
+   static/ anyway. */
+@source not "../static";
+
 @theme {
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));

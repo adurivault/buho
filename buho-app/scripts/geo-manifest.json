@@ -1,0 +1,8 @@
+{
+  "_comment": "Drives per-country attribution depth for build-geo-assets.mjs. Adding a country = one line + re-run the build. 'default' is the depth for every non-listed country; 'curated' overrides per country; 'arrondissements' lists countries whose big-city municipal arrondissements are clipped in as the finest leaves.",
+  "default": "ADM1",
+  "curated": {
+    "FRA": "ADM2"
+  },
+  "arrondissements": ["FRA"]
+}

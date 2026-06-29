@@ -26,33 +26,33 @@
         | "repeatIntensity";
 
     const METRIC_OPTIONS: Array<{ value: ArtistMetricKey; label: string }> = [
-        { value: "totalMinutes", label: "Durée d'écoute (minutes)" },
-        { value: "playCount", label: "Nombre d'écoutes" },
-        { value: "uniqueTracks", label: "Nb de chansons uniques" },
+        { value: "totalMinutes", label: "Listening time (minutes)" },
+        { value: "playCount", label: "Number of plays" },
+        { value: "uniqueTracks", label: "Unique tracks" },
         {
             value: "intentionalStopRate",
-            label: "Taux d'arrêt intentionnel (%)",
+            label: "Intentional stop rate (%)",
         },
-        { value: "shuffleRate", label: "Taux d'écoute shuffle (%)" },
+        { value: "shuffleRate", label: "Shuffle play rate (%)" },
         {
             value: "intentionalStartRate",
-            label: "Taux de lancement intentionnel (%)",
+            label: "Intentional start rate (%)",
         },
-        { value: "meanListenDateEpochMs", label: "Moyenne date d'écoute" },
+        { value: "meanListenDateEpochMs", label: "Mean listen date" },
         {
             value: "listenDateVarianceDays2",
-            label: "Variance date d'écoute (jours²)",
+            label: "Listen date variance (days²)",
         },
-        { value: "eveningRate", label: "Taux d'écoute soirée (19h-5h) (%)" },
+        { value: "eveningRate", label: "Evening listening rate (7pm-5am) (%)" },
         {
             value: "recencyDays",
-            label: "Recency (jours depuis dernière écoute)",
+            label: "Recency (days since last listen)",
         },
-        { value: "activeDays", label: "Nombre de jours actifs" },
-        { value: "skipRate", label: "Taux de skip (%)" },
+        { value: "activeDays", label: "Active days" },
+        { value: "skipRate", label: "Skip rate (%)" },
         {
             value: "repeatIntensity",
-            label: "Intensité de répétition (écoutes/track)",
+            label: "Repeat intensity (plays/track)",
         },
     ];
 

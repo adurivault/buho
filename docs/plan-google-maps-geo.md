@@ -1,59 +1,59 @@
-# Plan d'implémentation — Attribution géographique des points
+# Implementation plan — Geographic attribution of points
 
-> Périmètre : **uniquement** rattacher chaque point GPS à ses zones (pays / région / département / ville). Le fond de carte, les tuiles et le rendu sont **hors scope** ici (voir PRD §8).
-> Référence : [prd-google-maps-geo.md](./prd-google-maps-geo.md). Décisions arrêtées : DuckDB spatial (vérifié v1.4.3), tout eager, plus fin = ADM2, ville = plus proche via GeoNames `cities5000`.
+> Scope: **only** attaching each GPS point to its zones (country / region / department / city). The basemap, tiles, and rendering are **out of scope** here (see PRD §8).
+> Reference: [prd-google-maps-geo.md](./prd-google-maps-geo.md). Settled decisions: DuckDB spatial (verified v1.4.3), everything eager, finest = ADM2, city = nearest via GeoNames `cities5000`.
 
-## Principe directeur (perf)
+## Guiding principle (perf)
 
-On **ne** lance **pas** le point-in-polygon sur les 10⁵–10⁶ points bruts. On déduplique d'abord les positions (arrondi à ~110 m), on attribue les **positions distinctes** (typiquement 10³–10⁴), puis on rejoint sur les segments. Ça rend les joins tractables **sans dépendre de l'index RTREE** (non vérifié à ce jour), et ça reste valable jusqu'à l'échelle département.
+We do **not** run point-in-polygon over the 10⁵–10⁶ raw points. We deduplicate positions first (round to ~110 m), attribute the **distinct positions** (typically 10³–10⁴), then join back onto the segments. This makes the joins tractable **without depending on the RTREE index** (unverified to date), and it stays valid up to the department scale.
 
-## Dépendances
+## Dependencies
 
-- **Runtime** : `topojson-client` (ré-explosion TopoJSON → GeoJSON, minuscule).
-- **Build/dev** : `mapshaper` (simplification + conversion ; en `devDependencies` ou via `npx`).
-- Aucune dépendance carte ici (deck.gl / MapLibre = autre lot).
+- **Runtime**: `topojson-client` (re-expand TopoJSON → GeoJSON, tiny).
+- **Build/dev**: `mapshaper` (simplification + conversion; in `devDependencies` or via `npx`).
+- No map dependency here (deck.gl / MapLibre = a separate batch).
 
-## Carte des fichiers
+## File map
 
-| Fichier | Nature | Rôle |
+| File | Nature | Role |
 | --- | --- | --- |
-| `buho-app/scripts/build-geo-assets.mjs` | nouveau (offline) | Télécharge, simplifie, normalise → `static/geo/` |
-| `buho-app/static/geo/adm0.topojson` | asset généré | Pays (Natural Earth, monde) |
-| `buho-app/static/geo/adm1.topojson` | asset généré | Régions/états (Natural Earth, monde) |
-| `buho-app/static/geo/adm2-fr.topojson` | asset généré | Départements FR (geoBoundaries / france-geojson) |
-| `buho-app/static/geo/cities5000.json` | asset généré | Villes GeoNames (name, lat, lon, country, admin1, pop) |
-| `buho-app/src/lib/data/geo/loadGeoAssets.ts` | nouveau | Charge `geo_zones` + `geo_cities` dans DuckDB |
-| `buho-app/src/lib/data/geo/attributeZones.ts` | nouveau | Déduplique, attribue, enrichit `google_maps_segments` |
-| `buho-app/src/lib/data/db.ts` | modifié | `loadSpatial()` (INSTALL/LOAD spatial, lazy) |
-| `buho-app/src/lib/stores/dataStore.svelte.ts` | modifié | Hook après `insertLocationSegments` |
-| `buho-app/src/lib/data/queries/geo.ts` | nouveau | Requêtes de consommation (top pays, villes, etc.) |
-| `buho-app/src/lib/data/geo/attributeZones.integration.manual.ts` | nouveau | Test bout-en-bout (voir §Tests) |
+| `buho-app/scripts/build-geo-assets.mjs` | new (offline) | Downloads, simplifies, normalizes → `static/geo/` |
+| `buho-app/static/geo/adm0.topojson` | generated asset | Countries (Natural Earth, world) |
+| `buho-app/static/geo/adm1.topojson` | generated asset | Regions/states (Natural Earth, world) |
+| `buho-app/static/geo/adm2-fr.topojson` | generated asset | FR departments (geoBoundaries / france-geojson) |
+| `buho-app/static/geo/cities5000.json` | generated asset | GeoNames cities (name, lat, lon, country, admin1, pop) |
+| `buho-app/src/lib/data/geo/loadGeoAssets.ts` | new | Loads `geo_zones` + `geo_cities` into DuckDB |
+| `buho-app/src/lib/data/geo/attributeZones.ts` | new | Deduplicates, attributes, enriches `google_maps_segments` |
+| `buho-app/src/lib/data/db.ts` | modified | `loadSpatial()` (INSTALL/LOAD spatial, lazy) |
+| `buho-app/src/lib/stores/dataStore.svelte.ts` | modified | Hook after `insertLocationSegments` |
+| `buho-app/src/lib/data/queries/geo.ts` | new | Consumption queries (top countries, cities, etc.) |
+| `buho-app/src/lib/data/geo/attributeZones.integration.manual.ts` | new | End-to-end test (see §Tests) |
 
 ---
 
-## Étape 0 — Préparer les assets (offline, one-off)
+## Step 0 — Prepare the assets (offline, one-off)
 
-`scripts/build-geo-assets.mjs` (lancé à la main, ré-exécuté quand on ajoute un pays) :
+`scripts/build-geo-assets.mjs` (run by hand, re-run when adding a country):
 
-1. **Télécharger** : Natural Earth ADM0 + ADM1 ; geoBoundaries/france-geojson ADM2 FR ; GeoNames `cities5000.zip`.
-2. **Simplifier** (mapshaper, Visvalingam, agressif — précision ~quelques centaines de m OK) :
+1. **Download**: Natural Earth ADM0 + ADM1; geoBoundaries/france-geojson ADM2 FR; GeoNames `cities5000.zip`.
+2. **Simplify** (mapshaper, Visvalingam, aggressive — precision of ~a few hundred m is OK):
    ```bash
    mapshaper ne_10m_admin_0_countries.shp \
      -simplify visvalingam 8% keep-shapes -clean \
      -o format=topojson static/geo/adm0.topojson
    ```
-3. **Normaliser les propriétés** dès le build pour que le runtime soit source-agnostique → chaque feature porte `{ country_code (ISO3), zone_id, name }`. (Natural Earth : `ADM0_A3`/`ADMIN` ; ADM1 : `adm0_a3`/`name` ; geoBoundaries : `shapeISO`/`shapeName`.)
-4. **Villes** : extraire de `cities5000.txt` (TSV) les colonnes utiles → `cities5000.json` `[{name, lat, lon, country_code(ISO3), admin1, population}]`.
+3. **Normalize properties** at build time so the runtime is source-agnostic → each feature carries `{ country_code (ISO3), zone_id, name }`. (Natural Earth: `ADM0_A3`/`ADMIN`; ADM1: `adm0_a3`/`name`; geoBoundaries: `shapeISO`/`shapeName`.)
+4. **Cities**: extract from `cities5000.txt` (TSV) the useful columns → `cities5000.json` `[{name, lat, lon, country_code(ISO3), admin1, population}]`.
 
-> Les téléchargements bruts ne sont **pas** commités (volumineux) ; seuls les fichiers `static/geo/*` simplifiés le sont. Documenter sources + licences (geoBoundaries & GeoNames = CC-BY → créditer dans l'app).
+> The raw downloads are **not** committed (large); only the simplified `static/geo/*` files are. Document sources + licenses (geoBoundaries & GeoNames = CC-BY → credit in the app).
 
-**Checkpoint** : tailles `static/geo/*` conformes au PRD §4 (adm0 ~100 Ko, adm1 ~1-2 Mo, cities ~1,5-2 Mo).
+**Checkpoint**: `static/geo/*` sizes match PRD §4 (adm0 ~100 KB, adm1 ~1-2 MB, cities ~1.5-2 MB).
 
 ---
 
-## Étape 1 — Charger l'extension spatiale (lazy)
+## Step 1 — Load the spatial extension (lazy)
 
-Dans `db.ts`, fonction dédiée appelée **seulement** sur le chemin Google Maps (les users Spotify ne paient pas le fetch CDN) :
+In `db.ts`, a dedicated function called **only** on the Google Maps path (Spotify users don't pay the CDN fetch):
 
 ```ts
 let spatialLoaded = false;
@@ -66,13 +66,13 @@ export async function loadSpatial(): Promise<void> {
 }
 ```
 
-**Checkpoint** : `SELECT ST_Contains(ST_GeomFromText('POLYGON((2 48,3 48,3 49,2 49,2 48))'), ST_Point(2.35,48.85))` → `true` (déjà validé hors app).
+**Checkpoint**: `SELECT ST_Contains(ST_GeomFromText('POLYGON((2 48,3 48,3 49,2 49,2 48))'), ST_Point(2.35,48.85))` → `true` (already validated outside the app).
 
 ---
 
-## Étape 2 — Charger les tables de référence (`geo_zones`, `geo_cities`)
+## Step 2 — Load the reference tables (`geo_zones`, `geo_cities`)
 
-`loadGeoAssets.ts` — idempotent (données de référence, indépendantes de l'user ; charger une fois par session) :
+`loadGeoAssets.ts` — idempotent (reference data, independent of the user; load once per session):
 
 ```ts
 import { feature } from 'topojson-client';
@@ -93,28 +93,28 @@ for (const [level, url] of [['country','/geo/adm0.topojson'],
 }
 ```
 
-Insertion : réutiliser le pattern `registerFileText` + `read_json_auto` d'`insertData`, vers une table de staging `(…, geom_text VARCHAR)`, puis :
+Insertion: reuse the `registerFileText` + `read_json_auto` pattern from `insertData`, into a staging table `(…, geom_text VARCHAR)`, then:
 ```sql
 INSERT INTO geo_zones SELECT level, country_code, zone_id, name, ST_GeomFromGeoJSON(geom_text) FROM _staging;
 ```
-`geo_cities` : même topo, géométrie `ST_Point(lon, lat)`.
+`geo_cities`: same topo, geometry `ST_Point(lon, lat)`.
 
-**Checkpoint** : `SELECT level, count(*) FROM geo_zones GROUP BY 1` cohérent (~250 / ~3600 / ~101) ; `SELECT count(*) FROM geo_cities` ≈ 52k.
+**Checkpoint**: `SELECT level, count(*) FROM geo_zones GROUP BY 1` consistent (~250 / ~3600 / ~101); `SELECT count(*) FROM geo_cities` ≈ 52k.
 
 ---
 
-## Étape 3 — Attribuer (`attributeZones.ts`)
+## Step 3 — Attribute (`attributeZones.ts`)
 
-Rejoué à **chaque upload** (dépend des données user). Trois sous-étapes en SQL.
+Replayed on **every upload** (depends on user data). Three sub-steps in SQL.
 
-**3a. Positions distinctes** (la clé perf) :
+**3a. Distinct positions** (the perf key):
 ```sql
 CREATE OR REPLACE TABLE segment_locations AS
 SELECT DISTINCT round(lat,3) AS lat_k, round(lon,3) AS lon_k
 FROM google_maps_segments WHERE lat IS NOT NULL AND lon IS NOT NULL;
 ```
 
-**3b. Attribution des positions distinctes** (pays d'abord, puis région/département pré-filtrés par pays ; ville pré-filtrée par pays + garde-fou rayon) :
+**3b. Attribute the distinct positions** (country first, then region/department pre-filtered by country; city pre-filtered by country + radius guardrail):
 ```sql
 CREATE OR REPLACE TABLE location_zones AS
 WITH base AS (SELECT lat_k, lon_k, ST_Point(lon_k, lat_k) AS pt FROM segment_locations),
@@ -136,10 +136,10 @@ LEFT JOIN LATERAL (
   SELECT g.name, ST_Distance_Sphere(g.geom, c.pt)/1000 AS km
   FROM geo_cities g WHERE g.country_code = c.country_code
   ORDER BY ST_Distance(g.geom, c.pt) LIMIT 1
-) city ON city.km <= 30;   -- rayon max → sinon nearest_city = NULL
+) city ON city.km <= 30;   -- max radius → otherwise nearest_city = NULL
 ```
 
-**3c. Enrichir les segments** (ALTER + UPDATE…FROM, join sur les positions arrondies) :
+**3c. Enrich the segments** (ALTER + UPDATE…FROM, join on the rounded positions):
 ```sql
 ALTER TABLE google_maps_segments ADD COLUMN country VARCHAR;      -- + region, department, nearest_city, city_km
 UPDATE google_maps_segments s
@@ -148,57 +148,57 @@ SET country=lz.country, region=lz.region, department=lz.department,
 FROM location_zones lz
 WHERE round(s.lat,3)=lz.lat_k AND round(s.lon,3)=lz.lon_k;
 ```
-`place_id` est déjà une colonne des segments → rien à faire pour les lieux à ce stade (cf. PRD §7, backfill = phase ultérieure).
+`place_id` is already a column on the segments → nothing to do for places at this stage (cf. PRD §7, backfill = later phase).
 
-**Checkpoint** : `SELECT count(*) total, count(country) attribués, count(nearest_city) avec_ville FROM google_maps_segments` → taux d'attribution pays ≈ 100%, ville raisonnable. Inspecter quelques lignes connues (un point à Paris → France / Île-de-France / Paris / Paris).
+**Checkpoint**: `SELECT count(*) total, count(country) attributed, count(nearest_city) with_city FROM google_maps_segments` → country attribution rate ≈ 100%, city reasonable. Inspect a few known rows (a point in Paris → France / Île-de-France / Paris / Paris).
 
 ---
 
-## Étape 4 — Brancher dans le flux
+## Step 4 — Wire into the flow
 
-`dataStore.svelte.ts`, après `insertLocationSegments(...)`, sur le chemin Google Maps uniquement :
+`dataStore.svelte.ts`, after `insertLocationSegments(...)`, on the Google Maps path only:
 ```ts
 await loadSpatial();
 await loadGeoAssets();     // idempotent
 await attributeZones();
 ```
-Exposer un état (`geoAttributionReady`) pour que les sections sachent que les colonnes sont prêtes.
+Expose a state (`geoAttributionReady`) so the sections know the columns are ready.
 
-## Étape 5 — Couche requêtes (`queries/geo.ts`)
+## Step 5 — Query layer (`queries/geo.ts`)
 
-Requêtes camelCase via `query<T>()`, par ex. :
-- `topCountries()` — durée/visites par `country`.
-- `topCities()` — par `nearest_city` (+ `population`, `city_km`).
-- `regionBreakdown(country)` — répartition régions/départements d'un pays.
-- `timeAbroad()` — part du temps hors pays de résidence.
+camelCase queries via `query<T>()`, e.g.:
+- `topCountries()` — duration/visits per `country`.
+- `topCities()` — per `nearest_city` (+ `population`, `city_km`).
+- `regionBreakdown(country)` — region/department split of a country.
+- `timeAbroad()` — share of time outside the country of residence.
 
-Ces requêtes alimenteront les sections `/google-maps/guide` et les vues `/google-maps/explore` (lot séparé).
+These queries feed the `/google-maps/guide` sections and the `/google-maps/explore` views (separate batch).
 
-## Tests & vérification
+## Tests & verification
 
-- **SQL spatial en headless** : contrairement au pipeline worker (skip en JSDOM), le bundle **`duckdb-node-blocking.cjs`** charge `spatial` en Node (démontré pendant la vérif). On peut donc écrire un **vrai test automatisé** de l'attribution sur un mini-jeu de positions (Paris, Londres, New York, un point en mer) + un mini-`geo_zones`/`geo_cities` synthétique. À cadrer dans `attributeZones.integration.manual.ts` (ou un harness Node dédié).
-- **Unitaires purs** : mapping des propriétés au build, expression d'arrondi, logique de garde-fou rayon.
-- **Invariant réseau** : `npm test` (le test existant `stores.test.ts` garde l'absence de persistance) ; vérifier qu'aucun appel ne part avec des coordonnées (seuls partent : assets `/geo/*` statiques + extension `extensions.duckdb.org`).
+- **Headless spatial SQL**: unlike the worker pipeline (skipped in JSDOM), the **`duckdb-node-blocking.cjs`** bundle loads `spatial` in Node (demonstrated during verification). So we can write a **real automated test** of the attribution on a tiny set of positions (Paris, London, New York, a point at sea) + a tiny synthetic `geo_zones`/`geo_cities`. To frame in `attributeZones.integration.manual.ts` (or a dedicated Node harness).
+- **Pure unit tests**: property mapping at build, rounding expression, radius-guardrail logic.
+- **Network invariant**: `npm test` (the existing `stores.test.ts` keeps the no-persistence guarantee); verify no call leaves with coordinates (only the static `/geo/*` assets + the `extensions.duckdb.org` extension go out).
 - `npm run check` (types).
 
-## Séquencement conseillé
+## Suggested sequencing
 
-1. Étape 0 (assets FR + monde) → 2. loadSpatial → 3. loadGeoAssets → 4. attributeZones (pays seul d'abord, checkpoint) → 5. ajouter région → département → ville → 6. brancher dataStore → 7. queries/geo.ts.
+1. Step 0 (FR + world assets) → 2. loadSpatial → 3. loadGeoAssets → 4. attributeZones (country only first, checkpoint) → 5. add region → department → city → 6. wire dataStore → 7. queries/geo.ts.
 
-Chaque cran a un checkpoint SQL vérifiable avant d'ajouter le niveau suivant.
+Each notch has a verifiable SQL checkpoint before adding the next level.
 
-## Décisions (tranchées) & implémentation
+## Decisions (settled) & implementation
 
-1. Plus fin v1 = **département** (commune = phase 3 ultérieure).
-2. ADM2 = **France uniquement**.
-3. Rayon max ville = **30 km** (`NEAREST_CITY_MAX_KM`).
-4. Dédup des positions = **4 décimales (~11 m)** (`DEDUP_DECIMALS`). L'arrondi n'est qu'une clé de join : `google_maps_segments.lat/lon` restent intacts pour le placement précis sur carte.
+1. Finest v1 = **department** (municipality = later phase 3).
+2. ADM2 = **France only**.
+3. Max city radius = **30 km** (`NEAREST_CITY_MAX_KM`).
+4. Position dedup = **4 decimals (~11 m)** (`DEDUP_DECIMALS`). The rounding is just a join key: `google_maps_segments.lat/lon` stay intact for precise map placement.
 
-État : **implémenté et testé** (`npm test` → headless DuckDB spatial via le bundle `duckdb-node-blocking` ; `npm run check` clean). Assets générés dans `static/geo/` (adm0 236 Ko, adm1 99 Ko, adm2-fr 205 Ko, cities5000 6,4 Mo / 64k villes).
+State: **implemented and tested** (`npm test` → headless DuckDB spatial via the `duckdb-node-blocking` bundle; `npm run check` clean). Assets generated in `static/geo/` (adm0 236 KB, adm1 99 KB, adm2-fr 205 KB, cities5000 6.4 MB / 64k cities).
 
-Deux pièges révélés par la validation sur données réelles (encodés dans le code) :
+Two pitfalls revealed by validation on real data (encoded in the code):
 
-- **Côtes :** les fichiers `…-version-simplifiee.geojson` de france-geojson sur-simplifient les côtes (un point à Ajaccio tombait hors de Corse-du-Sud). On part du fichier **complet** et on simplifie nous-mêmes à 20% (préserve Ajaccio/Nice/Brest/Biarritz). Idem ADM0 monde à 25% (sinon Marseille hors de France).
-- **Arrondissements :** GeoNames liste les arrondissements/quartiers (Paris 04, Marseille 02, Sol) comme des points codés `PPL` (comme de vraies villes), à population élevée → ils gagnent le « plus proche ». Fix : parmi les villes d'un même cluster (`d_min + CITY_CLUSTER_KM = 5 km`), on prend la **plus peuplée** (collapse les sous-divisions vers Paris/Madrid/Marseille, garde les voisines distinctes comme Versailles).
+- **Coastlines:** the `…-version-simplifiee.geojson` files from france-geojson over-simplify coastlines (a point in Ajaccio fell outside Corse-du-Sud). We start from the **full** file and simplify ourselves at 20% (preserves Ajaccio/Nice/Brest/Biarritz). Same for world ADM0 at 25% (otherwise Marseille falls outside France).
+- **Arrondissements:** GeoNames lists arrondissements/neighborhoods (Paris 04, Marseille 02, Sol) as points coded `PPL` (like real cities), with high population → they win the "nearest". Fix: among the cities of a same cluster (`d_min + CITY_CLUSTER_KM = 5 km`), take the **most populated** one (collapses sub-divisions toward Paris/Madrid/Marseille, keeps distinct neighbors like Versailles).
 
-Reste hors périmètre (non bloquant) : `cities5000.json` pèse 6,4 Mo non compressé (≈1,5–2 Mo gzip au transport) — à optimiser plus tard (arrondir les coords, ou Parquet) si le poids commité gêne.
+Remaining out of scope (non-blocking): `cities5000.json` weighs 6.4 MB uncompressed (≈1.5–2 MB gzip in transit) — to optimize later (round the coords, or Parquet) if the committed weight becomes a problem.

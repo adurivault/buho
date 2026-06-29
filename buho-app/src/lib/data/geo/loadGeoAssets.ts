@@ -9,31 +9,22 @@ import { query, withJsonRows } from '../db';
  * from the static assets in `/geo`. These are public reference data, independent
  * of the user's data, so they are loaded once per session (idempotent).
  *
- * Assets are produced by `scripts/build-geo-assets.mjs`. Zone TopoJSON features
- * carry normalized `{ country_code, zone_id, name }` properties; cities are a
- * flat JSON array. Geometry is built SQL-side via ST_GeomFromGeoJSON / ST_Point.
+ * v2: `geo_zones` is a single "leaf" layer — each polygon is the finest admin
+ * unit of its territory and carries its full hierarchy in columns
+ * (country/region/department/arrondissement). The ocean polygons are appended
+ * (level = 'ocean') as the not-on-land fallback. Assets come from
+ * `scripts/build-geo-assets.mjs`; geometry is built SQL-side via ST_GeomFromGeoJSON.
  */
 
-const ZONE_SOURCES = [
-    { level: 'country', file: 'adm0.topojson' },
-    { level: 'ocean', file: 'ocean.topojson' }, // fallback when not on land
-    { level: 'region', file: 'adm1.topojson' }, // France régions (precise)
-    { level: 'region', file: 'adm1-world.topojson' }, // other countries' states/provinces
-    { level: 'department', file: 'adm2-fr.topojson' },
-] as const;
+const ZONE_FILES = ['geo_zones.topojson', 'ocean.topojson'];
 
-interface ZoneRow {
-    level: string;
-    country_code: string;
-    zone_id: string;
-    name: string;
-    geom_text: string;
-}
+const ZONE_COLS = ['level', 'country_code', 'country', 'region', 'department', 'arrondissement'] as const;
+type ZoneProp = (typeof ZONE_COLS)[number];
+type ZoneRow = Record<ZoneProp, string | null> & { geom_text: string };
 
 interface CityRow {
     name: string;
     country_code: string;
-    admin1: string;
     population: number;
     lat: number;
     lon: number;
@@ -45,36 +36,38 @@ export async function loadGeoAssets(): Promise<void> {
     if (geoAssetsLoaded) return;
 
     await query(`CREATE TABLE IF NOT EXISTS geo_zones (
-        level VARCHAR, country_code VARCHAR, zone_id VARCHAR, name VARCHAR, geom GEOMETRY)`);
+        level VARCHAR, country_code VARCHAR, country VARCHAR, region VARCHAR,
+        department VARCHAR, arrondissement VARCHAR, geom GEOMETRY)`);
     await query(`CREATE TABLE IF NOT EXISTS geo_cities (
-        name VARCHAR, country_code VARCHAR, admin1 VARCHAR, population INTEGER,
+        name VARCHAR, country_code VARCHAR, population INTEGER,
         lat DOUBLE, lon DOUBLE, geom GEOMETRY)`);
 
-    for (const { level, file } of ZONE_SOURCES) {
-        const rows = await loadZoneRows(`${base}/geo/${file}`, level);
+    for (const file of ZONE_FILES) {
+        const rows = await loadZoneRows(`${base}/geo/${file}`);
         if (rows.length === 0) continue;
         await withJsonRows(rows, (src) =>
             `INSERT INTO geo_zones
-             SELECT level, country_code, zone_id, name, ST_GeomFromGeoJSON(geom_text) FROM ${src}`);
+             SELECT level, country_code, country, region, department, arrondissement,
+                    ST_GeomFromGeoJSON(geom_text) FROM ${src}`);
     }
 
     const cities = await fetchJson<CityRow[]>(`${base}/geo/cities5000.json`);
     if (cities && cities.length > 0) {
         await withJsonRows(cities, (src) =>
             `INSERT INTO geo_cities
-             SELECT name, country_code, admin1, population, lat, lon, ST_Point(lon, lat) FROM ${src}`);
+             SELECT name, country_code, population, lat, lon, ST_Point(lon, lat) FROM ${src}`);
     }
 
     // RTREE indexes are essential: attributeZones spatial-joins against these
-    // tables, and without an index DuckDB nested-loops the 4500+ world ADM1
-    // polygons per point and blows the in-browser memory cap (OOM at ~3 GB).
+    // tables, and without an index DuckDB nested-loops the 4500+ leaf polygons
+    // per point and blows the in-browser memory cap (OOM at ~3 GB).
     await query(`CREATE INDEX IF NOT EXISTS geo_zones_rtree ON geo_zones USING RTREE (geom)`);
     await query(`CREATE INDEX IF NOT EXISTS geo_cities_rtree ON geo_cities USING RTREE (geom)`);
 
     geoAssetsLoaded = true;
 }
 
-async function loadZoneRows(url: string, level: string): Promise<ZoneRow[]> {
+async function loadZoneRows(url: string): Promise<ZoneRow[]> {
     const topo = await fetchJson<Topology>(url);
     if (!topo) return [];
 
@@ -82,14 +75,10 @@ async function loadZoneRows(url: string, level: string): Promise<ZoneRow[]> {
     const fc = feature(topo, topo.objects[objectName] as GeometryCollection) as FeatureCollection;
 
     return fc.features.map((f) => {
-        const p = (f.properties ?? {}) as Partial<Pick<ZoneRow, 'country_code' | 'zone_id' | 'name'>>;
-        return {
-            level,
-            country_code: p.country_code ?? '',
-            zone_id: p.zone_id ?? '',
-            name: p.name ?? '',
-            geom_text: JSON.stringify(f.geometry),
-        };
+        const p = (f.properties ?? {}) as Partial<Record<ZoneProp, string>>;
+        const row = { geom_text: JSON.stringify(f.geometry) } as ZoneRow;
+        for (const col of ZONE_COLS) row[col] = p[col] ?? null;
+        return row;
     });
 }
 

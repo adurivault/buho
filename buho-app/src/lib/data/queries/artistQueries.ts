@@ -44,7 +44,7 @@ export interface ArtistSunburstRow {
     track: string;
     minutes: number;
     playCount: number;
-    trackUri: string | null; // spotify:track:<id> — pour ouvrir le titre sur Spotify
+    trackUri: string | null; // spotify:track:<id> — to open the track on Spotify
 }
 
 export async function getTopArtists(limit = 15, dateRange?: DateRange): Promise<ArtistData[]> {
@@ -278,9 +278,9 @@ export async function getArtistAnalysis(limit = 100, dateRange?: DateRange): Pro
 
 
 export async function getArtistAlbumTrackSunburst(dateRange?: DateRange): Promise<ArtistSunburstRow[]> {
-    // Agrégat complet artiste/album/titre, sans regroupement : le bucket "Other"
-    // dépend du niveau affiché (1° de la vue courante) et est calculé côté client
-    // au moment du zoom, cf. bucketSunburstTree.
+    // Full artist/album/track aggregate, no bucketing: the "Other" bucket depends
+    // on the displayed level (1st of the current view) and is computed client-side
+    // at zoom time, cf. bucketSunburstTree.
     const sql = `
         SELECT
             artist_name as artist,
@@ -307,10 +307,10 @@ export async function getArtistAlbumTrackSunburst(dateRange?: DateRange): Promis
 }
 
 /**
- * Sunburst pour le mode Explorer : applique tous les filtres actifs SAUF
- * artist/album/track (les dimensions que le sunburst contrôle lui-même), afin
- * de conserver la hiérarchie complète et de pouvoir mettre en valeur / atténuer
- * la sélection — même pattern que BarChartSatellite.
+ * Sunburst for the Explorer mode: applies all active filters EXCEPT
+ * artist/album/track (the dimensions the sunburst controls itself), in order to
+ * keep the full hierarchy and be able to highlight / dim the selection — same
+ * pattern as BarChartSatellite.
  */
 export async function getArtistSunburstFiltered(filters: FilterState = {}): Promise<ArtistSunburstRow[]> {
     const where = buildWhereExceptMultiple(filters, ['artist_name', 'album_name', 'track_name']);

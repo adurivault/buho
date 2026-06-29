@@ -5,21 +5,21 @@
 
     interface Props {
         title: string;
-        /** Clé de dimension (sert à la coloration sticky), ex. "ip_addr". */
+        /** Dimension key (used for sticky coloring), e.g. "ip_addr". */
         filterKey: string;
         slices: DimensionSlice[];
         size?: number;
-        /** Formatage de la valeur pour l'affichage (tooltip), ex. jour de semaine. */
+        /** Value formatting for display (tooltip), e.g. day of week. */
         format?: (value: string) => string;
-        /** Valeur actuellement sélectionnée (null = aucune). */
+        /** Currently selected value (null = none). */
         selectedValue?: string | null;
-        /** Sélection/désélection d'une part (null = désélection). */
+        /** Select/deselect a slice (null = deselect). */
         onSelect?: (value: string | null) => void;
-        /** Affiche le toggle « color by » (colore la constellation par cette dimension). */
+        /** Shows the "color by" toggle (colors the constellation by this dimension). */
         colorByEnabled?: boolean;
-        /** Cette dimension est-elle la source de couleur active ? */
+        /** Is this dimension the active color source? */
         colorByActive?: boolean;
-        /** Bascule la source de couleur. */
+        /** Toggles the color source. */
         onToggleColorBy?: () => void;
     }
 
@@ -41,7 +41,7 @@
     let tooltip = $state({ visible: false, x: 0, y: 0, label: "", value: "" });
 
     function toggle(value: string) {
-        if (value === "Other") return; // pas filtrable
+        if (value === "Other") return; // not filterable
         onSelect?.(selectedValue === value ? null : value);
     }
 

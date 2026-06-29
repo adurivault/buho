@@ -70,8 +70,8 @@
 </div>
 
 <style>
-	/* Colonne plein écran : header fixe en haut, contenu qui prend le reste.
-	   L'Explore s'y cale pile (pas de scroll) ; le Guide y défile (overflow). */
+	/* Full-screen column: header fixed at the top, content takes the rest.
+	   Explore fits it exactly (no scroll); the Guide scrolls within it (overflow). */
 	.spotify-shell {
 		display: flex;
 		flex-direction: column;

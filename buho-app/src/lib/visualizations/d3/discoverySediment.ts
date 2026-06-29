@@ -261,8 +261,8 @@ export function createDiscoverySediment(container: HTMLElement): SedimentChart {
                     .style("opacity", "1")
                     .text(
                         `${monthLabel}\n` +
-                            `Découvert en ${cohortLabel} (il y a ${ageLabel})\n` +
-                            `${d.plays.toLocaleString()} écoutes`
+                            `Discovered in ${cohortLabel} (${ageLabel} ago)\n` +
+                            `${d.plays.toLocaleString()} plays`
                     );
             })
             .on("mouseleave", () => tip.style("opacity", "0"));
@@ -277,8 +277,8 @@ export function createDiscoverySediment(container: HTMLElement): SedimentChart {
             .attr("font-size", "11px")
             .text(
                 mode === "age"
-                    ? "Ancienneté du morceau au moment de l'écoute"
-                    : "Date de découverte du morceau"
+                    ? "Track age at listen time"
+                    : "Track discovery date"
             );
         gLegend
             .append("rect")

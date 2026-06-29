@@ -1,198 +1,198 @@
-# PRD v2 — Attribution géographique : architecture « zones-feuilles »
+# PRD v2 — Geographic attribution: "leaf-zones" architecture
 
-> Statut : proposition · Source : exports Google Timeline (table `google_maps_segments`)
-> **Relation à la v1** ([prd-google-maps-geo.md](./prd-google-maps-geo.md)) : ce document **remplace** la *logique d'attribution* (v1 §6 schéma, §7 logique) et la *production des assets*. Tout le reste de la v1 — invariants réseau, fond de carte MapLibre, rendu deck.gl, découpage Guide/Explore — **reste valable et inchangé**. La v1 est conservée comme référence de l'approche initiale (patchwork multi-sources).
+> Status: proposal · Source: Google Timeline exports (table `google_maps_segments`)
+> **Relation to v1** ([prd-google-maps-geo.md](./prd-google-maps-geo.md)): this document **replaces** the *attribution logic* (v1 §6 schema, §7 logic) and the *asset production*. Everything else in v1 — network invariants, MapLibre basemap, deck.gl rendering, Guide/Explore split — **stays valid and unchanged**. v1 is kept as the reference for the initial approach (multi-source patchwork).
 
-## 1. Pourquoi cette révision
+## 1. Why this revision
 
-La v1 attribue chaque point en **recalculant la hiérarchie niveau par niveau au runtime** : un test pays, puis région, puis département, chacun sur des polygones issus de **sources différentes** (Natural Earth 50m pour les pays, NE 10m pour les régions monde, france-geojson pour la France, etc.). Conséquences observées :
+v1 attributes each point by **recomputing the hierarchy level by level at runtime**: a country test, then region, then department, each on polygons coming from **different sources** (Natural Earth 50m for countries, NE 10m for world regions, france-geojson for France, etc.). Observed consequences:
 
-- **Frontières non recollées** : des fichiers simplifiés séparément ne coïncident pas → trous (point dans un pays mais aucune région) et incohérences **département ⊄ région** près des limites.
-- **Rustines** : buffer côtier, garde-fous spécifiques, dépendance à des particularités locales (ex. côte corse sur-simplifiée éjectant une ville de son département). Non scalable.
-- **Pas de hiérarchie matérialisée** : la relation parent→enfant n'existe nulle part comme donnée ; elle est ré-assemblée par `GROUP BY` au query-time en *supposant* la cohérence entre colonnes.
-- **Coût runtime** : 4–5 opérations spatiales par position distincte.
+- **Boundaries that don't line up**: files simplified separately don't coincide → gaps (a point in a country but in no region) and **department ⊄ region** inconsistencies near edges.
+- **Patches**: coastal buffer, specific safeguards, dependence on local quirks (e.g. an over-simplified Corsican coast ejecting a city from its department). Not scalable.
+- **No materialized hierarchy**: the parent→child relationship exists nowhere as data; it is re-assembled by `GROUP BY` at query time, *assuming* consistency across columns.
+- **Runtime cost**: 4–5 spatial operations per distinct position.
 
-Objectif produit identique à la v1 (attribuer chaque point à pays / région / département / ville), mais avec une architecture **universelle, scalable à de nouveaux pays, et plus rapide**.
+Product goal identical to v1 (attribute each point to country / region / department / city), but with a **universal architecture, scalable to new countries, and faster**.
 
-## 2. Principe directeur
+## 2. Guiding principle
 
-> **Tout le travail complexe est fait au build. Au runtime, on attribue un point à une zone, et la zone porte déjà sa hiérarchie.**
+> **All the complex work is done at build time. At runtime, we attribute a point to a zone, and the zone already carries its hierarchy.**
 
-1. Le build produit **une seule couche de « zones-feuilles »** : chaque polygone est l'unité administrative **la plus fine disponible** pour son territoire, et **porte sa hiérarchie complète en colonnes** (`country` / `region` / `department`).
-2. L'attribution runtime se réduit à **un seul `ST_Contains`** → une ligne → on lit les colonnes. La cohérence parent↔enfant est **garantie par construction** (tout est sur la même ligne).
-3. **Aucune logique spécifique à une région du monde.** Le comportement par pays est piloté par un **manifeste de données**, pas par du code.
+1. The build produces **a single "leaf-zones" layer**: each polygon is the **finest available** administrative unit for its territory, and **carries its full hierarchy in columns** (`country` / `region` / `department`).
+2. Runtime attribution reduces to **a single `ST_Contains`** → one row → we read the columns. Parent↔child consistency is **guaranteed by construction** (everything is on the same row).
+3. **No logic specific to a region of the world.** Per-country behavior is driven by a **data manifest**, not by code.
 
-## 3. Source unique hiérarchique
+## 3. Single hierarchical source
 
-Le patchwork multi-sources est la cause racine des problèmes de v1. On bascule sur **geoBoundaries**, source mondiale homogène couvrant tous les niveaux. Deux conditionnements, au choix :
+The multi-source patchwork is the root cause of v1's problems. We switch to **geoBoundaries**, a homogeneous worldwide source covering every level. Two packagings, your choice:
 
-| Conditionnement | Licence | Pour |
+| Packaging | License | For |
 | --- | --- | --- |
-| **CGAZ** (composite mondial harmonisé) | **1 seule : CC-BY 4.0** | Simplicité max : une citation pour le monde entier |
-| **gbOpen** (par pays, source nationale officielle) | par pays, **toutes ouvertes** (Etalab, OGL, Public Domain, CC-BY…), auto-collectables via l'API | Précision officielle + ne télécharger que le pays+niveau du manifeste |
+| **CGAZ** (harmonized global composite) | **just 1: CC-BY 4.0** | Max simplicity: one citation for the whole world |
+| **gbOpen** (per country, official national source) | per country, **all open** (Etalab, OGL, Public Domain, CC-BY…), auto-collectable via the API | Official precision + download only the manifest's country+level |
 
-**Couverture (validée via l'API gbOpen)** : ADM0 = **230 pays**, ADM1 = **198**, ADM2 = **180**. Tout point tombe au moins dans un pays ; la plupart ont région et département. Les ~50 sans ADM2 sont des micro-États sans 2ᵉ niveau réel (Monaco, Singapour…) → manifeste à ADM1/ADM0.
+**Coverage (validated via the gbOpen API)**: ADM0 = **230 countries**, ADM1 = **198**, ADM2 = **180**. Every point falls at least in a country; most have a region and a department. The ~50 without ADM2 are micro-states with no real 2nd level (Monaco, Singapore…) → manifest at ADM1/ADM0.
 
-| Autres | Décision |
+| Others | Decision |
 | --- | --- |
-| À éviter | **GADM** — plus détaillé mais licence **non-commerciale** → pas redistribuable |
-| Villes | **GeoNames `cities5000`** (inchangé v1) — points, « ville la plus proche », *pas* du containment |
-| Océans | **Natural Earth** marine polys (domaine public) pour le fallback §6 |
+| To avoid | **GADM** — more detailed but **non-commercial** license → not redistributable |
+| Cities | **GeoNames `cities5000`** (unchanged from v1) — points, "nearest city", *not* containment |
+| Oceans | **Natural Earth** marine polys (public domain) for the §6 fallback |
 
-> **Validation FR (geoBoundaries gbOpen — fait)** : ADM1 = 13 régions, ADM2 = 96 départements, source **IGN** (officiel), licence Etalab. Côtes **saines** en non-simplifié (Marseille, Ajaccio, Brest, Nice tous contenus — Ajaccio cassait avec france-geojson « simplifiée »). Cohérence dept⊂région **parfaite** (PIP : 0 orphelin, cf. §5.3).
+> **FR validation (geoBoundaries gbOpen — done)**: ADM1 = 13 regions, ADM2 = 96 departments, source **IGN** (official), Etalab license. Coastlines **healthy** when un-simplified (Marseille, Ajaccio, Brest, Nice all contained — Ajaccio broke with the "simplified" france-geojson). dept⊂region consistency **perfect** (PIP: 0 orphans, cf. §5.3).
 
-Une source homogène **pave proprement** (les ADM2 d'un pays s'unissent en son ADM1) → l'essentiel des réconciliations inter-fichiers et des rustines disparaît.
+A homogeneous source **tiles cleanly** (a country's ADM2s union into its ADM1) → most inter-file reconciliations and patches disappear.
 
-**Reco** : démarrer en **CGAZ** (1 licence) ; basculer un pays vers gbOpen (source nationale) au cas par cas via le manifeste, sans toucher au runtime. Attention au **ShareAlike** (ex. JPN en CC-BY-SA) : si on commit ses frontières dérivées, les marquer CC-BY-SA — ou laisser ces pays en contour seul.
+**Recommendation**: start in **CGAZ** (1 license); switch a country to gbOpen (national source) case by case via the manifest, without touching the runtime. Watch out for **ShareAlike** (e.g. JPN in CC-BY-SA): if we commit its derived boundaries, mark them CC-BY-SA — or leave those countries as outline only.
 
-## 4. Modèle de données
+## 4. Data model
 
-### 4.1 Couche-feuilles `geo_zones`
+### 4.1 Leaf layer `geo_zones`
 
 ```sql
 CREATE TABLE geo_zones (
-  zone_id      VARCHAR,   -- identifiant stable de la zone-feuille
-  level        VARCHAR,   -- niveau réel de la feuille : 'department' | 'region' | 'country'
+  zone_id      VARCHAR,   -- stable identifier of the leaf-zone
+  level        VARCHAR,   -- actual level of the leaf: 'department' | 'region' | 'country'
   country_code VARCHAR,   -- ISO 3166-1 alpha-3
-  country      VARCHAR,   -- hiérarchie embarquée
-  region       VARCHAR,   -- NULL si le pays n'a pas ce niveau chargé
-  department   VARCHAR,   -- NULL si le pays n'a pas ce niveau chargé
+  country      VARCHAR,   -- embedded hierarchy
+  region       VARCHAR,   -- NULL if the country has no such level loaded
+  department   VARCHAR,   -- NULL if the country has no such level loaded
   geom         GEOMETRY
 );
 ```
 
-Exemple (profondeur **variable** selon les données chargées par pays) :
+Example (**variable** depth depending on the data loaded per country):
 
 | geom | level | country | region | department |
 | --- | --- | --- | --- | --- |
 | ▢ | department | France | Île-de-France | Paris |
 | ▢ | department | France | Bretagne | Finistère |
-| ▢ | region | Espagne | Catalogne | NULL |
-| ▢ | country | Brésil | NULL | NULL |
+| ▢ | region | Spain | Catalonia | NULL |
+| ▢ | country | Brazil | NULL | NULL |
 
-Chaque feuille tuile son territoire ; l'union des feuilles couvre le monde (au moins au niveau pays — cf. §6 fallback).
+Each leaf tiles its territory; the union of the leaves covers the world (at least at the country level — cf. §6 fallback).
 
-### 4.2 Villes `geo_cities` (inchangé)
+### 4.2 Cities `geo_cities` (unchanged)
 
-Points GeoNames (`name, country_code, admin1, population, lat, lon, geom = ST_Point`). La « ville » reste une attribution **par plus proche point** (les villes ne pavent pas le plan) — c'est le seul niveau qui *ne* peut *pas* vivre dans la couche-feuilles.
+GeoNames points (`name, country_code, admin1, population, lat, lon, geom = ST_Point`). The "city" stays a **nearest-point** attribution (cities don't tile the plane) — it's the only level that *cannot* live in the leaf layer.
 
-### 4.3 Manifeste de pays (le levier de scalabilité)
+### 4.3 Country manifest (the scalability lever)
 
-Un fichier de config déclaratif pilote la **profondeur chargée par pays** :
+A declarative config file drives the **depth loaded per country**:
 
 ```jsonc
 {
-  "default": "ADM0",        // tout pays non listé → contour pays seul
+  "default": "ADM0",        // any unlisted country → country outline only
   "FRA": "ADM2",
   "USA": "ADM2",
   "ESP": "ADM1"
 }
 ```
 
-> **Ajouter un pays = une ligne dans le manifeste + re-run du build.** Zéro changement runtime, zéro logique par région.
+> **Adding a country = one line in the manifest + a build re-run.** Zero runtime change, zero per-region logic.
 
-### 4.4 Sources fines hors hiérarchie ADM (ex. arrondissements)
+### 4.4 Fine sources outside the ADM hierarchy (e.g. arrondissements)
 
-Certains niveaux utiles ne sont pas des ADM geoBoundaries — les **arrondissements municipaux** (Paris/Lyon/Marseille) sont sous-communaux (geoBoundaries FR s'arrête à ADM2 = département). On les ajoute comme **feuilles plus fines clippées sur leur parent**, via une source dédiée (data.gouv, ~45 polygones) :
+Some useful levels aren't geoBoundaries ADMs — the **municipal arrondissements** (Paris/Lyon/Marseille) are sub-communal (geoBoundaries FR stops at ADM2 = department). We add them as **finer leaves clipped to their parent**, via a dedicated source (data.gouv, ~45 polygons):
 
-- **Paris** : les 20 arrondissements = exactement le département 75 → ils **remplacent** la feuille « département Paris ».
-- **Lyon / Marseille** : les arrondissements ne couvrent que la ville (⊂ département) → insérer les arrondissements **+** remplacer la feuille département par « département **moins** la ville » (`ST_Difference` au build).
+- **Paris**: the 20 arrondissements = exactly department 75 → they **replace** the "Paris department" leaf.
+- **Lyon / Marseille**: the arrondissements only cover the city (⊂ department) → insert the arrondissements **+** replace the department leaf with "department **minus** the city" (`ST_Difference` at build time).
 
-La feuille-arrondissement porte alors `country/region/department` + son niveau `arrondissement`. Le runtime reste **un seul `ST_Contains`** — bien plus propre et précis que le hack « plus proche point GeoNames » de l'impl v1 (containment exact, pas de flou ni faux positif). Piloté par le manifeste (override de territoire), donc scalable.
+The arrondissement leaf then carries `country/region/department` + its `arrondissement` level. The runtime stays **a single `ST_Contains`** — much cleaner and more precise than the v1 impl's "nearest GeoNames point" hack (exact containment, no fuzziness or false positive). Driven by the manifest (territory override), so scalable.
 
-## 5. Pipeline de build (`scripts/build-geo-assets.mjs`, réécrit)
+## 5. Build pipeline (`scripts/build-geo-assets.mjs`, rewritten)
 
-Offline, one-off, ré-exécuté quand on touche au manifeste ou aux sources :
+Offline, one-off, re-run when we touch the manifest or the sources:
 
-1. **Télécharger** geoBoundaries CGAZ ADM0/ADM1/ADM2 (+ océans Natural Earth, + GeoNames `cities5000`).
-2. **Assembler la couche-feuilles** selon le manifeste :
-   - pour chaque pays curaté → ses polygones au niveau demandé (ADM2/ADM1) ;
-   - pour tous les autres pays → leur polygone ADM0.
-   - L'union ne se chevauche pas : un pays curaté est retiré de la couche ADM0 (remplacé par ses feuilles fines).
-3. **Embarquer la hiérarchie en colonnes par point-dans-polygone (PIP) au build.** Les features gbOpen ne portent **pas** le nom du parent (attributs = `shapeName/shapeGroup/shapeType` seulement — *validé*). On dérive donc l'ancestralité au build : pour chaque feuille, un point intérieur garanti (`ST_PointOnSurface`) → quel polygone parent (ADM1, ADM0) le contient. **Agnostique aux codes** (INSEE/FIPS/…), donc jamais spécifique à un pays. *Validé FR : 96 départements → **0 orphelin**, chacun dans exactement une région.* (Si on prend un jour une source qui embarque déjà la hiérarchie : simple recopie.)
-4. **Simplifier** (mapshaper, Visvalingam, `keep-shapes`) avec **une seule tolérance globale**, arbitrée contre l'objectif mémoire (§8). Pas de réglage par région : un curseur mondial *« ne pas simplifier au point d'éjecter une ville peuplée de sa zone »*.
-5. **Océans** : polygones marins nommés (Natural Earth) en couche séparée `ocean`, pour le fallback §6.
-6. **Villes** : extraire `cities5000` → JSON plat (inchangé v1).
+1. **Download** geoBoundaries CGAZ ADM0/ADM1/ADM2 (+ Natural Earth oceans, + GeoNames `cities5000`).
+2. **Assemble the leaf layer** per the manifest:
+   - for each curated country → its polygons at the requested level (ADM2/ADM1);
+   - for all other countries → their ADM0 polygon.
+   - The union doesn't overlap: a curated country is removed from the ADM0 layer (replaced by its fine leaves).
+3. **Embed the hierarchy in columns via point-in-polygon (PIP) at build time.** gbOpen features do **not** carry the parent name (attributes = `shapeName/shapeGroup/shapeType` only — *validated*). So we derive ancestry at build: for each leaf, a guaranteed interior point (`ST_PointOnSurface`) → which parent polygon (ADM1, ADM0) contains it. **Code-agnostic** (INSEE/FIPS/…), so never country-specific. *FR-validated: 96 departments → **0 orphans**, each in exactly one region.* (If we ever take a source that already embeds the hierarchy: a simple copy.)
+4. **Simplify** (mapshaper, Visvalingam, `keep-shapes`) with **a single global tolerance**, arbitrated against the memory goal (§8). No per-region tuning: one worldwide slider *"don't simplify to the point of ejecting a populated city from its zone"*.
+5. **Oceans**: named marine polygons (Natural Earth) in a separate `ocean` layer, for the §6 fallback.
+6. **Cities**: extract `cities5000` → flat JSON (unchanged from v1).
 
-Sortie : un asset couche-feuilles (TopoJSON), un asset océans, un asset villes — au lieu des 5 fichiers hétérogènes de v1.
+Output: one leaf-layer asset (TopoJSON), one oceans asset, one cities asset — instead of v1's 5 heterogeneous files.
 
-## 6. Attribution runtime (`attributeZones` / `attributionSql.ts`, simplifié)
+## 6. Runtime attribution (`attributeZones` / `attributionSql.ts`, simplified)
 
-Inchangé : on **déduplique d'abord les positions** (arrondi ~11 m → 10³–10⁴ positions distinctes au lieu de 10⁵–10⁶ points bruts), on attribue les positions distinctes, on rejoint sur les segments.
+Unchanged: we **deduplicate positions first** (round ~11 m → 10³–10⁴ distinct positions instead of 10⁵–10⁶ raw points), attribute the distinct positions, then join back onto the segments.
 
-L'attribution d'une position distincte se réduit à :
+Attributing a distinct position reduces to:
 
 ```sql
--- 1) Un seul test de containment sur la couche-feuilles → lit la hiérarchie.
+-- 1) A single containment test on the leaf layer → reads the hierarchy.
 SELECT z.country, z.region, z.department
 FROM geo_zones z
 WHERE ST_Contains(z.geom, pt)
 LIMIT 1;
 
--- 2) Fallback si aucune feuille terrestre (mer / contour grossier) :
---    priorité à la terre ; sinon plus proche pays dans une petite marge ; sinon océan.
---    (échelle de fallback universelle, pas un buffer par région)
+-- 2) Fallback if no land leaf (sea / coarse outline):
+--    prefer land; otherwise nearest country within a small margin; otherwise ocean.
+--    (universal fallback scale, not a per-region buffer)
 
--- 3) Ville la plus proche : inchangé (GeoNames, distance, garde-fou rayon, pré-filtre pays).
+-- 3) Nearest city: unchanged (GeoNames, distance, radius guardrail, country pre-filter).
 ```
 
-Ce qui **disparaît** par rapport à v1 :
-- les tests séparés région / département (et donc l'incohérence dept↔région) ;
-- le pré-filtre par pays sur chaque niveau ;
-- les rustines par particularité locale.
+What **disappears** compared to v1:
+- the separate region / department tests (and thus the dept↔region inconsistency);
+- the per-country pre-filter on each level;
+- the per-local-quirk patches.
 
-## 7. Perf & mémoire (objectif : scaler à plusieurs pays)
+## 7. Perf & memory (goal: scale to several countries)
 
-C'est le seul coût réellement inhérent (il faut les polygones pour attribuer). Mitigations, toutes compatibles avec l'architecture :
+This is the only truly inherent cost (you need the polygons to attribute). Mitigations, all compatible with the architecture:
 
-- **Un seul `ST_Contains` par position** (au lieu de 4–5) → runtime plus rapide.
-- **Index RTREE** sur `geo_zones.geom` (et `geo_cities.geom`) → `ST_Contains` / `ST_DWithin` sous-linéaire même avec beaucoup de feuilles (US counties ≈ 3 200, etc.). ✅ **Validé** : l'RTREE DuckDB-WASM fonctionne et est **indispensable** — sans index, les jointures spatiales sur ~4500 polygones partent en **OOM (3 Go)** ; avec, 100k positions distinctes passent. ⚠️ Prérequis : les requêtes doivent être des **JOINs spatiaux** ; les sous-requêtes corrélées n'utilisent **pas** l'index et OOMaient (corrigé en impl v1).
-- **Déduplication des positions** (déjà en place) → nombre de tests borné par les positions distinctes, indépendant du volume brut.
-- **Mémoire** : la couche-feuilles ne charge l'ADM2 que pour les pays curatés (le reste = ADM0, ~250 features). On peut **supprimer `adm1.topojson`** (la région est désormais une colonne, plus un polygone à tester). Net mémoire ≈ neutre voire meilleur que v1.
+- **A single `ST_Contains` per position** (instead of 4–5) → faster runtime.
+- **RTREE index** on `geo_zones.geom` (and `geo_cities.geom`) → `ST_Contains` / `ST_DWithin` sub-linear even with many leaves (US counties ≈ 3,200, etc.). ✅ **Validated**: the DuckDB-WASM RTREE works and is **indispensable** — without an index, spatial joins on ~4,500 polygons blow up to **OOM (3 GB)**; with it, 100k distinct positions pass. ⚠️ Prerequisite: the queries must be **spatial JOINs**; correlated subqueries do **not** use the index and OOM'd (fixed in the v1 impl).
+- **Position deduplication** (already in place) → the number of tests is bounded by distinct positions, independent of the raw volume.
+- **Memory**: the leaf layer only loads ADM2 for curated countries (the rest = ADM0, ~250 features). We can **drop `adm1.topojson`** (the region is now a column, no longer a polygon to test). Net memory ≈ neutral or even better than v1.
 
-## 8. Simplification : un seul curseur global
+## 8. Simplification: a single global slider
 
-La précision se règle par **une tolérance de simplification mondiale**, arbitrée contre la mémoire/bande passante. Contrainte universelle : préserver le containment des **lieux peuplés** (une ville ne doit pas tomber hors de sa zone après simplification). Aucune exception codée par région.
+Precision is set by **one worldwide simplification tolerance**, arbitrated against memory/bandwidth. Universal constraint: preserve the containment of **populated places** (a city must not fall outside its zone after simplification). No per-region exception in code.
 
-## 9. Sources & licences (exigence produit)
+## 9. Sources & licenses (product requirement)
 
-CC-BY impose une attribution comportant : **nom de la source**, **lien**, **nom + lien de la licence**, et **indication que les données sont modifiées** (on simplifie). Satisfait par une **section dédiée « Data & licenses »** dans l'UI (FAQ / About) — pas besoin de l'afficher sur chaque écran.
+CC-BY requires attribution including: **source name**, **link**, **license name + link**, and **an indication that the data is modified** (we simplify). Satisfied by a **dedicated "Data & licenses" section** in the UI (FAQ / About) — no need to show it on every screen.
 
-En **gbOpen**, chaque pays a sa licence nationale (toutes ouvertes) ; l'API renvoie `boundaryLicense` + `boundarySource` par pays → le build **auto-génère** les crédits des pays chargés (zéro saisie manuelle). En **CGAZ**, une seule ligne CC-BY 4.0 couvre le tout. Cas à surveiller : **ShareAlike** (ex. JPN CC-BY-SA) impose de redistribuer les frontières dérivées sous la même licence → marquer ces assets, ou exclure ces pays des niveaux fins.
+In **gbOpen**, each country has its national license (all open); the API returns `boundaryLicense` + `boundarySource` per country → the build **auto-generates** the credits for the loaded countries (zero manual entry). In **CGAZ**, a single CC-BY 4.0 line covers everything. Case to watch: **ShareAlike** (e.g. JPN CC-BY-SA) requires redistributing the derived boundaries under the same license → mark those assets, or exclude those countries from the fine levels.
 
 ```
 Data & licenses
 • Administrative boundaries © geoBoundaries (CC-BY 4.0) — modified (simplified).
   Runfola, D. et al. (2020), geoBoundaries, PLoS ONE 15(4): e0231866.
 • City data © GeoNames (CC-BY 4.0) — modified.
-• Map tiles © OpenStreetMap contributors / OpenFreeMap.   ← affiché SUR la carte
+• Map tiles © OpenStreetMap contributors / OpenFreeMap.   ← shown ON the map
 ```
 
-> Exception : les **tuiles** (OpenFreeMap/OSM) imposent une attribution **visible sur la carte** ; portée nativement par le contrôle d'attribution MapLibre, distincte des données de zones. Bonne pratique : répliquer les mentions dans l'en-tête de `build-geo-assets.mjs` + un `NOTICE` à côté des assets commités.
+> Exception: the **tiles** (OpenFreeMap/OSM) require attribution **visible on the map** — carried natively by MapLibre's attribution control, distinct from the zone data. Good practice: replicate the mentions in the header of `build-geo-assets.mjs` + a `NOTICE` next to the committed assets.
 
-## 10. Migration depuis v1
+## 10. Migration from v1
 
-| Fichier | Action |
+| File | Action |
 | --- | --- |
-| `scripts/build-geo-assets.mjs` | **Réécrit** : source geoBoundaries + manifeste → couche-feuilles à hiérarchie embarquée |
-| `static/geo/*` | Remplacés : 1 asset zones-feuilles + océans + villes (au lieu de adm0/adm1/adm1-world/adm2-fr) |
-| `lib/data/geo/loadGeoAssets.ts` | Charge `geo_zones` avec les colonnes hiérarchie ; **drop** `adm1.topojson` |
-| `lib/data/geo/attributionSql.ts` | **Collapse** : 1 `ST_Contains` + fallback océan ; suppression des sous-requêtes région/département/garde-fous |
-| `lib/data/geo/attributeZones.ts` | Orchestration inchangée (dedup → attribuer → enrichir) |
-| `lib/data/queries/geoQueries.ts` | **Inchangé** : colonnes de sortie identiques (`country`/`region`/`department`/`nearest_city`) |
+| `scripts/build-geo-assets.mjs` | **Rewritten**: geoBoundaries source + manifest → leaf layer with embedded hierarchy |
+| `static/geo/*` | Replaced: 1 leaf-zones asset + oceans + cities (instead of adm0/adm1/adm1-world/adm2-fr) |
+| `lib/data/geo/loadGeoAssets.ts` | Loads `geo_zones` with the hierarchy columns; **drops** `adm1.topojson` |
+| `lib/data/geo/attributionSql.ts` | **Collapsed**: 1 `ST_Contains` + ocean fallback; removal of the region/department subqueries/guardrails |
+| `lib/data/geo/attributeZones.ts` | Orchestration unchanged (dedup → attribute → enrich) |
+| `lib/data/queries/geoQueries.ts` | **Unchanged**: identical output columns (`country`/`region`/`department`/`nearest_city`) |
 
-L'interface de consommation ne bouge pas → les sections Guide / vues Explore (lot séparé) ne sont pas impactées.
+The consumption interface doesn't move → the Guide sections / Explore views (separate batch) are unaffected.
 
-## 11. Invariants (rappel, inchangés v1)
+## 11. Invariants (reminder, unchanged from v1)
 
-1. **Aucun envoi réseau de données utilisateur** : coordonnées jamais transmises ; seuls partent les assets `/geo/*` statiques (données de référence publiques) + l'extension spatiale DuckDB (du code).
-2. **Pas de persistance** des données utilisateur.
-3. Frontières & villes = **données de référence publiques**, pas des données utilisateur.
+1. **No network egress of user data**: coordinates never transmitted; only the static `/geo/*` assets (public reference data) + the DuckDB spatial extension (code) go out.
+2. **No persistence** of user data.
+3. Boundaries & cities = **public reference data**, not user data.
 
-## 12. Décisions ouvertes & risques
+## 12. Open decisions & risks
 
-1. ~~**RTREE DuckDB-WASM**~~ **Résolu** : validé fonctionnel et indispensable (cf. §7). Condition : attribution écrite en **JOINs spatiaux** (pas de sous-requêtes corrélées, qui n'utilisent pas l'index → OOM).
-2. **geoBoundaries vs source nationale fine** : geoBoundaries comme socle universel ; possibilité de surcharger un pays par une source nationale plus précise via le manifeste (sans changer le runtime).
-3. **Profondeur par défaut** : ADM0 mondial chargé pour tous → tout point hors pays curaté reçoit au moins le pays. Confirmer ce comportement de fallback.
-4. **Liste initiale des pays curatés** (ADM2) : France d'abord, puis ? (piloté par le manifeste).
-5. **Niveau « lieu » (placeId)** : hors périmètre, identique à v1 §7.
+1. ~~**DuckDB-WASM RTREE**~~ **Resolved**: validated functional and indispensable (cf. §7). Condition: attribution written as **spatial JOINs** (no correlated subqueries, which don't use the index → OOM).
+2. **geoBoundaries vs fine national source**: geoBoundaries as the universal base; possibility to override a country with a more precise national source via the manifest (without changing the runtime).
+3. **Default depth**: world ADM0 loaded for all → any point outside a curated country still gets at least the country. Confirm this fallback behavior.
+4. **Initial list of curated countries** (ADM2): France first, then? (driven by the manifest).
+5. **"Place" level (placeId)**: out of scope, identical to v1 §7.

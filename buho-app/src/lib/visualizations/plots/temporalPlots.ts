@@ -22,7 +22,7 @@ export function calendarHeatmapPlot(data: DailyCalendarPoint[], options: any = {
         const root = document.createElement("div");
         root.style.cssText =
             "display:flex;align-items:center;justify-content:center;min-height:240px;opacity:0.6";
-        root.textContent = "Pas de données dans cette plage de dates.";
+        root.textContent = "No data in this date range.";
         return root as HTMLElement | SVGElement;
     }
 

@@ -22,10 +22,10 @@
     import { firstFilterValue } from "$lib/utils/filters";
     import { MODIFIER_LABEL, openSpotify } from "$lib/utils/spotify";
 
-    // Les points de la constellation sont chargés UNE fois (raw : pas de proxy
-    // réactif sur 167k objets). Le flag `matched` est recalculé en JS en place,
-    // et `matchVersion` déclenche un simple redraw côté chart — sans rebuild du
-    // quadtree (~1,3 s) ni round-trip DB à chaque filtre.
+    // The constellation points are loaded ONCE (raw: no reactive proxy over 167k
+    // objects). The `matched` flag is recomputed in JS in place, and
+    // `matchVersion` triggers a simple chart-side redraw — without rebuilding the
+    // quadtree (~1.3 s) or a DB round-trip on every filter.
     let basePoints = $state.raw<ExplorerBasePoint[]>([]);
     let matchVersion = $state(0);
     let sunburstRows = $state<ArtistSunburstRow[]>([]);
@@ -47,8 +47,8 @@
     let viewportHeight = $state(0);
     let timeDomain = $state<[number, number] | null>(null);
 
-    // Les pies occupent ~10% de la hauteur d'écran (carré + label). Bornées pour
-    // rester lisibles sur petits écrans et raisonnables sur grands.
+    // The pies take ~10% of the screen height (square + label). Clamped to stay
+    // legible on small screens and reasonable on large ones.
     const pieSize = $derived(
         Math.max(56, Math.min(120, Math.round(viewportHeight * 0.1) - 20)),
     );
@@ -64,8 +64,8 @@
     let prevMacroSig = "";
     let prevMatchSig = "";
     const REQUEST_DEBOUNCE_MS = 30;
-    // Le brush émet en continu pendant le drag ; on throttle l'application du
-    // filtre pour rafraîchir le sunburst ~9 fois/s sans saturer le thread.
+    // The brush emits continuously during the drag; we throttle applying the
+    // filter to refresh the sunburst ~9 times/s without saturating the thread.
     const FILTER_SYNC_THROTTLE_MS = 110;
 
     let viewTimeDomain = $state<[number, number] | null>(null);
@@ -76,9 +76,9 @@
         dataStore.source === "spotify" && !dataStore.isLoading,
     );
 
-    // La colonne `timestamp` est stockée en mur-horloge LOCALE (cf.
-    // insertSpotifyPlays → formatLocalTimestamp). Le format "YYYY-MM-DD HH:MM:SS"
-    // n'a pas de suffixe de zone : new Date() l'interprète déjà comme heure locale.
+    // The `timestamp` column is stored as LOCAL wall-clock time (cf.
+    // insertSpotifyPlays → formatLocalTimestamp). The "YYYY-MM-DD HH:MM:SS" format
+    // has no zone suffix: new Date() already interprets it as local time.
     function formatPlayedAt(playedAt: string): string {
         const d = new Date(playedAt.replace(" ", "T"));
         return Number.isNaN(d.getTime()) ? playedAt : d.toLocaleString();
@@ -98,7 +98,7 @@
         return openSpotify(m.trackUri as string | null);
     }
 
-    /** Set<string> des valeurs d'un filtre, ou null si non applicable (range, etc.). */
+    /** Set<string> of a filter's values, or null if not applicable (range, etc.). */
     function filterValueSet(f: FilterState, key: string): Set<string> | null {
         const v = f[key];
         if (v === undefined || v === null) return null;
@@ -109,8 +109,8 @@
     }
 
     // --- Dimensions (config) ---------------------------------------------
-    // `key` = clé du store / colonne SQL ; `field` = champ porté par les base
-    // points. Toutes ces dimensions influent sur `matched` de la constellation.
+    // `key` = store key / SQL column; `field` = field carried by the base points.
+    // All these dimensions affect the constellation's `matched`.
     type DimField = keyof ExplorerBasePoint;
     interface MatchDim {
         key: string;
@@ -138,13 +138,13 @@
         return Number.isInteger(n) && n >= 0 && n < 7 ? names[n] : v;
     }
 
-    // Les champs booléens sont encodés 'True'/'False' (cf. getExplorerBasePoints).
+    // Boolean fields are encoded 'True'/'False' (cf. getExplorerBasePoints).
     const boolLabel =
         (yes: string, no: string) =>
         (v: string): string =>
             v === "True" ? yes : no;
 
-    // Sous-ensemble affiché en pie charts (artiste/album/titre sont le sunburst).
+    // Subset shown as pie charts (artist/album/track are the sunburst).
     interface PieDim extends MatchDim {
         label: string;
         format?: (v: string) => string;
@@ -183,23 +183,23 @@
 
     const TOP_N = 15;
 
-    // --- Coloration par dimension ----------------------------------------
-    // `colorBy` = clé store de la dimension qui colore la constellation et empile
-    // les barcharts satellites (null = vert par défaut). N'importe quelle pie peut
-    // être la source ; le toggle est exclusif. Les catégories/couleurs sont
-    // dérivées de la dimension pour rester au pixel avec le camembert.
+    // --- Coloring by dimension -------------------------------------------
+    // `colorBy` = store key of the dimension that colors the constellation and
+    // stacks the satellite barcharts (null = green by default). Any pie can be the
+    // source; the toggle is exclusive. The categories/colors are derived from the
+    // dimension to stay pixel-aligned with the pie.
     let colorBy = $state<string | null>(null);
 
     const colorByDim = $derived(
         colorBy ? (PIE_DIMS.find((d) => d.key === colorBy) ?? null) : null,
     );
 
-    // Ordre/couleurs des catégories : alignés EXACTEMENT sur les slices de la pie
-    // (donc fenêtre de brush + tous les filtres compris). Les couleurs affichées
-    // dans la constellation/barcharts référencent ainsi ce que montre le pie.
-    // En contrepartie, l'ordre d'empilement peut s'inverser quand on brushe — mais
-    // les barcharts ne colorent que la portion brushée (cf. ConstellationChart),
-    // donc l'inversion est lisible.
+    // Category order/colors: aligned EXACTLY on the pie's slices (so brush window
+    // + all filters included). The colors shown in the constellation/barcharts
+    // thus reference what the pie shows.
+    // The trade-off is that the stacking order can flip when brushing — but the
+    // barcharts only color the brushed portion (cf. ConstellationChart), so the
+    // flip stays readable.
     const colorCategories = $derived(
         colorBy
             ? (pieSlices[colorBy] ?? []).map((s) => ({
@@ -213,7 +213,7 @@
         colorBy = colorBy === key ? null : key;
     }
 
-    /** Dimensions actuellement filtrées + leur Set de valeurs. */
+    /** Currently filtered dimensions + their Set of values. */
     function activeDims(f: FilterState) {
         const out: { key: string; field: DimField; vals: Set<string> }[] = [];
         for (const d of MATCH_DIMS) {
@@ -224,16 +224,16 @@
     }
 
     /**
-     * Signature des filtres qui influent sur `matched` (= toutes les dimensions
-     * hors timestamp/hour, gérées comme domaines de vue par le chart).
+     * Signature of the filters that affect `matched` (= all dimensions except
+     * timestamp/hour, handled as view domains by the chart).
      */
     function matchSig(f: FilterState): string {
         return JSON.stringify(MATCH_DIMS.map((d) => f[d.key] ?? null));
     }
 
     /**
-     * Recalcule `matched` en place sur les points (mutation, pas de nouvelle
-     * référence) puis bumpe `matchVersion` pour déclencher un redraw du chart.
+     * Recomputes `matched` in place on the points (mutation, not a new reference)
+     * then bumps `matchVersion` to trigger a chart redraw.
      */
     function computeMatched() {
         const active = activeDims(spotifyExplorerFilters.activeFilters);
@@ -274,12 +274,12 @@
     }
 
     /**
-     * Répartition de TOUTES les dimensions pie en UN seul passage JS sur les
-     * points en mémoire (pas de round-trip DB → immédiat pendant le brush).
-     * Chaque pie exclut son propre filtre (comme les bars classiques) : on
-     * compte, par point, le nb de dimensions actives en échec — un point compte
-     * pour une pie s'il passe TOUT (0 échec) ou s'il n'échoue QUE sur cette pie.
-     * La fenêtre temps/heure visible (brush) s'applique à toutes.
+     * Breakdown of ALL pie dimensions in a SINGLE JS pass over the in-memory
+     * points (no DB round-trip → immediate during the brush).
+     * Each pie excludes its own filter (like the classic bars): per point, we
+     * count the number of failing active dimensions — a point counts for a pie if
+     * it passes EVERYTHING (0 failures) or if it fails ONLY on that pie.
+     * The visible time/hour window (brush) applies to all of them.
      */
     function computeAllPieSlices() {
         const pts = basePoints;
@@ -332,8 +332,8 @@
         pieSlices = next;
     }
 
-    // Recompute coalescé en rAF : pendant le brush, plusieurs changements de
-    // fenêtre par frame ⇒ un seul recalcul (et dégradation gracieuse si lourd).
+    // Recompute coalesced in rAF: during the brush, several window changes per
+    // frame ⇒ a single recompute (and graceful degradation if heavy).
     let pieRaf = 0;
     function schedulePieRecompute() {
         if (pieRaf) return;
@@ -354,7 +354,7 @@
             if (runId !== baseSeq) return;
 
             if (domain) timeDomain = [domain.minX, domain.maxX];
-            basePoints = nextPoints; // référence stable jusqu'au prochain dataset
+            basePoints = nextPoints; // stable reference until the next dataset
             prevMatchSig = matchSig(spotifyExplorerFilters.activeFilters);
             computeMatched();
         } catch (e) {
@@ -409,8 +409,8 @@
         prevMacroSig = "";
     }
 
-    // Chargement des points : UNE fois quand la source est prête. Le jeu de
-    // points ne dépend pas des filtres.
+    // Loading the points: ONCE when the source is ready. The point set does not
+    // depend on the filters.
     let basePointsLoaded = false;
     $effect(() => {
         const ready = dbReady;
@@ -424,10 +424,10 @@
         void loadBasePoints();
     });
 
-    // Surlignage de la constellation : recalcul JS de `matched` quand la
-    // sélection artist/album/track change. La signature évite tout recalcul
-    // inutile (ex. brush temps/heure) et `untrack` garantit que la mutation en
-    // place de `basePoints` ne peut pas re-déclencher cet effet (anti-boucle).
+    // Constellation highlight: JS recompute of `matched` when the artist/album/
+    // track selection changes. The signature avoids any useless recompute (e.g.
+    // time/hour brush) and `untrack` guarantees that the in-place mutation of
+    // `basePoints` cannot re-trigger this effect (anti-loop).
     $effect(() => {
         if (!dbReady) return;
         const sig = matchSig(activeFilters);
@@ -439,8 +439,8 @@
         });
     });
 
-    // Sunburst : re-query quand un filtre AUTRE que artist/album/track change
-    // (il exclut ses propres dimensions pour garder la hiérarchie complète).
+    // Sunburst: re-query when a filter OTHER than artist/album/track changes
+    // (it excludes its own dimensions to keep the full hierarchy).
     $effect(() => {
         const ready = dbReady;
         const f = activeFilters;
@@ -458,7 +458,7 @@
         );
     });
 
-    // Indicateurs globaux : recalculés à chaque changement de filtre.
+    // Global indicators: recomputed on every filter change.
     $effect(() => {
         const ready = dbReady;
         const f = activeFilters;
@@ -472,11 +472,11 @@
         macroTimer = setTimeout(() => void loadMacro(f), REQUEST_DEBOUNCE_MS);
     });
 
-    // Pies : recalcul JS (immédiat, sans DB) dès que les points, la sélection,
-    // ou la fenêtre temps/heure du brush changent. Coalescé en rAF.
+    // Pies: JS recompute (immediate, no DB) whenever the points, the selection,
+    // or the brush's time/hour window change. Coalesced in rAF.
     $effect(() => {
         const _b = basePoints;
-        const _m = matchVersion; // proxy des changements de sélection
+        const _m = matchVersion; // proxy for selection changes
         const _t = viewTimeDomain;
         const _h = viewHourDomain;
         if (!dbReady) return;
@@ -484,8 +484,8 @@
     });
 
     // Sync interactions from ConstellationChart to global filters.
-    // Le brush émet en continu : on applique le filtre en throttle (leading +
-    // trailing) pour rafraîchir pendant le drag, pas seulement au relâchement.
+    // The brush emits continuously: we apply the filter throttled (leading +
+    // trailing) to refresh during the drag, not only on release.
     let timeRangeSyncTimer: ReturnType<typeof setTimeout> | null = null;
     let hourRangeSyncTimer: ReturnType<typeof setTimeout> | null = null;
     let lastTimeSync = 0;
@@ -806,8 +806,8 @@
         justify-content: center;
     }
 
-    /* Sous une certaine largeur, on empile constellation + sunburst et on laisse
-       la page défiler : impossible de tout garder lisible en un seul écran. */
+    /* Below a certain width, stack constellation + sunburst and let the page
+       scroll: impossible to keep everything legible in a single screen. */
     @media (max-width: 1023px) {
         .explorer-page {
             height: auto;

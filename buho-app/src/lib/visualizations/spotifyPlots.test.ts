@@ -150,8 +150,8 @@ describe('spotifyPlots', () => {
                 ],
                 xMetric: 'totalMinutes',
                 yMetric: 'repeatIntensity',
-                xLabel: 'Durée',
-                yLabel: 'Répétition'
+                xLabel: 'Duration',
+                yLabel: 'Repetition'
             });
             expect(result).toBeTruthy();
             expect(result.tagName).toBeDefined();
@@ -198,7 +198,7 @@ describe('spotifyPlots', () => {
                 xMetric: 'dateEpochMs',
                 yMetric: 'playCount',
                 xLabel: 'Date',
-                yLabel: "Nb d'écoutes",
+                yLabel: "Plays",
                 width: 1200,
                 height: 700
             });
@@ -239,8 +239,8 @@ describe('spotifyPlots', () => {
                 ],
                 xMetric: 'playCount',
                 yMetric: 'artistPrevalenceRate',
-                xLabel: "Nb d'écoutes",
-                yLabel: "Prévalence",
+                xLabel: "Plays",
+                yLabel: "Prevalence",
                 width: 1200,
                 height: 700
             });
