@@ -3,6 +3,7 @@
     import ConstellationChart from "$lib/components/visualizations/ConstellationChart.svelte";
     import DimensionPie from "$lib/components/visualizations/DimensionPie.svelte";
     import SunburstExplorer from "$lib/components/visualizations/SunburstExplorer.svelte";
+    import LocationMap from "$lib/components/visualizations/LocationMap.svelte";
     import {
         getGoogleMapsConstellationTimeDomain,
         getGoogleMapsExplorerBasePoints,
@@ -181,6 +182,10 @@
     ];
 
     const TOP_N = 15;
+
+    // Spatial slot: the constellation stays fixed; this slot toggles between the
+    // geo sunburst and the interactive map (both read the same basePoints/matchVersion).
+    let spatialView = $state<"sunburst" | "map">("sunburst");
 
     // --- Coloring by dimension -------------------------------------------
     let colorBy = $state<string | null>(null);
@@ -689,7 +694,33 @@
                 </div>
             </article>
 
-            <aside class="chart-placeholder sunburst" aria-label="Location sunburst">
+            <aside class="chart-placeholder sunburst" aria-label="Spatial view">
+                <div class="spatial-header">
+                    <div
+                        class="measure-toggle"
+                        role="group"
+                        aria-label="Spatial view"
+                    >
+                        <button
+                            type="button"
+                            class="measure-btn"
+                            class:active={spatialView === "sunburst"}
+                            aria-pressed={spatialView === "sunburst"}
+                            onclick={() => (spatialView = "sunburst")}
+                        >
+                            Sunburst
+                        </button>
+                        <button
+                            type="button"
+                            class="measure-btn"
+                            class:active={spatialView === "map"}
+                            aria-pressed={spatialView === "map"}
+                            onclick={() => (spatialView = "map")}
+                        >
+                            Map
+                        </button>
+                    </div>
+                </div>
                 <div
                     class="sunburst-host"
                     bind:clientWidth={sunburstWidth}
@@ -702,17 +733,27 @@
                             <LoadingOverlay message="Locating places..." />
                         </div>
                     {:else if sunburstWidth > 0 && sunburstHeight > 0}
-                        <SunburstExplorer
-                            data={sunburstTree}
-                            width={sunburstWidth}
-                            height={sunburstHeight}
-                            filters={googleMapsExplorerFilters}
-                            keyByDepth={GEO_KEY_BY_DEPTH}
-                            rootLabel="All locations"
-                            formatValue={formatMeasure}
-                            otherLabels={GEO_OTHER_LABELS}
-                            testId="location-sunburst-explorer"
-                        />
+                        {#if spatialView === "map"}
+                            <LocationMap
+                                data={basePoints}
+                                {matchVersion}
+                                width={sunburstWidth}
+                                height={sunburstHeight}
+                                formatTooltip={constellationTooltip}
+                            />
+                        {:else}
+                            <SunburstExplorer
+                                data={sunburstTree}
+                                width={sunburstWidth}
+                                height={sunburstHeight}
+                                filters={googleMapsExplorerFilters}
+                                keyByDepth={GEO_KEY_BY_DEPTH}
+                                rootLabel="All locations"
+                                formatValue={formatMeasure}
+                                otherLabels={GEO_OTHER_LABELS}
+                                testId="location-sunburst-explorer"
+                            />
+                        {/if}
                     {/if}
                 </div>
             </aside>
@@ -912,6 +953,12 @@
         grid-area: sunburst;
         min-width: 0;
         position: relative;
+    }
+
+    .spatial-header {
+        flex: none;
+        display: flex;
+        justify-content: flex-end;
     }
 
     .sunburst-host {
