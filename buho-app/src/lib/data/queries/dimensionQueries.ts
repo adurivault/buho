@@ -135,4 +135,6 @@ export interface DimensionSlice {
     value: string;
     minutes: number;
     plays: number;
+    /** Optional measure magnitude that drives the slice (e.g. km, points). */
+    amount?: number;
 }

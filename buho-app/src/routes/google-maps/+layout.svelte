@@ -72,6 +72,25 @@
 		</div>
 	</header>
 
+	{#if dataStore.loading}
+		<div
+			class="progress-track"
+			role="progressbar"
+			aria-label={dataStore.loading.message}
+			aria-valuenow={Math.round((dataStore.loading.progress ?? 0) * 100)}
+			aria-valuemin={0}
+			aria-valuemax={100}
+		>
+			<div
+				class="progress-fill"
+				class:indeterminate={dataStore.loading.progress == null}
+				style:width={dataStore.loading.progress != null
+					? `${dataStore.loading.progress * 100}%`
+					: undefined}
+			></div>
+		</div>
+	{/if}
+
 	{#if dataStore.error}
 		<div class="error-bar" role="alert">
 			{dataStore.error.message}
@@ -160,6 +179,60 @@
 
 	.hidden {
 		display: none;
+	}
+
+	.progress-track {
+		flex: none;
+		position: relative;
+		height: 3px;
+		width: 100%;
+		overflow: hidden;
+		background: hsl(var(--secondary) / 0.6);
+	}
+
+	.progress-fill {
+		position: relative;
+		height: 100%;
+		width: 0;
+		overflow: hidden;
+		border-radius: 0 999px 999px 0;
+		background: hsl(var(--primary));
+		transition: width 0.4s ease;
+	}
+
+	/* Subtle sheen so a paused phase still looks alive. */
+	.progress-fill::after {
+		content: "";
+		position: absolute;
+		inset: 0;
+		background: linear-gradient(
+			90deg,
+			transparent,
+			hsl(var(--primary-foreground) / 0.35),
+			transparent
+		);
+		transform: translateX(-100%);
+		animation: progress-sheen 1.3s ease-in-out infinite;
+	}
+
+	.progress-fill.indeterminate {
+		width: 35%;
+		animation: progress-indeterminate 1.1s ease-in-out infinite;
+	}
+
+	@keyframes progress-sheen {
+		100% {
+			transform: translateX(100%);
+		}
+	}
+
+	@keyframes progress-indeterminate {
+		0% {
+			margin-left: -35%;
+		}
+		100% {
+			margin-left: 100%;
+		}
 	}
 
 	.error-bar {

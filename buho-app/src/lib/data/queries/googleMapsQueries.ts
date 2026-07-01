@@ -21,6 +21,7 @@ export interface LocationBasePoint extends ConnectablePoint {
     department: string;
     nearestCity: string;
     arrondissement: string; // Paris/Lyon/Marseille only; 'Unknown' otherwise
+    presenceMins: number; // gap until the next point in time (capped at 24h)
 }
 
 /**
@@ -56,7 +57,7 @@ export async function getGoogleMapsExplorerBasePoints(): Promise<LocationBasePoi
 
     try {
         const result = await query<any>(sql);
-        return result.map((row) => ({
+        const points: LocationBasePoint[] = result.map((row) => ({
             x: Number(row.x),
             y: Number(row.y),
             matched: true,
@@ -87,10 +88,40 @@ export async function getGoogleMapsExplorerBasePoints(): Promise<LocationBasePoi
             department: row.department || 'Unknown',
             nearestCity: row.nearestCity || 'Unknown',
             arrondissement: row.arrondissement || 'Unknown',
+            presenceMins: 0,
         }));
+        annotatePresenceMinutes(points);
+        return points;
     } catch (error) {
         console.error('Error fetching Google Maps base points:', error);
         return [];
+    }
+}
+
+/** Reconstructed local instant (ms) of a point: midnight epoch + fractional hour. */
+function instantMs(p: LocationBasePoint): number {
+    return p.x + p.y * 3_600_000;
+}
+
+/**
+ * Fill each point's `presenceMins` = the time until the NEXT point in the merged,
+ * time-sorted series, capped at 24h (the last point gets 0). Treating the base
+ * points as one piecewise-constant-position series makes Σ presence telescope to
+ * the tracked span, so overlapping source layers can never double-count. Mutates
+ * in place; the array order is left untouched — the chain is walked over a
+ * time-sorted index because the SQL orders by day, not by instant.
+ */
+export function annotatePresenceMinutes(points: LocationBasePoint[]): void {
+    const GAP_CAP_MIN = 24 * 60;
+    const order = points.map((_, i) => i).sort((a, b) => instantMs(points[a]) - instantMs(points[b]));
+    for (let k = 0; k < order.length; k++) {
+        const p = points[order[k]];
+        if (k + 1 >= order.length) {
+            p.presenceMins = 0;
+            continue;
+        }
+        const gapMin = (instantMs(points[order[k + 1]]) - instantMs(p)) / 60_000;
+        p.presenceMins = Math.min(Math.max(0, gapMin), GAP_CAP_MIN);
     }
 }
 

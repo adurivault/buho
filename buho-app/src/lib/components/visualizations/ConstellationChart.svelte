@@ -37,6 +37,10 @@
         // satellite barcharts are colored/stacked by this dimension.
         colorField?: string | null;
         colorCategories?: ColorCategory[];
+        // Weight a point contributes to the satellite bar charts (monthly + hourly).
+        // Default 1 → bars count points. The Google Maps explorer passes the active
+        // measure (presence minutes / km) so the temporal bars track the toggle.
+        barValue?: (point: ConnectablePoint) => number;
         // Tooltip content for the hovered point, derived from its metadata.
         // When omitted, no tooltip is shown.
         formatTooltip?: (metadata: Record<string, unknown>) => TooltipInfo;
@@ -58,6 +62,7 @@
         matchVersion = 0,
         colorField = null,
         colorCategories = [],
+        barValue = () => 1,
         formatTooltip,
         onPointClick,
     }: Props = $props();
@@ -348,18 +353,21 @@
 
     const monthlyBars = $derived.by(() => {
         void matchVersion; // recompute when `matched` is mutated in place
+        // `count` holds the summed bar weight (default: 1 per point = a count;
+        // the GMaps explorer passes a measure so it's presence min / km).
         const counts = new Map<number, number>();
-        // In coloring mode: count by category (segments[idx]) per month.
+        // In coloring mode: weight by category (segments[idx]) per month.
         const segs = colorActive ? new Map<number, number[]>() : null;
         for (const point of data) {
             if (!point.matched) continue;
             if (point.y < committedYDomain[0] || point.y > committedYDomain[1])
                 continue;
+            const w = barValue(point);
             const month = new Date(point.x);
             month.setDate(1);
             month.setHours(0, 0, 0, 0);
             const key = month.getTime();
-            counts.set(key, (counts.get(key) || 0) + 1);
+            counts.set(key, (counts.get(key) || 0) + w);
             if (segs) {
                 const si = segmentIndex(point);
                 if (si >= 0) {
@@ -368,7 +376,7 @@
                         arr = new Array(segCount).fill(0);
                         segs.set(key, arr);
                     }
-                    arr[si] += 1;
+                    arr[si] += w;
                 }
             }
         }
@@ -419,6 +427,7 @@
             if (!point.matched) continue;
             if (point.x < committedXDomain[0] || point.x > committedXDomain[1])
                 continue;
+            const w = barValue(point);
             const minuteOfDay = Math.max(
                 0,
                 Math.min(1439, Math.floor(point.y * 60)),
@@ -428,10 +437,10 @@
                 Math.floor(minuteOfDay / step),
             );
             const bin = bins[binIndex];
-            bin.count += 1;
+            bin.count += w;
             if (bin.segments) {
                 const si = segmentIndex(point);
-                if (si >= 0) bin.segments[si] += 1;
+                if (si >= 0) bin.segments[si] += w;
             }
         }
 
@@ -1011,6 +1020,7 @@
         void colorActive;
         void colorCategories;
         void colorField;
+        void barValue;
         if (domainsInitialized) scheduleRender();
     });
 

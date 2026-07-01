@@ -68,6 +68,8 @@ export interface LoadingState {
     status: string;
     message: string;
     itemsFound?: number;
+    /** Completion fraction in [0, 1] for a determinate progress bar. */
+    progress?: number;
 }
 
 export interface ErrorState {
@@ -260,16 +262,18 @@ class DataStore {
      * Mirrors handleFilesUpload but parses into google_maps_segments.
      */
     async handleLocationFilesUpload(files: FileList) {
-        this.setLoading({ status: 'reading', message: 'Reading files...' });
+        this.setLoading({ status: 'reading', message: 'Reading files...', progress: 0.02 });
 
         try {
             const allData: unknown[] = [];
 
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
+                // Reading files is quick, so it only spans the first ~8% of the bar.
                 this.setLoading({
                     status: 'processing',
-                    message: `Processing ${file.name} (${i + 1}/${files.length})...`
+                    message: `Processing ${file.name} (${i + 1}/${files.length})...`,
+                    progress: 0.02 + (i / files.length) * 0.06
                 });
 
                 if (file.name.endsWith('.zip')) {
@@ -296,29 +300,39 @@ class DataStore {
                 throw new Error('No valid Google Maps data found in the selected files');
             }
 
-            this.setLoading({ status: 'parsing', message: 'Parsing location history...' });
+            this.setLoading({ status: 'parsing', message: 'Parsing location history...', progress: 0.1 });
             const segments = parseGoogleMapsData(allData as Parameters<typeof parseGoogleMapsData>[0]);
 
             if (segments.length === 0) {
                 throw new Error('No valid location segments found');
             }
 
-            this.setLoading({ status: 'importing', message: `Importing ${segments.length} segments...` });
+            this.setLoading({ status: 'importing', message: `Importing ${segments.length} segments...`, progress: 0.18 });
             await db.initDuckDB();
             await db.dropTable('google_maps_segments');
             await db.insertLocationSegments(segments);
 
-            this.setLoading({ status: 'locating', message: 'Locating points...' });
+            // Geo attribution is the slow part, so it drives most of the bar (0.3 → 1).
+            this.setLoading({ status: 'locating', message: 'Preparing map data...', progress: 0.22 });
             try {
                 await db.loadSpatial();
                 await loadGeoAssets();
-                await attributeZones();
+                this.setLoading({ status: 'locating', message: 'Locating points...', progress: 0.3 });
+                await attributeZones((fraction) => {
+                    this.setLoading({
+                        status: 'locating',
+                        message: 'Locating points...',
+                        progress: 0.3 + fraction * 0.7
+                    });
+                });
             } catch (geoError) {
                 // Best-effort: segments stay usable even if zone attribution fails.
                 console.error('Geo attribution failed:', geoError);
             }
 
             this.loadUserData('google-maps');
+            this.setLoading({ status: 'done', message: 'Done', progress: 1 });
+            await new Promise((r) => setTimeout(r, 300));
             this.loading = null;
 
             trackEvent('upload', { source: 'google-maps', files: files.length, tracks: bucket(segments.length) });

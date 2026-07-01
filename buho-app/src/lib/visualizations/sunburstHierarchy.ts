@@ -6,6 +6,7 @@ export interface SunburstNode {
     playCount?: number;
     value?: number;
     trackUri?: string | null; // carried by the "track" leaves to open on Spotify
+    filterKey?: string; // explicit cross-filter dimension (geo: levels can be skipped, so depth ≠ key)
     children?: SunburstNode[];
 }
 
@@ -101,16 +102,22 @@ export function bucketByDegree(
 }
 
 /**
- * Build a hierarchy from rows that carry an ordered `path` of level values plus
- * a `value`. Levels may be null (e.g. a foreign point has a country but no
- * region): the path is followed only up to the first null, and the value lands
- * on the deepest known node. A node that is BOTH a destination (rows end there)
- * and a parent (deeper rows exist) gets a placeholder "—" leaf for its direct
- * value, so d3.sum (leaves only) doesn't drop it. Generic counterpart of
- * buildSunburstHierarchy, used by the Google Maps geo sunburst.
+ * Build a hierarchy from rows that carry an ordered list of `levels`, each a
+ * `{ name, key }` pair, plus a `value`. The caller passes only the levels it
+ * wants (skipping absent ones), so a foreign point can be
+ * country → region → city even though it has no department in between — the
+ * level's `key` (not its depth) drives cross-filtering. A node that is BOTH a
+ * destination (rows end there) and a parent (deeper rows exist) gets a
+ * placeholder "—" leaf for its direct value, so d3.sum (leaves only) doesn't
+ * drop it. Generic counterpart of buildSunburstHierarchy, used by the Google
+ * Maps geo sunburst.
  */
+export interface PathLevel {
+    name: string;
+    key?: string; // the cross-filter dimension this level belongs to
+}
 export interface PathRow {
-    path: (string | null | undefined)[];
+    levels: PathLevel[];
     value: number;
 }
 
@@ -119,22 +126,18 @@ export function buildPathHierarchy(rows: PathRow[], rootName: string): SunburstN
     const nodeByKey = new Map<string, SunburstNode>([['', root]]);
 
     for (const row of rows) {
-        const known: string[] = [];
-        for (const level of row.path) {
-            if (level === null || level === undefined || level === '') break;
-            known.push(level);
-        }
-        if (known.length === 0) continue;
+        const levels = row.levels.filter((l) => l && l.name != null && l.name !== '');
+        if (levels.length === 0) continue;
 
         let parent = root;
         const prefix: string[] = [];
-        for (const name of known) {
-            prefix.push(name);
-            const key = JSON.stringify(prefix);
-            let node = nodeByKey.get(key);
+        for (const level of levels) {
+            prefix.push(level.name);
+            const nk = JSON.stringify(prefix);
+            let node = nodeByKey.get(nk);
             if (!node) {
-                node = { name, children: [] };
-                nodeByKey.set(key, node);
+                node = { name: level.name, filterKey: level.key, children: [] };
+                nodeByKey.set(nk, node);
                 parent.children!.push(node);
             }
             parent = node;

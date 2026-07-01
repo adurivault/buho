@@ -11,6 +11,10 @@
         size?: number;
         /** Value formatting for display (tooltip), e.g. day of week. */
         format?: (value: string) => string;
+        /** Magnitude that drives a slice's angle (default: its minutes). */
+        sliceValue?: (slice: DimensionSlice) => number;
+        /** Tooltip formatting for the magnitude (default: "N min"). */
+        formatValue?: (value: number) => string;
         /** Currently selected value (null = none). */
         selectedValue?: string | null;
         /** Select/deselect a slice (null = deselect). */
@@ -29,6 +33,8 @@
         slices,
         size = 132,
         format = (v: string) => v,
+        sliceValue = (s: DimensionSlice) => s.minutes,
+        formatValue = (m: number) => `${Math.round(m).toLocaleString()} min`,
         selectedValue = null,
         onSelect,
         colorByEnabled = false,
@@ -43,10 +49,6 @@
     function toggle(value: string) {
         if (value === "Other") return; // not filterable
         onSelect?.(selectedValue === value ? null : value);
-    }
-
-    function formatMinutes(m: number): string {
-        return `${Math.round(m).toLocaleString()} min`;
     }
 
     function positionTooltip(event: PointerEvent) {
@@ -73,7 +75,7 @@
         const pie = d3
             .pie<DimensionSlice>()
             .sort(null)
-            .value((d) => d.minutes);
+            .value((d) => sliceValue(d));
         const arc = d3
             .arc<d3.PieArcDatum<DimensionSlice>>()
             .innerRadius(radius * 0.55)
@@ -99,7 +101,7 @@
             .on("click", (_event, d) => toggle(d.data.value))
             .on("pointerenter", (event, d) => {
                 tooltip.label = format(d.data.value);
-                tooltip.value = formatMinutes(d.data.minutes);
+                tooltip.value = formatValue(sliceValue(d.data));
                 tooltip.visible = true;
                 positionTooltip(event as PointerEvent);
             })
@@ -113,6 +115,7 @@
         const _slices = slices;
         const _selected = selectedValue;
         const _size = size;
+        const _sliceValue = sliceValue;
         render();
     });
 </script>

@@ -39,6 +39,17 @@ function wallClock(instantMs: number, offsetMinutes: number): string {
     return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
 }
 
+interface EntryRecord {
+    startMs: number;
+    endMs: number;
+    offsetMinutes: number | null; // explicit local offset, or null for `Z`
+    entry: RawGoogleMapsEntry;
+}
+
+function durationSeconds(startMs: number, endMs: number): number {
+    return Math.max(0, (endMs - startMs) / 1000);
+}
+
 /** Great-circle distance in meters between two lat/lon points. */
 function haversineMeters(
     a: { lat: number; lon: number },
@@ -54,17 +65,6 @@ function haversineMeters(
         Math.sin(dLat / 2) ** 2 +
         Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
     return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
-}
-
-interface EntryRecord {
-    startMs: number;
-    endMs: number;
-    offsetMinutes: number | null; // explicit local offset, or null for `Z`
-    entry: RawGoogleMapsEntry;
-}
-
-function durationSeconds(startMs: number, endMs: number): number {
-    return Math.max(0, (endMs - startMs) / 1000);
 }
 
 /**
@@ -110,6 +110,35 @@ export function parseGoogleMapsData(jsonData: RawGoogleMapsEntry[]): LocationSeg
         });
     }
     records.sort((a, b) => a.startMs - b.startMs);
+
+    // Activity time-windows, to skip distance on timelinePath points they cover:
+    // a path traces the same move as its activity, so its haversine would
+    // double-count activity.distanceMeters. Outside any activity (open-water
+    // crossings, etc.) the path IS the only record of the move, so it keeps its
+    // distance. Activities barely overlap, so a rightmost-start lookup suffices.
+    const activityStarts: number[] = [];
+    const activityEnds: number[] = [];
+    for (const r of records) {
+        if ('activity' in r.entry) {
+            activityStarts.push(r.startMs);
+            activityEnds.push(r.endMs);
+        }
+    }
+    function inActivity(t: number): boolean {
+        let lo = 0;
+        let hi = activityStarts.length - 1;
+        let idx = -1;
+        while (lo <= hi) {
+            const mid = (lo + hi) >> 1;
+            if (activityStarts[mid] <= t) {
+                idx = mid;
+                lo = mid + 1;
+            } else {
+                hi = mid - 1;
+            }
+        }
+        return idx >= 0 && activityEnds[idx] >= t;
+    }
 
     // Seed the carried offset with the first explicit offset in the timeline so
     // leading UTC-only entries (if any) still get a sensible local time.
@@ -185,7 +214,12 @@ export function parseGoogleMapsData(jsonData: RawGoogleMapsEntry[]): LocationSeg
                     activityType: null,
                     semanticType: null,
                     placeId: null,
-                    distanceMeters: next ? haversineMeters(cur.geo!, next.geo!) : null,
+                    // Distance only where no activity covers this point (else the
+                    // activity's distanceMeters already counts the move).
+                    distanceMeters:
+                        next && !inActivity(pointMs)
+                            ? haversineMeters(cur.geo!, next.geo!)
+                            : null,
                 });
             }
         }

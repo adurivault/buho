@@ -12,9 +12,17 @@ import { ATTRIBUTION_STATEMENTS } from './attributionSql';
  *
  * The original `lat`/`lon` are never modified: the ~11 m rounding is only a join
  * key for deduplication, so points stay precise for map placement.
+ *
+ * `onProgress` is called after each statement completes with the fraction in
+ * [0, 1] of statements done, so the UI can show real attribution progress (this
+ * is the slow part of an upload).
  */
-export async function attributeZones(): Promise<void> {
-    for (const sql of ATTRIBUTION_STATEMENTS) {
-        await query(sql);
+export async function attributeZones(
+    onProgress?: (fraction: number) => void
+): Promise<void> {
+    const total = ATTRIBUTION_STATEMENTS.length;
+    for (let i = 0; i < total; i++) {
+        await query(ATTRIBUTION_STATEMENTS[i]);
+        onProgress?.((i + 1) / total);
     }
 }

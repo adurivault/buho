@@ -3,6 +3,7 @@
 	import "../app.css";
 	import favicon from "$lib/assets/favicon.svg";
 	import AppSidebar from "$lib/components/AppSidebar.svelte";
+	import { initDuckDB } from "$lib/data/db";
 	import { uiStore, setDbInitializing } from "$lib/stores/uiStore.svelte";
 	import { errorStore, setError } from "$lib/stores/errorStore.svelte";
 	import { initErrorTracking } from "$lib/analytics";
@@ -15,11 +16,6 @@
 		initErrorTracking();
 		try {
 			setDbInitializing(true);
-			// Dynamic import: keep the heavy DuckDB-WASM module out of the initial
-			// client bundle so every page (incl. the landing) paints before the DB
-			// engine is transformed/loaded — otherwise the whole app blocks white on
-			// the cold DuckDB compile (it's optimizeDeps-excluded).
-			const { initDuckDB } = await import("$lib/data/db");
 			await initDuckDB();
 		} catch (error) {
 			console.error("Failed to initialize DuckDB:", error);

@@ -8,8 +8,10 @@
         getGoogleMapsExplorerBasePoints,
         type LocationBasePoint,
     } from "$lib/data/queries/googleMapsQueries";
+    import type { ConnectablePoint } from "$lib/data/queries/behaviorQueries";
     import {
         buildPathHierarchy,
+        type PathLevel,
         type SunburstNode,
     } from "$lib/visualizations/sunburstHierarchy";
     import type { DimensionSlice } from "$lib/data/queries/dimensionQueries";
@@ -32,6 +34,44 @@
         totalKm: 0,
         uniquePlaces: 0,
     });
+
+    // Measure encoded by the sunburst + pies. The constellation and color-by are
+    // unaffected; the indicator bar always shows the full picture regardless.
+    type Measure = "time" | "km" | "points";
+    let measure = $state<Measure>("time");
+    const MEASURES: { key: Measure; label: string }[] = [
+        { key: "time", label: "time" },
+        { key: "km", label: "km" },
+        { key: "points", label: "points" },
+    ];
+
+    function measureOf(m: Measure, p: LocationBasePoint): number {
+        switch (m) {
+            case "km":
+                return p.distanceMeters / 1000;
+            case "points":
+                return 1;
+            default:
+                return p.presenceMins;
+        }
+    }
+
+    function measureValue(p: LocationBasePoint): number {
+        return measureOf(measure, p);
+    }
+
+    // Per-point weight for the constellation's temporal satellite bars. A fresh
+    // closure on each measure change so the bars recompute/redraw.
+    const barValue = $derived.by(() => {
+        const m = measure;
+        return (p: ConnectablePoint) => measureOf(m, p as LocationBasePoint);
+    });
+
+    function formatMeasure(v: number): string {
+        if (measure === "km") return `${Math.round(v).toLocaleString()} km`;
+        if (measure === "points") return Math.round(v).toLocaleString();
+        return formatDuration(v);
+    }
 
     let initialLoad = $state(true);
     let containerWidth = $state(0);
@@ -227,17 +267,18 @@
     }
 
     function topNSlices(
-        acc: Map<string, { minutes: number; plays: number }>,
+        acc: Map<string, { minutes: number; plays: number; amount: number }>,
     ): DimensionSlice[] {
         const sorted = [...acc.entries()]
-            .map(([value, v]) => ({ value, minutes: v.minutes, plays: v.plays }))
-            .sort((a, b) => b.minutes - a.minutes);
+            .map(([value, v]) => ({ value, minutes: v.minutes, plays: v.plays, amount: v.amount }))
+            .sort((a, b) => b.amount - a.amount);
         const slices = sorted.slice(0, TOP_N);
         const rest = sorted.slice(TOP_N);
         if (rest.length) {
             const om = rest.reduce((s, x) => s + x.minutes, 0);
             const op = rest.reduce((s, x) => s + x.plays, 0);
-            if (om > 0.5) slices.push({ value: "Other", minutes: om, plays: op });
+            const oa = rest.reduce((s, x) => s + x.amount, 0);
+            if (oa > 0) slices.push({ value: "Other", minutes: om, plays: op, amount: oa });
         }
         return slices;
     }
@@ -257,7 +298,7 @@
         const hWin = viewHourDomain;
         const maps: Record<
             string,
-            Map<string, { minutes: number; plays: number }>
+            Map<string, { minutes: number; plays: number; amount: number }>
         > = {};
         for (const pd of PIE_DIMS) maps[pd.key] = new Map();
 
@@ -283,11 +324,12 @@
                 const key = p[pd.field] as string;
                 let e = m.get(key);
                 if (!e) {
-                    e = { minutes: 0, plays: 0 };
+                    e = { minutes: 0, plays: 0, amount: 0 };
                     m.set(key, e);
                 }
                 e.minutes += p.mins;
                 e.plays += 1;
+                e.amount += measureValue(p);
             }
         }
 
@@ -319,7 +361,7 @@
             }
             if (!ok) continue;
             segs++;
-            mins += p.mins;
+            mins += p.presenceMins;
             meters += p.distanceMeters;
             if (p.placeId) places.add(p.placeId);
         }
@@ -342,7 +384,18 @@
         ).filter((d) => !GEO_KEYS.has(d.key));
         const tWin = viewTimeDomain;
         const hWin = viewHourDomain;
-        const agg = new Map<string, { path: (string | null)[]; minutes: number }>();
+        const agg = new Map<string, { levels: PathLevel[]; value: number }>();
+
+        // depth → (filter key, point field). Levels are compacted (absent ones
+        // skipped), so a foreign point becomes country → region → city even
+        // without a department; the level's key drives cross-filtering.
+        const LEVELS: { key: string; field: DimField }[] = [
+            { key: "country", field: "country" },
+            { key: "region", field: "region" },
+            { key: "department", field: "department" },
+            { key: "nearest_city", field: "nearestCity" },
+            { key: "arrondissement", field: "arrondissement" },
+        ];
 
         for (let i = 0; i < pts.length; i++) {
             const p = pts[i];
@@ -357,24 +410,22 @@
             }
             if (!ok) continue;
 
-            // 'Unknown' = missing level → truncates the path (cf. buildPathHierarchy).
-            const country = p.country === "Unknown" ? null : p.country;
-            if (!country) continue; // no country → outside the geo hierarchy
-            const region = p.region === "Unknown" ? null : p.region;
-            const department = p.department === "Unknown" ? null : p.department;
-            const city = p.nearestCity === "Unknown" ? null : p.nearestCity;
-            const arr = p.arrondissement === "Unknown" ? null : p.arrondissement;
-            const path = [country, region, department, city, arr];
-            const key = JSON.stringify(path);
-            let e = agg.get(key);
-            if (!e) {
-                e = { path, minutes: 0 };
-                agg.set(key, e);
+            if (p.country === "Unknown") continue; // no country → outside the geo hierarchy
+            const levels: PathLevel[] = [];
+            for (const lvl of LEVELS) {
+                const name = p[lvl.field] as string;
+                if (name && name !== "Unknown") levels.push({ name, key: lvl.key });
             }
-            e.minutes += p.mins;
+            const mapKey = levels.map((l) => l.name).join(" ");
+            let e = agg.get(mapKey);
+            if (!e) {
+                e = { levels, value: 0 };
+                agg.set(mapKey, e);
+            }
+            e.value += measureValue(p);
         }
 
-        const rows = [...agg.values()].map((e) => ({ path: e.path, value: e.minutes }));
+        const rows = [...agg.values()].map((e) => ({ levels: e.levels, value: e.value }));
         return buildPathHierarchy(rows, "All locations");
     }
 
@@ -383,7 +434,7 @@
         const f = googleMapsExplorerFilters.activeFilters;
         const rest: FilterState = {};
         for (const k in f) if (!GEO_KEYS.has(k)) rest[k] = f[k];
-        return JSON.stringify([rest, basePoints.length]);
+        return JSON.stringify([rest, basePoints.length, measure]);
     }
 
     function maybeRecomputeSunburst() {
@@ -473,6 +524,7 @@
         const _m = matchVersion;
         const _t = viewTimeDomain;
         const _h = viewHourDomain;
+        const _ms = measure;
         if (!dbReady) return;
         scheduleRecompute();
     });
@@ -553,7 +605,7 @@
                     <span class="indicator-value"
                         >{formatDurationLong(macroStats.totalMinutes)}</span
                     >
-                    <span class="indicator-label">tracked</span>
+                    <span class="indicator-label">time</span>
                 </div>
                 <div class="indicator">
                     <span class="indicator-value"
@@ -575,15 +627,35 @@
                 </div>
             </div>
 
-            {#if googleMapsExplorerFilters.hasActiveFilters}
-                <button
-                    class="clear-filters-btn"
-                    type="button"
-                    onclick={() => googleMapsExplorerFilters.clearAll()}
+            <div class="header-right">
+                <div
+                    class="measure-toggle"
+                    role="group"
+                    aria-label="Measure"
                 >
-                    Clear all filters
-                </button>
-            {/if}
+                    {#each MEASURES as m (m.key)}
+                        <button
+                            type="button"
+                            class="measure-btn"
+                            class:active={measure === m.key}
+                            aria-pressed={measure === m.key}
+                            onclick={() => (measure = m.key)}
+                        >
+                            {m.label}
+                        </button>
+                    {/each}
+                </div>
+
+                {#if googleMapsExplorerFilters.hasActiveFilters}
+                    <button
+                        class="clear-filters-btn"
+                        type="button"
+                        onclick={() => googleMapsExplorerFilters.clearAll()}
+                    >
+                        Clear all filters
+                    </button>
+                {/if}
+            </div>
         </div>
 
         <section class="explorer-grid" aria-label="Google Maps explorer layout">
@@ -608,6 +680,7 @@
                             {timeDomain}
                             colorField={colorByDim?.field ?? null}
                             {colorCategories}
+                            {barValue}
                             formatTooltip={constellationTooltip}
                             bind:viewTimeDomain
                             bind:viewHourDomain
@@ -636,7 +709,7 @@
                             filters={googleMapsExplorerFilters}
                             keyByDepth={GEO_KEY_BY_DEPTH}
                             rootLabel="All locations"
-                            formatValue={(m) => formatDuration(m)}
+                            formatValue={formatMeasure}
                             otherLabels={GEO_OTHER_LABELS}
                             testId="location-sunburst-explorer"
                         />
@@ -654,6 +727,8 @@
                         slices={pieSlices[pd.key] ?? []}
                         size={pieSize}
                         format={pd.format}
+                        sliceValue={(s) => s.amount ?? s.minutes}
+                        formatValue={formatMeasure}
                         selectedValue={firstFilterValue(activeFilters, pd.key)}
                         onSelect={(v) =>
                             v === null
@@ -740,6 +815,46 @@
         text-transform: uppercase;
         letter-spacing: 0.04em;
         color: hsl(var(--muted-foreground));
+    }
+
+    .header-right {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+    }
+
+    .measure-toggle {
+        display: inline-flex;
+        border: 1px solid var(--border, hsl(var(--border)));
+        border-radius: 0.55rem;
+        overflow: hidden;
+    }
+
+    .measure-btn {
+        padding: 0.4rem 0.7rem;
+        font-size: 0.78rem;
+        cursor: pointer;
+        color: hsl(var(--muted-foreground));
+        background: transparent;
+        border: none;
+        border-left: 1px solid var(--border, hsl(var(--border)));
+        transition:
+            color 0.18s ease,
+            background-color 0.18s ease;
+    }
+
+    .measure-btn:first-child {
+        border-left: none;
+    }
+
+    .measure-btn:hover {
+        color: hsl(var(--foreground));
+    }
+
+    .measure-btn.active {
+        color: hsl(var(--foreground));
+        background: color-mix(in srgb, hsl(var(--foreground)) 12%, transparent);
+        font-weight: 600;
     }
 
     .clear-filters-btn {

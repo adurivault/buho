@@ -76,9 +76,6 @@
     });
 
     const SELECTABLE_KEYS = $derived(Object.values(keyByDepth));
-    const MAX_DEPTH = $derived(
-        Math.max(0, ...Object.keys(keyByDepth).map(Number)),
-    );
 
     const hasData = $derived(!!data.children && data.children.length > 0);
 
@@ -177,18 +174,27 @@
     }
 
     /**
-     * A node is "in the selection" if, for every active filter at a level ≤ the
-     * node's depth, its ancestor at that level matches. Nodes higher than the
-     * filter (ancestors of the selection) stay lit.
+     * Cross-filter dimension of a node. Geo nodes carry an explicit `filterKey`
+     * (levels can be skipped, so depth ≠ key); otherwise fall back to the
+     * positional map (Spotify: depth 1/2/3 → artist/album/track).
+     */
+    function keyOf(node: RectNode): string | undefined {
+        return node.data.filterKey ?? keyByDepth[node.depth];
+    }
+
+    /**
+     * A node is "in the selection" if, for every active filter, the node's
+     * ancestor carrying that dimension matches. If no ancestor carries it, the
+     * filter is at a deeper level → the node is an ancestor of the selection and
+     * stays lit.
      */
     function nodeMatches(node: RectNode, state: FilterState): boolean {
-        for (const [depthStr, key] of Object.entries(keyByDepth)) {
-            const depth = Number(depthStr);
+        const ancestors = node.ancestors();
+        for (const key of SELECTABLE_KEYS) {
             const vals = filterValues(state, key);
             if (!vals) continue;
-            if (node.depth < depth) continue;
-            const anc = node.ancestors().find((a) => a.depth === depth);
-            if (!anc || !vals.has(anc.data.name)) return false;
+            const anc = ancestors.find((a) => keyOf(a) === key);
+            if (anc && !vals.has(anc.data.name)) return false;
         }
         return true;
     }
@@ -199,7 +205,7 @@
         if (node.depth === 0) return;
         const path = node.ancestors().reverse().slice(1) as RectNode[];
         for (const n of path) {
-            const key = keyByDepth[n.depth];
+            const key = keyOf(n);
             if (key) filters.setFilter(key, n.data.name);
         }
     }
@@ -250,13 +256,14 @@
         if (!rootNode) return "";
         const state = filters.activeFilters;
         let node: RectNode = rootNode;
-        for (let depth = 1; depth <= MAX_DEPTH; depth++) {
-            const key = keyByDepth[depth];
-            const name = key ? scalarName(state[key]) : null;
-            if (name == null) break;
-            const child = (node.children as RectNode[] | undefined)?.find(
-                (c) => c.data.name === name && !c.data.isOther,
-            );
+        for (;;) {
+            const kids = node.children as RectNode[] | undefined;
+            if (!kids) break;
+            const child = kids.find((c) => {
+                if (c.data.isOther) return false;
+                const key = keyOf(c);
+                return key != null && c.data.name === scalarName(state[key]);
+            });
             if (!child || !child.children || child.children.length === 0) break;
             node = child;
         }

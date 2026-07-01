@@ -70,9 +70,9 @@ describe('parseGoogleMapsData', () => {
         const segs = parseGoogleMapsData(data);
         expect(segs).toHaveLength(3);
         expect(segs.every((s) => s.segmentType === 'moving')).toBe(true);
-        // distance is computed to the next point; the last point has none
-        expect(segs[0].distanceMeters).toBeGreaterThan(0);
-        expect(segs[2].distanceMeters).toBeNull();
+        // No distance on path points: it would double-count activity.distanceMeters
+        // over the same time (path is geometry only).
+        expect(segs.every((s) => s.distanceMeters === null)).toBe(true);
     });
 
     it('ignores timelineMemory and unrecognized entries', () => {
