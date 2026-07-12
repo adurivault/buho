@@ -72,7 +72,7 @@ function haversineMeters(
  *
  * Three entry types become segments:
  *   - `visit`        → one `stationary` segment (position = placeLocation)
- *   - `activity`     → one `moving` segment (position = start, distanceMeters)
+ *   - `activity`     → one `moving` segment (position = start; no distance)
  *   - `timelinePath` → one `moving` segment per point (position = point)
  * `timelineMemory` and anything unrecognized are ignored.
  *
@@ -111,35 +111,6 @@ export function parseGoogleMapsData(jsonData: RawGoogleMapsEntry[]): LocationSeg
     }
     records.sort((a, b) => a.startMs - b.startMs);
 
-    // Activity time-windows, to skip distance on timelinePath points they cover:
-    // a path traces the same move as its activity, so its haversine would
-    // double-count activity.distanceMeters. Outside any activity (open-water
-    // crossings, etc.) the path IS the only record of the move, so it keeps its
-    // distance. Activities barely overlap, so a rightmost-start lookup suffices.
-    const activityStarts: number[] = [];
-    const activityEnds: number[] = [];
-    for (const r of records) {
-        if ('activity' in r.entry) {
-            activityStarts.push(r.startMs);
-            activityEnds.push(r.endMs);
-        }
-    }
-    function inActivity(t: number): boolean {
-        let lo = 0;
-        let hi = activityStarts.length - 1;
-        let idx = -1;
-        while (lo <= hi) {
-            const mid = (lo + hi) >> 1;
-            if (activityStarts[mid] <= t) {
-                idx = mid;
-                lo = mid + 1;
-            } else {
-                hi = mid - 1;
-            }
-        }
-        return idx >= 0 && activityEnds[idx] >= t;
-    }
-
     // Seed the carried offset with the first explicit offset in the timeline so
     // leading UTC-only entries (if any) still get a sensible local time.
     let lastOffset = records.find((r) => r.offsetMinutes !== null)?.offsetMinutes ?? 0;
@@ -172,7 +143,6 @@ export function parseGoogleMapsData(jsonData: RawGoogleMapsEntry[]): LocationSeg
             const activity = (entry as RawActivityEntry).activity;
             const loc = parseGeo(activity?.start);
             if (!loc) continue;
-            const dist = activity?.distanceMeters != null ? parseFloat(activity.distanceMeters) : NaN;
             const timestamp = wallClock(startMs, eff);
             segments.push({
                 timestamp,
@@ -185,7 +155,9 @@ export function parseGoogleMapsData(jsonData: RawGoogleMapsEntry[]): LocationSeg
                 activityType: activity?.topCandidate?.type ?? null,
                 semanticType: null,
                 placeId: null,
-                distanceMeters: Number.isFinite(dist) ? dist : null,
+                // Distance is derived from the raw GPS path only; the routed
+                // activity distance (semantic layer) is intentionally dropped.
+                distanceMeters: null,
             });
         } else if ('timelinePath' in entry) {
             const path = (entry as RawTimelinePathEntry).timelinePath ?? [];
@@ -214,12 +186,10 @@ export function parseGoogleMapsData(jsonData: RawGoogleMapsEntry[]): LocationSeg
                     activityType: null,
                     semanticType: null,
                     placeId: null,
-                    // Distance only where no activity covers this point (else the
-                    // activity's distanceMeters already counts the move).
-                    distanceMeters:
-                        next && !inActivity(pointMs)
-                            ? haversineMeters(cur.geo!, next.geo!)
-                            : null,
+                    // Distance is the raw path leg to the next point (the last
+                    // point has none). The path is the single distance source,
+                    // so there is nothing to double-count.
+                    distanceMeters: next ? haversineMeters(cur.geo!, next.geo!) : null,
                 });
             }
         }

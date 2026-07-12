@@ -50,7 +50,7 @@
 			<div class="upload-pill">
 				{#if dataStore.loading}
 					<span class="dot loading"></span>
-					<span class="muted">{dataStore.loading.message}</span>
+					<span class="muted">Loading…</span>
 				{:else if onMaps}
 					<span class="dot ok"></span>
 					<span class="ok-text">Your data</span>
@@ -73,6 +73,9 @@
 	</header>
 
 	{#if dataStore.loading}
+		<div class="loading-banner">
+			<span class="loading-text">{dataStore.loading.message}</span>
+		</div>
 		<div
 			class="progress-track"
 			role="progressbar"
@@ -179,6 +182,20 @@
 
 	.hidden {
 		display: none;
+	}
+
+	.loading-banner {
+		flex: none;
+		display: flex;
+		justify-content: center;
+		padding: 0.5rem 1rem 0.4rem;
+	}
+
+	.loading-text {
+		font-size: 0.85rem;
+		color: hsl(var(--muted-foreground));
+		text-align: center;
+		font-variant-numeric: tabular-nums;
 	}
 
 	.progress-track {

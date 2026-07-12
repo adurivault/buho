@@ -37,6 +37,9 @@
         // satellite barcharts are colored/stacked by this dimension.
         colorField?: string | null;
         colorCategories?: ColorCategory[];
+        // Fill for matched points when not coloring by dimension. Defaults to the
+        // Spotify green; the Google Maps explorer passes its red.
+        matchedColor?: string;
         // Weight a point contributes to the satellite bar charts (monthly + hourly).
         // Default 1 → bars count points. The Google Maps explorer passes the active
         // measure (presence minutes / km) so the temporal bars track the toggle.
@@ -62,6 +65,7 @@
         matchVersion = 0,
         colorField = null,
         colorCategories = [],
+        matchedColor = "#1DB954",
         barValue = () => 1,
         formatTooltip,
         onPointClick,
@@ -166,7 +170,6 @@
         top: 12,
         bottom: 24,
     };
-    const GUIDE_SPOTIFY_COLOR = "#1DB954";
     const OUT_OF_BRUSH_BAR_COLOR = "#6b645c";
     const UNMATCHED_POINT_COLOR = "#6b645c";
     const UNMATCHED_POINT_ALPHA = 0.22;
@@ -581,7 +584,7 @@
                 }
             }
         } else {
-            ctx.fillStyle = GUIDE_SPOTIFY_COLOR;
+            ctx.fillStyle = matchedColor;
             ctx.globalAlpha = 0.62;
             for (const point of scaledData) {
                 if (!point.original.matched) continue;
@@ -676,7 +679,7 @@
                 ctx.globalAlpha = 0.85;
                 const y = barScale(bar.count);
                 ctx.fillStyle = isInWindow
-                    ? GUIDE_SPOTIFY_COLOR
+                    ? matchedColor
                     : OUT_OF_BRUSH_BAR_COLOR;
                 ctx.fillRect(bx, y, bw, bottom - y);
             }
@@ -753,7 +756,7 @@
                 ctx.globalAlpha = 0.85;
                 const xStart = xForCount(bar.count);
                 ctx.fillStyle = isInWindow
-                    ? GUIDE_SPOTIFY_COLOR
+                    ? matchedColor
                     : OUT_OF_BRUSH_BAR_COLOR;
                 ctx.fillRect(xStart, y, Math.max(1, right - xStart), h * 0.92);
             }

@@ -30,7 +30,7 @@ describe('parseGoogleMapsData', () => {
         expect(seg.durationSeconds).toBeCloseTo(39419.498, 0);
     });
 
-    it('parses an activity into one moving segment with distance', () => {
+    it('parses an activity into one moving segment (routed distance dropped)', () => {
         const data: RawGoogleMapsEntry[] = [
             {
                 startTime: '2016-07-12T08:16:44.999+02:00',
@@ -49,8 +49,9 @@ describe('parseGoogleMapsData', () => {
         expect(seg.activityType).toBe('in passenger vehicle');
         expect(seg.semanticType).toBeNull();
         expect(seg.placeId).toBeNull();
-        // distanceMeters is a string in the export — must be parsed to a number
-        expect(seg.distanceMeters).toBeCloseTo(6871.015625);
+        // The routed activity distance (semantic layer) is not used: distance
+        // comes from the raw path only, so a lone activity carries none.
+        expect(seg.distanceMeters).toBeNull();
         expect(seg.lat).toBeCloseTo(45.753686);
     });
 
@@ -70,9 +71,11 @@ describe('parseGoogleMapsData', () => {
         const segs = parseGoogleMapsData(data);
         expect(segs).toHaveLength(3);
         expect(segs.every((s) => s.segmentType === 'moving')).toBe(true);
-        // No distance on path points: it would double-count activity.distanceMeters
-        // over the same time (path is geometry only).
-        expect(segs.every((s) => s.distanceMeters === null)).toBe(true);
+        // Distance is the raw haversine leg to the next path point; the last
+        // point has no successor, so its distance is null.
+        expect(segs[0].distanceMeters).toBeGreaterThan(0);
+        expect(segs[1].distanceMeters).toBeGreaterThan(0);
+        expect(segs[2].distanceMeters).toBeNull();
     });
 
     it('ignores timelineMemory and unrecognized entries', () => {

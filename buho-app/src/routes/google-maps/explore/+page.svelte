@@ -4,6 +4,7 @@
     import DimensionPie from "$lib/components/visualizations/DimensionPie.svelte";
     import SunburstExplorer from "$lib/components/visualizations/SunburstExplorer.svelte";
     import LocationMap from "$lib/components/visualizations/LocationMap.svelte";
+    import type { MapBounds } from "$lib/visualizations/locationMapData";
     import {
         getGoogleMapsConstellationTimeDomain,
         getGoogleMapsExplorerBasePoints,
@@ -23,6 +24,9 @@
     import { formatDuration, formatDurationLong } from "$lib/utils/duration";
     import { firstFilterValue } from "$lib/utils/filters";
     import { stickyColor } from "$lib/utils/dimensionColors";
+
+    // Accent for matched points in this explorer (red), vs the Spotify green.
+    const MATCHED_COLOR = "#EA4335";
 
     // Points loaded ONCE (raw). `matched` recomputed in JS in place, `matchVersion`
     // triggers a redraw without rebuilding the quadtree (cf. /spotify/explore).
@@ -185,7 +189,12 @@
 
     // Spatial slot: the constellation stays fixed; this slot toggles between the
     // geo sunburst and the interactive map (both read the same basePoints/matchVersion).
-    let spatialView = $state<"sunburst" | "map">("sunburst");
+    let spatialView = $state<"sunburst" | "map">("map");
+
+    // The map's committed viewport (lon/lat box), emitted on pan/zoom end. Folded
+    // into `matched` so the constellation + pies + indicators reflect the map's
+    // geographic zoom, like a range window. Null when the map isn't shown.
+    let viewGeoBounds = $state<MapBounds | null>(null);
 
     // --- Coloring by dimension -------------------------------------------
     let colorBy = $state<string | null>(null);
@@ -250,13 +259,25 @@
         return out;
     }
 
-    function matchSig(f: FilterState): string {
-        return JSON.stringify(MATCH_DIMS.map((d) => f[d.key] ?? null));
+    function matchSig(f: FilterState, gb: MapBounds | null): string {
+        return JSON.stringify([MATCH_DIMS.map((d) => f[d.key] ?? null), gb]);
+    }
+
+    /** True when a point falls outside the map's viewport box (or has no coords). */
+    function outOfGeoBox(p: LocationBasePoint, gb: MapBounds): boolean {
+        const lon = p.metadata.lon as number;
+        const lat = p.metadata.lat as number;
+        if (typeof lon !== "number" || typeof lat !== "number") return true;
+        if (Number.isNaN(lon) || Number.isNaN(lat)) return true;
+        return (
+            lon < gb[0][0] || lon > gb[1][0] || lat < gb[0][1] || lat > gb[1][1]
+        );
     }
 
     function computeMatched() {
         const active = activeDims(googleMapsExplorerFilters.activeFilters);
         const pts = basePoints;
+        const gb = viewGeoBounds;
         for (let i = 0; i < pts.length; i++) {
             const p = pts[i];
             let m = true;
@@ -266,6 +287,7 @@
                     break;
                 }
             }
+            if (m && gb && outOfGeoBox(p, gb)) m = false;
             p.matched = m;
         }
         matchVersion += 1;
@@ -301,6 +323,7 @@
         const active = activeDims(googleMapsExplorerFilters.activeFilters);
         const tWin = viewTimeDomain;
         const hWin = viewHourDomain;
+        const gb = viewGeoBounds;
         const maps: Record<
             string,
             Map<string, { minutes: number; plays: number; amount: number }>
@@ -311,6 +334,7 @@
             const p = pts[i];
             if (tWin && (p.x < tWin[0] || p.x > tWin[1])) continue;
             if (hWin && (p.y < hWin[0] || p.y > hWin[1])) continue;
+            if (gb && outOfGeoBox(p, gb)) continue;
 
             let fails = 0;
             let failedKey = "";
@@ -349,6 +373,7 @@
         const active = activeDims(googleMapsExplorerFilters.activeFilters);
         const tWin = viewTimeDomain;
         const hWin = viewHourDomain;
+        const gb = viewGeoBounds;
         let segs = 0;
         let mins = 0;
         let meters = 0;
@@ -357,6 +382,7 @@
             const p = pts[i];
             if (tWin && (p.x < tWin[0] || p.x > tWin[1])) continue;
             if (hWin && (p.y < hWin[0] || p.y > hWin[1])) continue;
+            if (gb && outOfGeoBox(p, gb)) continue;
             let ok = true;
             for (const d of active) {
                 if (!d.vals.has(p[d.field] as string)) {
@@ -471,7 +497,10 @@
             if (runId !== baseSeq) return;
             if (domain) timeDomain = [domain.minX, domain.maxX];
             basePoints = nextPoints;
-            prevMatchSig = matchSig(googleMapsExplorerFilters.activeFilters);
+            prevMatchSig = matchSig(
+                googleMapsExplorerFilters.activeFilters,
+                viewGeoBounds,
+            );
             computeMatched();
         } catch (e) {
             console.error("Error loading constellation base points:", e);
@@ -511,10 +540,11 @@
         void loadBasePoints();
     });
 
-    // Highlight: JS recompute of `matched` when the selection changes.
+    // Highlight: JS recompute of `matched` when the selection or the map's
+    // geographic viewport changes.
     $effect(() => {
         if (!dbReady) return;
-        const sig = matchSig(activeFilters);
+        const sig = matchSig(activeFilters, viewGeoBounds);
         untrack(() => {
             if (sig === prevMatchSig) return;
             prevMatchSig = sig;
@@ -529,9 +559,15 @@
         const _m = matchVersion;
         const _t = viewTimeDomain;
         const _h = viewHourDomain;
+        const _g = viewGeoBounds;
         const _ms = measure;
         if (!dbReady) return;
         scheduleRecompute();
+    });
+
+    // Leaving the map drops its geographic filter so the other views go full again.
+    $effect(() => {
+        if (spatialView !== "map") viewGeoBounds = null;
     });
 
     // Sync brush → filtres globaux (throttle leading + trailing).
@@ -685,6 +721,7 @@
                             {timeDomain}
                             colorField={colorByDim?.field ?? null}
                             {colorCategories}
+                            matchedColor={MATCHED_COLOR}
                             {barValue}
                             formatTooltip={constellationTooltip}
                             bind:viewTimeDomain
@@ -739,6 +776,9 @@
                                 {matchVersion}
                                 width={sunburstWidth}
                                 height={sunburstHeight}
+                                timeWindow={viewTimeDomain}
+                                hourWindow={viewHourDomain}
+                                onViewportChange={(b) => (viewGeoBounds = b)}
                                 formatTooltip={constellationTooltip}
                             />
                         {:else}

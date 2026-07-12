@@ -1,5 +1,10 @@
 import { query } from '../db';
-import { ATTRIBUTION_STATEMENTS } from './attributionSql';
+import {
+    buildSetupStatements,
+    attributionBatchSql,
+    FINALIZE_STATEMENTS,
+    DEFAULT_BATCH_SIZE
+} from './attributionSql';
 
 /**
  * Attribute every `google_maps_segments` row to its geographic zones
@@ -13,16 +18,30 @@ import { ATTRIBUTION_STATEMENTS } from './attributionSql';
  * The original `lat`/`lon` are never modified: the ~11 m rounding is only a join
  * key for deduplication, so points stay precise for map placement.
  *
- * `onProgress` is called after each statement completes with the fraction in
- * [0, 1] of statements done, so the UI can show real attribution progress (this
- * is the slow part of an upload).
+ * Distinct positions are resolved in batches (the slow spatial joins are the bulk
+ * of an upload), so `onProgress(processed, total)` is called after each batch with
+ * the number of positions located so far — the UI can show real, steadily
+ * advancing progress with a point count.
  */
 export async function attributeZones(
-    onProgress?: (fraction: number) => void
+    onProgress?: (processed: number, total: number) => void
 ): Promise<void> {
-    const total = ATTRIBUTION_STATEMENTS.length;
-    for (let i = 0; i < total; i++) {
-        await query(ATTRIBUTION_STATEMENTS[i]);
-        onProgress?.((i + 1) / total);
+    const batchSize = DEFAULT_BATCH_SIZE;
+    for (const sql of buildSetupStatements(batchSize)) {
+        await query(sql);
     }
+
+    const [{ total }] = await query<{ total: number }>('SELECT count(*) AS total FROM loc');
+    const totalPositions = Number(total);
+    const batchCount = Math.ceil(totalPositions / batchSize);
+
+    for (let b = 0; b < batchCount; b++) {
+        await query(attributionBatchSql(b));
+        onProgress?.(Math.min((b + 1) * batchSize, totalPositions), totalPositions);
+    }
+
+    for (const sql of FINALIZE_STATEMENTS) {
+        await query(sql);
+    }
+    onProgress?.(totalPositions, totalPositions);
 }

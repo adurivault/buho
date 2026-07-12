@@ -318,10 +318,13 @@ class DataStore {
                 await db.loadSpatial();
                 await loadGeoAssets();
                 this.setLoading({ status: 'locating', message: 'Locating points...', progress: 0.3 });
-                await attributeZones((fraction) => {
+                await attributeZones((processed, total) => {
+                    const fraction = total > 0 ? processed / total : 1;
                     this.setLoading({
                         status: 'locating',
-                        message: 'Locating points...',
+                        message: total > 0
+                            ? `Locating points... ${processed.toLocaleString()} / ${total.toLocaleString()}`
+                            : 'Locating points...',
                         progress: 0.3 + fraction * 0.7
                     });
                 });

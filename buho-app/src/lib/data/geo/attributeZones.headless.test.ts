@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { ATTRIBUTION_STATEMENTS } from './attributionSql';
+import { buildSetupStatements, attributionBatchSql, FINALIZE_STATEMENTS } from './attributionSql';
 
 const require = createRequire(import.meta.url);
 const DIST = path.resolve(process.cwd(), 'node_modules/@duckdb/duckdb-wasm/dist');
@@ -61,7 +61,14 @@ beforeAll(async () => {
       (44.0000, 1.0000, NULL, 'rural'),
       (60.0000,60.0000, NULL, 'nowhere')`);
 
-    for (const sql of ATTRIBUTION_STATEMENTS) conn.query(sql);
+    // Batch size 2 forces the 7 positions across multiple batches, so the test
+    // also proves the per-batch resolution unions back to the same result.
+    for (const sql of buildSetupStatements(2)) conn.query(sql);
+    const batchCount = Number(
+        q('SELECT COALESCE(max(batch) + 1, 0) AS n FROM loc')[0].n
+    );
+    for (let b = 0; b < batchCount; b++) conn.query(attributionBatchSql(b));
+    for (const sql of FINALIZE_STATEMENTS) conn.query(sql);
 });
 
 afterAll(() => {
