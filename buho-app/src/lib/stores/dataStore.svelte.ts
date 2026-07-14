@@ -6,6 +6,7 @@ import { parseGoogleMapsData } from '$lib/data/parseGoogleMaps';
 import * as db from '$lib/data/db';
 import { loadGeoAssets } from '$lib/data/geo/loadGeoAssets';
 import { attributeZones } from '$lib/data/geo/attributeZones';
+import { buildDays } from '$lib/data/geo/buildDays';
 import { spotifyFilterStore } from '$lib/stores/spotifyFilterStore.svelte';
 import { trackEvent, bucket } from '$lib/analytics';
 
@@ -310,6 +311,7 @@ class DataStore {
             this.setLoading({ status: 'importing', message: `Importing ${segments.length} segments...`, progress: 0.18 });
             await db.initDuckDB();
             await db.dropTable('google_maps_segments');
+            await db.dropTable('google_maps_days');
             await db.insertLocationSegments(segments);
 
             // Geo attribution is the slow part, so it drives most of the bar (0.3 → 1).
@@ -328,6 +330,8 @@ class DataStore {
                         progress: 0.3 + fraction * 0.7
                     });
                 });
+                this.setLoading({ status: 'locating', message: 'Building daily summary...', progress: 0.98 });
+                await buildDays();
             } catch (geoError) {
                 // Best-effort: segments stay usable even if zone attribution fails.
                 console.error('Geo attribution failed:', geoError);

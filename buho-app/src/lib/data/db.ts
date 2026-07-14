@@ -109,6 +109,27 @@ export async function query<T>(sql: string, params?: any[]): Promise<T[]> {
     return transformKeys(rows, toCamelCase) as T[];
 }
 
+/**
+ * Columnar variant of `query`: returns each result column as an array (Arrow
+ * vector → typed/JS array) instead of building one JS object per row. For large
+ * result sets (e.g. all location segments) this skips the per-row toJSON +
+ * snake→camel churn, at the cost of a struct-of-arrays shape. Column names are
+ * the SQL output names verbatim (no camelCase transform), so alias them as you
+ * want them. BIGINT columns arrive as BigInt64Array — coerce with Number().
+ */
+export async function queryColumnar(
+    sql: string,
+): Promise<{ numRows: number; columns: Record<string, ArrayLike<unknown>> }> {
+    const connection = await getConnection();
+    const result = await connection.query(sql);
+    const columns: Record<string, ArrayLike<unknown>> = {};
+    for (const field of result.schema.fields) {
+        const child = result.getChild(field.name);
+        columns[field.name] = child ? child.toArray() : [];
+    }
+    return { numRows: result.numRows, columns };
+}
+
 export async function createTable(name: string, schema: string): Promise<void> {
     validateIdentifier(name, 'table');
     const connection = await getConnection();
