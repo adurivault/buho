@@ -33,8 +33,12 @@
 					resolve("/google-maps/explore"),
 				)}>Explore</a
 			>
-			<span class="nav-link disabled" aria-disabled="true" title="Coming soon"
-				>Guide</span
+			<a
+				href={resolve("/google-maps/guide")}
+				class="nav-link"
+				class:active={page.url.pathname.startsWith(
+					resolve("/google-maps/guide"),
+				)}>Guide</a
 			>
 		</nav>
 
@@ -173,11 +177,6 @@
 	.nav-link.active {
 		color: hsl(var(--foreground));
 		background: hsl(var(--accent));
-	}
-
-	.nav-link.disabled {
-		opacity: 0.4;
-		cursor: not-allowed;
 	}
 
 	.hidden {
