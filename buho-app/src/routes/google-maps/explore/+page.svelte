@@ -447,7 +447,7 @@
                 const name = p[lvl.field] as string;
                 if (name && name !== "Unknown") levels.push({ name, key: lvl.key });
             }
-            const mapKey = levels.map((l) => l.name).join(" ");
+            const mapKey = levels.map((l) => l.name).join("\u0000");
             let e = agg.get(mapKey);
             if (!e) {
                 e = { levels, value: 0 };
