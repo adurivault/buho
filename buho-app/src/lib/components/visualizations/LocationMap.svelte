@@ -84,12 +84,15 @@
     const DIMMED_RGBA: [number, number, number, number] = [107, 100, 92, 70];
     const TRANSPARENT: [number, number, number, number] = [0, 0, 0, 0];
 
-    // Trail: red lines connecting active points in chronological order. A segment
-    // is dropped when its two ends are more than PATH_MAX_GAP_MS apart in time, so
-    // the trail breaks over travel/overnight gaps instead of drawing a straight
-    // line across the whole map.
+    // Trail: red segments between consecutive active points in chronological
+    // order. It follows the dimension filters + time/hour brush; a segment is drawn
+    // only when at least one of its endpoints is inside the current viewport, so an
+    // out-and-back excursion is shown truthfully while segments that would merely
+    // cut straight across the view (both ends off-screen) are dropped.
     const PATH_RGBA: [number, number, number, number] = [234, 67, 53, 140];
-    const PATH_MAX_GAP_MS = 12 * 3_600_000;
+
+    // Chronological instant (ms) of a point: midnight epoch + fractional hour.
+    const instant = (p: LocationBasePoint) => p.x + p.y * 3_600_000;
 
     let container: HTMLDivElement | null = null;
     let map: MaplibreMap | null = null;
@@ -97,17 +100,22 @@
     // Theme currently applied to the basemap + guard against stale async reloads.
     let appliedTheme: Theme | null = null;
     let styleSeq = 0;
-    // Constructor captured from the lazy import; typed loosely to avoid pulling
+    // Constructors captured from the lazy import; typed loosely to avoid pulling
     // deck.gl generics into the component.
     let ScatterplotLayerCtor: (new (props: unknown) => unknown) | null = null;
+    let LineLayerCtor: (new (props: unknown) => unknown) | null = null;
 
     // Derived buffers, rebuilt once per upload (never on highlight change).
     let positions: Float32Array = new Float32Array(0);
     let mapPoints: LocationBasePoint[] = [];
+    // Indices into mapPoints sorted by chronological instant (for the trail).
+    let orderByTime: number[] = [];
     let prevData: LocationBasePoint[] | null = null;
 
     let destroyed = false;
     let ready = $state(false);
+    // Connect the active points into a chronological trail (toggle on the map).
+    let showPaths = $state(false);
 
     let tooltip = $state({
         visible: false,
@@ -125,16 +133,77 @@
         const built = buildPositions(data);
         positions = built.positions;
         mapPoints = built.mapPoints;
+        // mapPoints keeps the source (day-ASC) order; sort an index by full
+        // instant so the trail connects points chronologically without a per-frame sort.
+        orderByTime = mapPoints.map((_, i) => i);
+        orderByTime.sort((a, b) => instant(mapPoints[a]) - instant(mapPoints[b]));
     }
 
-    /** A point is "active" (green) when matched and inside the brush windows. */
-    function isActive(p: LocationBasePoint | undefined): boolean {
-        if (!p || !p.matched) return false;
+    /** True when `p` is inside the brush windows (time + hour). */
+    function inBrush(p: LocationBasePoint): boolean {
         if (timeWindow && (p.x < timeWindow[0] || p.x > timeWindow[1]))
             return false;
         if (hourWindow && (p.y < hourWindow[0] || p.y > hourWindow[1]))
             return false;
         return true;
+    }
+
+    /** A point is "active" (red) when matched and inside the brush windows. */
+    function isActive(p: LocationBasePoint | undefined): boolean {
+        return !!p && p.matched && inBrush(p);
+    }
+
+    // Trail membership: dimension filters + brush, but NOT the map's own geographic
+    // viewport (`matched` folds the viewport box in; `matchedDims` does not), so the
+    // trail spans excursions out of the current view and deck.gl clips them.
+    function isTrailActive(p: LocationBasePoint | undefined): boolean {
+        return !!p && p.matchedDims !== false && inBrush(p);
+    }
+
+    // Segments between consecutive trail-active points (time order), keeping only
+    // those with at least one endpoint inside the current viewport.
+    function buildTrailSegments(): {
+        s: [number, number];
+        t: [number, number];
+    }[] {
+        const b = map?.getBounds();
+        if (!b) return [];
+        const west = b.getWest();
+        const south = b.getSouth();
+        const east = b.getEast();
+        const north = b.getNorth();
+        const inView = (lon: number, lat: number) =>
+            lon >= west && lon <= east && lat >= south && lat <= north;
+
+        const segs: { s: [number, number]; t: [number, number] }[] = [];
+        let prev: [number, number] | null = null;
+        for (const idx of orderByTime) {
+            const p = mapPoints[idx];
+            if (!isTrailActive(p)) continue;
+            const cur: [number, number] = [
+                p.metadata.lon as number,
+                p.metadata.lat as number,
+            ];
+            if (prev && (inView(prev[0], prev[1]) || inView(cur[0], cur[1]))) {
+                segs.push({ s: prev, t: cur });
+            }
+            prev = cur;
+        }
+        return segs;
+    }
+
+    function makePathLayer(): unknown {
+        if (!LineLayerCtor) return null;
+        return new LineLayerCtor({
+            id: "location-paths",
+            data: buildTrailSegments(),
+            getSourcePosition: (d: { s: [number, number] }) => d.s,
+            getTargetPosition: (d: { t: [number, number] }) => d.t,
+            getColor: PATH_RGBA,
+            getWidth: 1.4,
+            widthUnits: "pixels",
+            widthMinPixels: 1,
+        });
     }
 
     function onHover(info: { index: number; x: number; y: number }) {
@@ -193,7 +262,14 @@
     }
 
     function layers(): unknown[] {
-        return [makeLayer("dimmed"), makeLayer("active")];
+        const arr: unknown[] = [];
+        // Trail first so the points paint over it (deck draws later layers on top).
+        if (showPaths) {
+            const pl = makePathLayer();
+            if (pl) arr.push(pl);
+        }
+        arr.push(makeLayer("dimmed"), makeLayer("active"));
+        return arr;
     }
 
     function refreshLayer() {
@@ -239,6 +315,9 @@
                 deckLayers.ScatterplotLayer as unknown as new (
                     props: unknown,
                 ) => unknown;
+            LineLayerCtor = deckLayers.LineLayer as unknown as new (
+                props: unknown,
+            ) => unknown;
             rebuild();
             prevData = data;
 
@@ -256,7 +335,12 @@
             map.addControl(overlay as unknown as IControl);
             map.on("load", fit);
             // Committed viewport only (on gesture end) → discrete geo filter.
-            map.on("moveend", emitViewport);
+            map.on("moveend", () => {
+                emitViewport();
+                // The trail keeps only segments touching the viewport, so it must
+                // be rebuilt when the view moves (cheap; skipped when off).
+                if (showPaths) scheduleRefresh();
+            });
             ready = true;
         })();
     });
@@ -280,11 +364,13 @@
         fit();
     });
 
-    // Highlight or brush-window change (same data ref) → refresh the color buffer.
+    // Highlight, brush-window, or trail-toggle change (same data ref) → rebuild
+    // the layers (color buffer + optional trail).
     $effect(() => {
         void matchVersion;
         void timeWindow;
         void hourWindow;
+        void showPaths;
         if (ready) scheduleRefresh();
     });
 
@@ -311,6 +397,16 @@
 </script>
 
 <div class="location-map" bind:this={container}>
+    <button
+        type="button"
+        class="trail-toggle"
+        class:active={showPaths}
+        aria-pressed={showPaths}
+        title="Connect points into a chronological trail"
+        onclick={() => (showPaths = !showPaths)}
+    >
+        Connect points
+    </button>
     {#if tooltipInfo}
         <div class="tooltip" style={`left:${tooltip.x}px; top:${tooltip.y}px;`}>
             {#if tooltipInfo.title}
@@ -333,6 +429,30 @@
         height: 100%;
         border-radius: 8px;
         overflow: hidden;
+    }
+
+    .trail-toggle {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        z-index: 3;
+        padding: 0.28rem 0.6rem;
+        border-radius: 999px;
+        border: 1px solid hsl(var(--border));
+        font-size: 0.72rem;
+        color: hsl(var(--muted-foreground));
+        background: color-mix(in srgb, hsl(var(--card)) 88%, transparent);
+        cursor: pointer;
+        backdrop-filter: blur(2px);
+    }
+
+    .trail-toggle:hover {
+        color: hsl(var(--foreground));
+    }
+
+    .trail-toggle.active {
+        border-color: #ea4335;
+        color: #ea4335;
     }
 
     .tooltip {

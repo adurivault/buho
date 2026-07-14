@@ -8,6 +8,10 @@ import type { ConnectablePoint, ConstellationTimeDomain } from './behaviorQuerie
  * x = day epoch (ms), y = fractional hour of day.
  */
 export interface LocationBasePoint extends ConnectablePoint {
+    // Passes the active dimension filters, ignoring the map's geographic viewport
+    // (unlike `matched`, which also folds the viewport box in). The map trail reads
+    // this so it can span points outside the current view.
+    matchedDims?: boolean;
     fSegmentType: string; // stationary | moving
     fActivityType: string; // walking, in passenger vehicle, … (or Unknown)
     fSemanticType: string; // Home, Work, Unknown, …

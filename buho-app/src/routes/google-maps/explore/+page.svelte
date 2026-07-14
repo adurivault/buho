@@ -280,15 +280,17 @@
         const gb = viewGeoBounds;
         for (let i = 0; i < pts.length; i++) {
             const p = pts[i];
-            let m = true;
+            let dims = true;
             for (const d of active) {
                 if (!d.vals.has(p[d.field] as string)) {
-                    m = false;
+                    dims = false;
                     break;
                 }
             }
-            if (m && gb && outOfGeoBox(p, gb)) m = false;
-            p.matched = m;
+            // Dimension-only match (trail basis); `matched` also folds in the
+            // map's viewport box, as before.
+            p.matchedDims = dims;
+            p.matched = dims && !(gb && outOfGeoBox(p, gb));
         }
         matchVersion += 1;
     }
