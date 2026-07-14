@@ -5,6 +5,7 @@ import type {
     RawTimelinePathEntry,
     RawVisitEntry,
 } from '$lib/types/googleMaps';
+import { haversineMeters } from '$lib/data/geo/haversine';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
@@ -48,23 +49,6 @@ interface EntryRecord {
 
 function durationSeconds(startMs: number, endMs: number): number {
     return Math.max(0, (endMs - startMs) / 1000);
-}
-
-/** Great-circle distance in meters between two lat/lon points. */
-function haversineMeters(
-    a: { lat: number; lon: number },
-    b: { lat: number; lon: number },
-): number {
-    const R = 6_371_000; // Earth radius (m)
-    const toRad = (deg: number) => (deg * Math.PI) / 180;
-    const dLat = toRad(b.lat - a.lat);
-    const dLon = toRad(b.lon - a.lon);
-    const lat1 = toRad(a.lat);
-    const lat2 = toRad(b.lat);
-    const h =
-        Math.sin(dLat / 2) ** 2 +
-        Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
-    return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
 /**
