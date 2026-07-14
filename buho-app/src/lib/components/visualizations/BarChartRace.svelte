@@ -15,9 +15,16 @@
         title: string;
         rows: RaceRow[];
         formatValue?: (v: number) => string;
+        // Applied to bar labels only (join keys stay the full name), e.g. to
+        // truncate long track titles.
+        formatName?: (name: string) => string;
         ariaLabel?: string;
         loadingLabel?: string;
         topN?: number;
+        // Space reserved for bar labels on the left (px).
+        leftMargin?: number;
+        // Lower bound on the drawn chart width (px).
+        minWidth?: number;
         // Fired once when the section scrolls into view, so parents can lazy-load.
         onVisible?: () => void;
     };
@@ -26,9 +33,12 @@
         title,
         rows,
         formatValue = (v: number) => v.toFixed(1),
+        formatName = (name: string) => name,
         ariaLabel = "Bar chart race",
         loadingLabel = "Loading…",
         topN = 15,
+        leftMargin = 220,
+        minWidth = 920,
         onVisible,
     }: Props = $props();
 
@@ -46,7 +56,7 @@
     const INTERPOLATION_STEPS = 10;
     const FRAME_DURATION_MS = 120;
     const BAR_SIZE = 36;
-    const MARGIN = { top: 24, right: 90, bottom: 16, left: 220 };
+    const MARGIN = $derived({ top: 24, right: 90, bottom: 16, left: leftMargin });
 
     let element = $state<HTMLElement | undefined>(undefined);
     let chartContainer = $state<HTMLDivElement | undefined>(undefined);
@@ -233,7 +243,10 @@
 
     function updateChartWidth() {
         if (!chartContainer) return;
-        chartWidth = Math.max(920, Math.floor(chartContainer.clientWidth - 32));
+        chartWidth = Math.max(
+            minWidth,
+            Math.floor(chartContainer.clientWidth - 32),
+        );
         if (!isPlaying) renderStaticFrame();
     }
 
@@ -389,7 +402,7 @@
                     text.append("tspan")
                         .attr("x", -6)
                         .attr("font-weight", "600")
-                        .text((d: any) => d.name);
+                        .text((d: any) => formatName(d.name));
 
                     text.append("tspan")
                         .attr("fill-opacity", 0.78)
