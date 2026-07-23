@@ -31,6 +31,10 @@ export interface DayRow {
     movingMinutes: number;
     stationaryMinutes: number;
     segmentCount: number;
+    departureHour: number | null;  // wall-clock hour you first left the morning anchor (>300 m)
+    returnHour: number | null;     // wall-clock hour you settled back at the night anchor
+    amplitudeHours: number | null; // hours out = return − departure (null if either is missing)
+    discoveredNew: boolean;        // at least one 110 m grid cell seen for the first time this day
 }
 
 /** One segment as loaded for the day build (timestamps as epoch ms). */
@@ -50,7 +54,14 @@ export interface DaySegment {
 
 const DAY_MS = 86_400_000;
 const ANCHOR_HOUR = 4; // the 04:00 night boundary
+const AWAY_RADIUS_M = 300;   // how far from the sleep anchor counts as "left home"
+const NOVELTY_DECIMALS = 3;  // lat/lon rounding for the novelty grid (~110 m cells)
 const pad = (n: number) => String(n).padStart(2, '0');
+
+/** Wall-clock fractional hour (0–24) of a naive-as-UTC instant. */
+function wallHour(ms: number): number {
+    return ((((ms % DAY_MS) + DAY_MS) % DAY_MS)) / 3_600_000;
+}
 
 /** UTC calendar-day key of an epoch-ms instant (timestamps are naive-as-UTC). */
 function dayKey(ms: number): string {
@@ -58,11 +69,11 @@ function dayKey(ms: number): string {
     return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
 }
 /** Logical day a moment belongs to: the day of (instant − 04:00). */
-function logicalDay(ms: number): string {
+export function logicalDay(ms: number): string {
     return dayKey(ms - ANCHOR_HOUR * 3_600_000);
 }
 /** The 04:00 anchor instant (ms) of a 'YYYY-MM-DD' logical day. */
-function anchorMs(day: string): number {
+export function anchorMs(day: string): number {
     const [y, m, d] = day.split('-').map(Number);
     return Date.UTC(y, m - 1, d, ANCHOR_HOUR);
 }
@@ -194,6 +205,16 @@ function lastAtOrBefore(keys: number[], x: number): number {
     return res;
 }
 
+/** Smallest index i with keys[i] >= x (or keys.length). Assumes keys ascending. */
+function firstAtOrAfter(keys: number[], x: number): number {
+    let lo = 0, hi = keys.length;
+    while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (keys[mid] < x) lo = mid + 1; else hi = mid;
+    }
+    return lo;
+}
+
 /**
  * Build the per-day rows from time-ordered segments. Pure (no DB), so it can be
  * unit-tested directly. `segments` must be sorted ascending by `startMs`.
@@ -231,6 +252,17 @@ export function computeDays(segments: DaySegment[]): DayRow[] {
         (byDay.get(d) ?? byDay.set(d, []).get(d)!).push(s);
         if (s.endMs > maxEnd) maxEnd = s.endMs;
     }
+    // Novelty: which logical days see at least one 110 m grid cell for the first
+    // time. Purely spatial (rounded lat/lon), so it never touches the semantic
+    // layer. `segments` is time-ordered, so the first hit of a cell is its
+    // earliest sighting. Moving and stationary points count alike.
+    const cellFirstDay = new Map<string, string>();
+    for (const s of segments) {
+        const cell = `${s.lat.toFixed(NOVELTY_DECIMALS)},${s.lon.toFixed(NOVELTY_DECIMALS)}`;
+        if (!cellFirstDay.has(cell)) cellFirstDay.set(cell, logicalDay(s.startMs));
+    }
+    const daysWithNewCell = new Set<string>(cellFirstDay.values());
+
     // Samples share segment order except for the interleaved stationary end
     // points; sort to guarantee ascending time for the binary searches.
     const order = sampleT.map((_, i) => i).sort((a, b) => sampleT[a] - sampleT[b]);
@@ -287,6 +319,32 @@ export function computeDays(segments: DaySegment[]): DayRow[] {
             if (d > maxDistKm) maxDistKm = d;
         }
 
+        // Departure = first sample of the day that gets >300 m from the morning
+        // anchor; return = the first sample back within 300 m of the *next*
+        // morning's anchor after the last far one (so travel days, where the two
+        // anchors differ, read correctly). Either can be null (stayed home / out).
+        const nextStart = resolveStart(a + DAY_MS) ?? start;
+        const lo = firstAtOrAfter(sT, a);
+        const hi = firstAtOrAfter(sT, a + DAY_MS);
+        let departureMs: number | null = null;
+        let lastFar = -1;
+        for (let i = lo; i < hi; i++) {
+            if (departureMs === null &&
+                haversineMeters({ lat: start.lat, lon: start.lon }, { lat: sLat[i], lon: sLon[i] }) > AWAY_RADIUS_M) {
+                departureMs = sT[i];
+            }
+            if (haversineMeters({ lat: nextStart.lat, lon: nextStart.lon }, { lat: sLat[i], lon: sLon[i] }) > AWAY_RADIUS_M) {
+                lastFar = i;
+            }
+        }
+        const returnMs = lastFar >= lo && lastFar < hi - 1 ? sT[lastFar + 1] : null;
+        const departureHour = departureMs === null ? null : wallHour(departureMs);
+        const returnHour = returnMs === null ? null : wallHour(returnMs);
+        const amplitudeHours =
+            departureMs !== null && returnMs !== null && returnMs >= departureMs
+                ? (returnMs - departureMs) / 3_600_000
+                : null;
+
         rows.push({
             day,
             startPlaceId: snap?.place.placeId ?? '',
@@ -304,6 +362,10 @@ export function computeDays(segments: DaySegment[]): DayRow[] {
             movingMinutes: movingMin,
             stationaryMinutes: stationaryMin,
             segmentCount: segs.length,
+            departureHour,
+            returnHour,
+            amplitudeHours,
+            discoveredNew: daysWithNewCell.has(day),
         });
     }
     return rows;

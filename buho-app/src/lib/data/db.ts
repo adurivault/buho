@@ -310,6 +310,8 @@ export async function insertLocationSegments(segments: LocationSegment[]): Promi
         semantic_type VARCHAR,
         place_id VARCHAR,
         distance_meters DOUBLE,
+        speed_kmh DOUBLE,
+        azimuth_degrees DOUBLE,
         country VARCHAR,
         region VARCHAR,
         department VARCHAR,
@@ -338,17 +340,20 @@ export async function insertLocationSegments(segments: LocationSegment[]): Promi
         semantic_type: s.semanticType,
         place_id: s.placeId,
         distance_meters: s.distanceMeters,
+        speed_kmh: s.speedKmh,
+        azimuth_degrees: s.azimuthDegrees,
     }));
     const jsonContent = JSON.stringify(snakeData);
     const tempFile = `import_${TABLE_NAME}_${Date.now()}.json`;
 
     await db.registerFileText(tempFile, jsonContent);
 
-    // Explicit column list: the source JSON has only the 11 base fields; the geo
+    // Explicit column list: the source JSON has only the 13 base fields; the geo
     // columns default to NULL until attributeZones populates them.
     await conn.query(`INSERT INTO ${TABLE_NAME} (
         timestamp, date, end_timestamp, duration_seconds, lat, lon,
-        segment_type, activity_type, semantic_type, place_id, distance_meters
+        segment_type, activity_type, semantic_type, place_id, distance_meters,
+        speed_kmh, azimuth_degrees
     ) SELECT DISTINCT * FROM read_json_auto('${tempFile}')`);
 
     await db.registerFileText(tempFile, '');

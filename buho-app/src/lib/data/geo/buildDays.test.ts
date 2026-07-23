@@ -85,3 +85,35 @@ describe('computeDays', () => {
         expect([...days.keys()].sort()[0]).toBe('2024-03-10');
     });
 });
+
+describe('computeDays — daily rhythm & novelty', () => {
+    // A clean out-and-back day: sleep at HOME, out to WORK 09:00–17:00, home for
+    // the night. HOME and WORK are ~6 km apart (> the 300 m away radius).
+    const segs: DaySegment[] = [
+        seg({ startMs: ms(2024, 5, 9, 23, 0), endMs: ms(2024, 5, 10, 8, 0), segmentType: 'stationary', placeId: 'home', ...HOME }),
+        seg({ startMs: ms(2024, 5, 10, 9, 0), endMs: ms(2024, 5, 10, 17, 0), segmentType: 'stationary', placeId: 'work', ...WORK }),
+        seg({ startMs: ms(2024, 5, 10, 18, 0), endMs: ms(2024, 5, 11, 8, 0), segmentType: 'stationary', placeId: 'home', ...HOME }),
+    ];
+    const days = build(segs);
+
+    it('reads departure, return and amplitude off the away radius', () => {
+        const d = days.get('2024-05-10')!;
+        expect(d.departureHour).toBeCloseTo(9, 5);   // first sample >300 m from HOME
+        expect(d.returnHour).toBeCloseTo(18, 5);     // settled back near HOME
+        expect(d.amplitudeHours).toBeCloseTo(9, 5);
+    });
+
+    it('leaves departure/return null on a day spent at the anchor', () => {
+        // 05-09 holds only the HOME visit's start; it never leaves.
+        const d = days.get('2024-05-09')!;
+        expect(d.departureHour).toBeNull();
+        expect(d.returnHour).toBeNull();
+        expect(d.amplitudeHours).toBeNull();
+    });
+
+    it('flags a day that sees a grid cell for the first time', () => {
+        expect(days.get('2024-05-09')!.discoveredNew).toBe(true);  // HOME cell first seen
+        expect(days.get('2024-05-10')!.discoveredNew).toBe(true);  // WORK cell first seen
+        expect(days.get('2024-05-11')!.discoveredNew).toBe(false); // nothing new
+    });
+});

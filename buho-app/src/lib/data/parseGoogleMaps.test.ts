@@ -53,6 +53,11 @@ describe('parseGoogleMapsData', () => {
         // comes from the raw path only, so a lone activity carries none.
         expect(seg.distanceMeters).toBeNull();
         expect(seg.lat).toBeCloseTo(45.753686);
+        // Speed still uses the routed distance / duration (~6871 m over ~28m15s).
+        expect(seg.speedKmh).toBeCloseTo(14.6, 0);
+        // Heading start→end points roughly west (0..360).
+        expect(seg.azimuthDegrees).toBeGreaterThanOrEqual(0);
+        expect(seg.azimuthDegrees).toBeLessThan(360);
     });
 
     it('expands a timelinePath into one moving segment per point', () => {
@@ -76,6 +81,13 @@ describe('parseGoogleMapsData', () => {
         expect(segs[0].distanceMeters).toBeGreaterThan(0);
         expect(segs[1].distanceMeters).toBeGreaterThan(0);
         expect(segs[2].distanceMeters).toBeNull();
+        // Speed + azimuth derive from the leg to the next point. The last point
+        // has no leg, so it's a standstill: speed 0, no heading.
+        expect(segs[0].speedKmh).toBeGreaterThan(0);
+        expect(segs[0].azimuthDegrees).toBeGreaterThanOrEqual(0);
+        expect(segs[1].speedKmh).toBeGreaterThan(0);
+        expect(segs[2].speedKmh).toBe(0);
+        expect(segs[2].azimuthDegrees).toBeNull();
     });
 
     it('ignores timelineMemory and unrecognized entries', () => {

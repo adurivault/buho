@@ -19,6 +19,8 @@ export interface LocationSegment {
     semanticType: string | null;   // stationary only (Home, Work, Unknown, …)
     placeId: string | null;        // stationary only
     distanceMeters: number | null; // moving only
+    speedKmh: number | null;       // moving only: derived travel speed (see parseGoogleMaps)
+    azimuthDegrees: number | null; // moving only: heading 0–360 (0 = N, 90 = E)
 }
 
 /** A `"geo:lat,lon"` string as stored in the Google Timeline export. */

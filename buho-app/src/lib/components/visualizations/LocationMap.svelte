@@ -9,6 +9,7 @@
         type MapBounds,
     } from "$lib/visualizations/locationMapData";
     import { toMinimalStyle } from "$lib/visualizations/minimalMapStyle";
+    import { OTHER_COLOR } from "$lib/utils/dimensionColors";
     import { themeStore, type Theme } from "$lib/stores/themeStore.svelte";
 
     /** Tooltip content for a hovered point, built by the caller from metadata. */
@@ -16,6 +17,11 @@
         title?: string;
         lines?: string[];
         hint?: string;
+    }
+
+    interface ColorCategory {
+        value: string;
+        color: string;
     }
 
     interface Props {
@@ -37,6 +43,12 @@
         // dark style.
         minimalStyle?: boolean;
         formatTooltip?: (metadata: Record<string, unknown>) => TooltipInfo;
+        // Coloring by dimension, aligned with the constellation: `colorField` is a
+        // raw field carried by each point (e.g. "fSegmentType"), `colorCategories`
+        // maps its values to colors. When both are set, active points are painted
+        // by their dimension value instead of the uniform matched red.
+        colorField?: string | null;
+        colorCategories?: ColorCategory[];
     }
 
     let {
@@ -49,6 +61,8 @@
         onViewportChange,
         minimalStyle = false,
         formatTooltip,
+        colorField = null,
+        colorCategories = [],
     }: Props = $props();
 
     // Original basemap, used unless `minimalStyle` is enabled.
@@ -93,6 +107,38 @@
 
     // Chronological instant (ms) of a point: midnight epoch + fractional hour.
     const instant = (p: LocationBasePoint) => p.x + p.y * 3_600_000;
+
+    // --- Coloring by dimension -------------------------------------------
+    const colorActive = $derived(!!colorField && colorCategories.length > 0);
+    const OTHER_RGBA = hexToRgba(OTHER_COLOR);
+    // value → rgba tuple (matched-point alpha), built once per category change.
+    const colorRgbaMap = $derived.by(() => {
+        const m = new Map<string, [number, number, number, number]>();
+        for (const c of colorCategories) m.set(c.value, hexToRgba(c.color));
+        return m;
+    });
+
+    /** "#RRGGBB" → deck.gl rgba tuple at the matched-point alpha (200). */
+    function hexToRgba(hex: string): [number, number, number, number] {
+        const h = hex.replace("#", "");
+        return [
+            parseInt(h.slice(0, 2), 16),
+            parseInt(h.slice(2, 4), 16),
+            parseInt(h.slice(4, 6), 16),
+            200,
+        ];
+    }
+
+    /** Fill for an active point: its dimension color when coloring, else red. */
+    function activeColor(
+        p: LocationBasePoint,
+    ): [number, number, number, number] {
+        if (!colorActive || !colorField) return MATCHED_RGBA;
+        const v = (p as unknown as Record<string, unknown>)[colorField] as
+            | string
+            | undefined;
+        return colorRgbaMap.get(v ?? "") ?? OTHER_RGBA;
+    }
 
     let container: HTMLDivElement | null = null;
     let map: MaplibreMap | null = null;
@@ -234,12 +280,13 @@
                 },
             },
             getFillColor: (_: unknown, info: { index: number }) => {
-                const on = isActive(mapPoints[info.index]);
-                if (active) return on ? MATCHED_RGBA : TRANSPARENT;
+                const p = mapPoints[info.index];
+                const on = isActive(p);
+                if (active) return on ? activeColor(p) : TRANSPARENT;
                 return on ? TRANSPARENT : DIMMED_RGBA;
             },
-            // Refresh the color buffer (positions untouched) on highlight or
-            // brush-window change.
+            // Refresh the color buffer (positions untouched) on highlight,
+            // brush-window, or color-by-dimension change.
             updateTriggers: {
                 getFillColor: [
                     matchVersion,
@@ -247,6 +294,8 @@
                     timeWindow?.[1],
                     hourWindow?.[0],
                     hourWindow?.[1],
+                    colorField,
+                    colorCategories,
                 ],
             },
             radiusUnits: "pixels",
@@ -371,6 +420,8 @@
         void timeWindow;
         void hourWindow;
         void showPaths;
+        void colorField;
+        void colorCategories;
         if (ready) scheduleRefresh();
     });
 

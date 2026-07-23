@@ -8,7 +8,8 @@ const DAYS_SCHEMA = `
     start_place_km DOUBLE, start_fill VARCHAR,
     km_traveled DOUBLE, max_dist_from_start_km DOUBLE,
     distinct_places INTEGER, visit_count INTEGER,
-    moving_minutes DOUBLE, stationary_minutes DOUBLE, segment_count INTEGER
+    moving_minutes DOUBLE, stationary_minutes DOUBLE, segment_count INTEGER,
+    departure_hour DOUBLE, return_hour DOUBLE, amplitude_hours DOUBLE, discovered_new BOOLEAN
 `;
 
 /**

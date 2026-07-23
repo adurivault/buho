@@ -24,10 +24,6 @@
         trackEvent("switch-to-demo", { source: dataStore.source ?? "unknown" });
         dataStore.loadDemoData();
     }
-
-    function dismissError() {
-        dataStore.setError(null);
-    }
 </script>
 
 <div class="relative">
@@ -86,30 +82,4 @@
             </button>
         {/if}
     </div>
-
-    {#if dataStore.error}
-        <div
-            class="absolute top-full right-0 z-50 mt-2 w-80 rounded-lg border border-destructive/50 bg-background p-4 text-sm shadow-lg"
-            role="alert"
-        >
-            <div class="flex items-start justify-between gap-2">
-                <p class="font-bold text-destructive-foreground">Error:</p>
-                <button
-                    class="text-muted-foreground hover:text-foreground"
-                    aria-label="Dismiss error"
-                    onclick={dismissError}
-                >
-                    ✕
-                </button>
-            </div>
-            <p>{dataStore.error.message}</p>
-            {#if dataStore.error.link}
-                <a
-                    href={dataStore.error.link}
-                    class="underline hover:text-muted-foreground"
-                    >Get help with export</a
-                >
-            {/if}
-        </div>
-    {/if}
 </div>

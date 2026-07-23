@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/svelte';
 import '@testing-library/jest-dom/vitest';
 import { describe, expect, test, vi } from 'vitest';
-import SpotifyNav from './SpotifyNav.svelte';
+import SourceNav from './SourceNav.svelte';
 
 // Mock $app/state — pathname is on the Explore view
 vi.mock('$app/state', () => ({
@@ -16,14 +16,14 @@ vi.mock('$app/state', () => ({
 	}
 }));
 
-// Mock $app/paths
-vi.mock('$app/paths', () => ({
-	resolve: (path: string) => path
-}));
+const tabs = [
+	{ label: 'Explore', href: '/spotify/explore' },
+	{ label: 'Other', href: '/spotify/guide' }
+];
 
-describe('SpotifyNav', () => {
-	test('renders Explore and Other links with correct routes', () => {
-		render(SpotifyNav);
+describe('SourceNav', () => {
+	test('renders every tab with its route', () => {
+		render(SourceNav, { tabs, ariaLabel: 'Spotify views' });
 
 		const exploreLink = screen.getByRole('link', { name: 'Explore' });
 		const otherLink = screen.getByRole('link', { name: 'Other' });
@@ -33,7 +33,7 @@ describe('SpotifyNav', () => {
 	});
 
 	test('marks the current view as active', () => {
-		render(SpotifyNav);
+		render(SourceNav, { tabs, ariaLabel: 'Spotify views' });
 
 		const exploreLink = screen.getByRole('link', { name: 'Explore' });
 		const otherLink = screen.getByRole('link', { name: 'Other' });

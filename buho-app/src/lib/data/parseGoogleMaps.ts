@@ -5,7 +5,7 @@ import type {
     RawTimelinePathEntry,
     RawVisitEntry,
 } from '$lib/types/googleMaps';
-import { haversineMeters } from '$lib/data/geo/haversine';
+import { haversineMeters, bearingDegrees } from '$lib/data/geo/haversine';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
@@ -49,6 +49,11 @@ interface EntryRecord {
 
 function durationSeconds(startMs: number, endMs: number): number {
     return Math.max(0, (endMs - startMs) / 1000);
+}
+
+/** km/h from meters over seconds; null when the duration is non-positive. */
+function speedKmh(meters: number, seconds: number): number | null {
+    return seconds > 0 ? (meters / seconds) * 3.6 : null;
 }
 
 /**
@@ -122,17 +127,22 @@ export function parseGoogleMapsData(jsonData: RawGoogleMapsEntry[]): LocationSeg
                 semanticType: tc?.semanticType ?? null,
                 placeId: tc?.placeID ?? null,
                 distanceMeters: null,
+                speedKmh: null,
+                azimuthDegrees: null,
             });
         } else if ('activity' in entry) {
             const activity = (entry as RawActivityEntry).activity;
             const loc = parseGeo(activity?.start);
             if (!loc) continue;
+            const endLoc = parseGeo(activity?.end);
+            const routed = activity?.distanceMeters != null ? parseFloat(activity.distanceMeters) : NaN;
+            const dur = durationSeconds(startMs, endMs);
             const timestamp = wallClock(startMs, eff);
             segments.push({
                 timestamp,
                 date: timestamp.slice(0, 10),
                 endTimestamp: wallClock(endMs, eff),
-                durationSeconds: durationSeconds(startMs, endMs),
+                durationSeconds: dur,
                 lat: loc.lat,
                 lon: loc.lon,
                 segmentType: 'moving',
@@ -142,6 +152,11 @@ export function parseGoogleMapsData(jsonData: RawGoogleMapsEntry[]): LocationSeg
                 // Distance is derived from the raw GPS path only; the routed
                 // activity distance (semantic layer) is intentionally dropped.
                 distanceMeters: null,
+                // Speed still uses the routed distance (a real travelled length,
+                // unlike the straight-line start→end), so it isn't double-counted
+                // as distance. Azimuth is the straight start→end heading.
+                speedKmh: Number.isFinite(routed) ? speedKmh(routed, dur) : null,
+                azimuthDegrees: endLoc ? bearingDegrees(loc, endLoc) : null,
             });
         } else if ('timelinePath' in entry) {
             const path = (entry as RawTimelinePathEntry).timelinePath ?? [];
@@ -158,22 +173,28 @@ export function parseGoogleMapsData(jsonData: RawGoogleMapsEntry[]): LocationSeg
                 const next = points[i + 1];
                 const pointMs = startMs + cur.offsetMin * 60_000;
                 const nextMs = next ? startMs + next.offsetMin * 60_000 : endMs;
+                const legDur = durationSeconds(pointMs, nextMs);
+                // Distance is the raw path leg to the next point (the last point
+                // has none). The path is the single distance source, so there is
+                // nothing to double-count. Speed/azimuth derive from the same leg.
+                const legMeters = next ? haversineMeters(cur.geo!, next.geo!) : null;
                 const timestamp = wallClock(pointMs, eff);
                 segments.push({
                     timestamp,
                     date: timestamp.slice(0, 10),
                     endTimestamp: wallClock(Math.max(pointMs, nextMs), eff),
-                    durationSeconds: durationSeconds(pointMs, nextMs),
+                    durationSeconds: legDur,
                     lat: cur.geo!.lat,
                     lon: cur.geo!.lon,
                     segmentType: 'moving',
                     activityType: null,
                     semanticType: null,
                     placeId: null,
-                    // Distance is the raw path leg to the next point (the last
-                    // point has none). The path is the single distance source,
-                    // so there is nothing to double-count.
-                    distanceMeters: next ? haversineMeters(cur.geo!, next.geo!) : null,
+                    distanceMeters: legMeters,
+                    // The terminal point (no next point → end of the movement,
+                    // just before a stop/gap) is a standstill: speed 0, no heading.
+                    speedKmh: legMeters !== null ? speedKmh(legMeters, legDur) : 0,
+                    azimuthDegrees: next ? bearingDegrees(cur.geo!, next.geo!) : null,
                 });
             }
         }

@@ -62,14 +62,6 @@ describe('FileUpload', () => {
         expect(screen.getByText('Reading file test...')).toBeTruthy();
     });
 
-    it('should show error message and link', () => {
-        dataStore.setError({ message: 'Test error', link: '/test-link' });
-        render(FileUpload);
-        expect(screen.getByText(/Test error/i)).toBeTruthy();
-        const link = screen.getByRole('link', { name: /help/i }); // Assuming link text is "help" or similar, or just find by href
-        expect(link).toHaveAttribute('href', '/test-link');
-    });
-
     it('should show "Switch to Demo Data" button when in user mode', async () => {
         dataStore.loadUserData('spotify');
         render(FileUpload);

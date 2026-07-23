@@ -22,7 +22,10 @@ function mk(lat: unknown, lon: unknown): LocationBasePoint {
         department: 'Unknown',
         nearestCity: 'Unknown',
         arrondissement: 'Unknown',
-        presenceMins: 0
+        presenceMins: 0,
+        fNovelty: 'Seen',
+        fSpeed: 'Unknown',
+        fAzimuth: 'Unknown'
     };
 }
 

@@ -1,34 +1,28 @@
 <script lang="ts">
     import * as d3 from "d3";
-    import type { SpeedBucket } from "$lib/data/queries/googleMapsQueries";
 
+    // bins[i] = count in [i, i+1) km/h; the last index (maxKmh) is the '300+'
+    // overflow bin.
     let {
-        data,
+        bins,
+        maxKmh,
         medianKmh,
         width = 720,
-    }: { data: SpeedBucket[]; medianKmh: number; width?: number } = $props();
+    }: {
+        bins: number[];
+        maxKmh: number;
+        medianKmh: number;
+        width?: number;
+    } = $props();
 
     let svgEl: SVGSVGElement;
 
     const ACCENT = "#EA4335";
-    const height = 300;
-    const margin = { top: 16, right: 16, bottom: 44, left: 48 };
-
-    // Where the median line sits: bucket index + fraction across that bucket.
-    function medianX(x: d3.ScaleBand<string>): number | null {
-        const i = data.findIndex(
-            (b) => medianKmh >= b.lo && (b.hi === null || medianKmh < b.hi),
-        );
-        if (i < 0) return null;
-        const b = data[i];
-        const band = x(b.label);
-        if (band === undefined) return null;
-        const span = b.hi === null ? 1 : (medianKmh - b.lo) / (b.hi - b.lo);
-        return band + x.bandwidth() * Math.min(1, Math.max(0, span));
-    }
+    const height = 320;
+    const margin = { top: 16, right: 16, bottom: 44, left: 52 };
 
     $effect(() => {
-        const rows = data;
+        const data = bins;
         const innerW = width - margin.left - margin.right;
         const innerH = height - margin.top - margin.bottom;
 
@@ -43,19 +37,19 @@
             .append("g")
             .attr("transform", `translate(${margin.left},${margin.top})`);
 
+        // x is continuous over km/h; the overflow bin sits in [maxKmh, maxKmh+1).
         const x = d3
-            .scaleBand<string>()
-            .domain(rows.map((d) => d.label))
-            .range([0, innerW])
-            .padding(0.2);
+            .scaleLinear()
+            .domain([0, maxKmh + 1])
+            .range([0, innerW]);
 
         const y = d3
             .scaleLinear()
-            .domain([0, d3.max(rows, (d) => d.count) ?? 1])
+            .domain([0, d3.max(data) ?? 1])
             .nice()
             .range([innerH, 0]);
 
-        // Y grid + axis (leg counts).
+        // Y grid + axis (segment counts).
         g.append("g")
             .call(d3.axisLeft(y).ticks(4).tickSize(-innerW))
             .call((sel) => sel.select(".domain").remove())
@@ -73,40 +67,50 @@
                     .attr("font-size", 11),
             );
 
-        // Bars.
+        // 1-km/h bars.
+        const bw = x(1) - x(0);
         g.selectAll("rect.bar")
-            .data(rows)
+            .data(data)
             .join("rect")
             .attr("class", "bar")
-            .attr("x", (d) => x(d.label) ?? 0)
-            .attr("width", x.bandwidth())
-            .attr("rx", 3)
+            .attr("x", (_, i) => x(i))
+            .attr("width", Math.max(0.6, bw - 0.4))
+            .attr("y", (d) => y(d))
+            .attr("height", (d) => innerH - y(d))
             .attr("fill", ACCENT)
-            .attr("fill-opacity", 0.85)
-            .attr("y", innerH)
-            .attr("height", 0)
-            .transition()
-            .duration(600)
-            .delay((_, i) => i * 30)
-            .attr("y", (d) => y(d.count))
-            .attr("height", (d) => innerH - y(d.count));
+            // The overflow bin (last index) is dimmed to read as "and above".
+            .attr("fill-opacity", (_, i) => (i === maxKmh ? 0.45 : 0.85));
 
-        // X axis: speed buckets (km/h).
+        // X axis (km/h) with a labelled overflow tick.
+        const ticks = d3.range(0, maxKmh + 1, 50);
         g.append("g")
             .attr("transform", `translate(0,${innerH})`)
-            .call(d3.axisBottom(x).tickSize(0))
-            .call((sel) => sel.select(".domain").remove())
+            .call(
+                d3
+                    .axisBottom(x)
+                    .tickValues([...ticks, maxKmh + 0.5])
+                    .tickFormat((v) =>
+                        (v as number) > maxKmh ? `${maxKmh}+` : `${v}`,
+                    )
+                    .tickSizeOuter(0),
+            )
             .call((sel) =>
                 sel
                     .selectAll("text")
                     .attr("fill", "currentColor")
                     .attr("opacity", 0.7)
                     .attr("font-size", 11),
+            )
+            .call((sel) =>
+                sel
+                    .selectAll(".tick line, .domain")
+                    .attr("stroke", "currentColor")
+                    .attr("stroke-opacity", 0.25),
             );
 
         g.append("text")
             .attr("x", innerW)
-            .attr("y", innerH + 38)
+            .attr("y", innerH + 40)
             .attr("text-anchor", "end")
             .attr("fill", "currentColor")
             .attr("opacity", 0.5)
@@ -114,8 +118,8 @@
             .text("km/h");
 
         // Median marker.
-        const mx = medianX(x);
-        if (mx !== null) {
+        if (medianKmh > 0 && medianKmh <= maxKmh) {
+            const mx = x(medianKmh);
             g.append("line")
                 .attr("x1", mx)
                 .attr("x2", mx)
@@ -139,7 +143,7 @@
 <svg
     bind:this={svgEl}
     class="speed-chart"
-    aria-label="Distribution of derived travel speed"
+    aria-label="Distribution of derived travel speed, in 1 km/h bins"
 ></svg>
 
 <style>

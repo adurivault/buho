@@ -1,24 +1,20 @@
 <script lang="ts">
     import { dataStore } from "$lib/stores/dataStore.svelte";
     import {
-        getNightsPerPlace,
-        getNightCoverage,
-        getUncoveredNights,
         getMonthlyDurationByCountry,
         getMonthlyDurationByRegion,
         getSpeedDistribution,
         getDays,
-        type NightsPerPlace,
-        type NightCoverage,
-        type UncoveredNight,
+        getDayRaceSegments,
         type MonthlyDurationData,
         type SpeedDistribution,
         type DayRecord,
+        type DayRaceSegmentRows,
     } from "$lib/data/queries/googleMapsQueries";
-    import NightsPerPlaceChart from "$lib/components/visualizations/guide/NightsPerPlaceChart.svelte";
     import SpeedDistributionChart from "$lib/components/visualizations/guide/SpeedDistributionChart.svelte";
     import DistanceCalendar from "$lib/components/visualizations/guide/DistanceCalendar.svelte";
     import DailyDistanceScatter from "$lib/components/visualizations/guide/DailyDistanceScatter.svelte";
+    import DayRaceMap from "$lib/components/visualizations/guide/DayRaceMap.svelte";
     import BarChartRace, {
         type RaceRow,
     } from "$lib/components/visualizations/BarChartRace.svelte";
@@ -27,16 +23,11 @@
         dataStore.source === "google-maps" && !dataStore.isLoading,
     );
 
-    let nights = $state<NightsPerPlace[]>([]);
-    let coverage = $state<NightCoverage | null>(null);
-    let uncovered = $state<UncoveredNight[]>([]);
     let speed = $state<SpeedDistribution | null>(null);
     let days = $state<DayRecord[]>([]);
+    let raceSegments = $state<DayRaceSegmentRows | null>(null);
     let countryRows = $state<RaceRow[]>([]);
     let regionRows = $state<RaceRow[]>([]);
-
-    const pct = (n: number, total: number) =>
-        total > 0 ? Math.round((n / total) * 100) : 0;
 
     const toRaceRows = (rows: MonthlyDurationData[]): RaceRow[] =>
         rows.map((r) => ({ month: r.month, name: r.name, value: r.hours }));
@@ -48,13 +39,11 @@
         (async () => {
             let country: MonthlyDurationData[];
             let region: MonthlyDurationData[];
-            [nights, coverage, uncovered, speed, days, country, region] =
+            [speed, days, raceSegments, country, region] =
                 await Promise.all([
-                    getNightsPerPlace(25),
-                    getNightCoverage(),
-                    getUncoveredNights(),
                     getSpeedDistribution(),
                     getDays(),
+                    getDayRaceSegments(),
                     getMonthlyDurationByCountry(),
                     getMonthlyDurationByRegion(),
                 ]);
@@ -63,62 +52,14 @@
         })();
     });
 
-    // Aggregates over the uncovered nights, sorted most-frequent first.
-    function tally(
-        rows: UncoveredNight[],
-        keyOf: (r: UncoveredNight) => string,
-    ): { key: string; count: number }[] {
-        const m = new Map<string, number>();
-        for (const r of rows) {
-            const k = keyOf(r);
-            m.set(k, (m.get(k) ?? 0) + 1);
-        }
-        return [...m.entries()]
-            .map(([key, count]) => ({ key, count }))
-            .sort((a, b) => b.count - a.count);
-    }
-
-    const byCountry = $derived(tally(uncovered, (r) => r.country));
-    const byYear = $derived(tally(uncovered, (r) => r.year).sort((a, b) =>
-        a.key.localeCompare(b.key),
-    ));
-    const travelCount = $derived(
-        uncovered.filter((r) => r.kind === "travel").length,
-    );
-    // The country where most days start — the user's base, so "abroad" isn't
-    // hardcoded to any particular country.
-    const homeCountry = $derived.by(() => {
-        const counts = new Map<string, number>();
-        for (const d of days) {
-            if (d.startCountry === "Unknown") continue;
-            counts.set(d.startCountry, (counts.get(d.startCountry) ?? 0) + 1);
-        }
-        let best: string | null = null;
-        let bestN = 0;
-        for (const [c, n] of counts) {
-            if (n > bestN) { best = c; bestN = n; }
-        }
-        return best;
-    });
-    const abroadCount = $derived(
-        homeCountry === null
-            ? 0
-            : uncovered.filter(
-                  (r) => r.country !== "None" && r.country !== homeCountry,
-              ).length,
-    );
-
-    // Speed distribution summary shares (over the bucketed legs).
-    const speedTotal = $derived(
-        speed ? speed.buckets.reduce((s, b) => s + b.count, 0) : 0,
-    );
+    // Share of moving segments below a given km/h (sum of the 1-km/h bins).
     const shareBelow = (kmh: number) =>
-        speed && speedTotal > 0
+        speed && speed.totalLegs > 0
             ? Math.round(
-                  (speed.buckets
-                      .filter((b) => b.hi !== null && b.hi <= kmh)
-                      .reduce((s, b) => s + b.count, 0) /
-                      speedTotal) *
+                  (speed.bins
+                      .slice(0, kmh)
+                      .reduce((s, c) => s + c, 0) /
+                      speed.totalLegs) *
                       100,
               )
             : 0;
@@ -128,116 +69,29 @@
 
 <div class="guide">
     {#if !dbReady}
-        <p class="empty">Upload your Google Timeline export to see the guide.</p>
+        <p class="empty">Import your Google Timeline export to see the guide.</p>
     {:else}
-        <section class="viz">
-            <h2>Where you spent the most nights</h2>
-            <p class="sub">
-                Distinct nights (presence at 04:00) per place, top 25.
-            </p>
-            {#if coverage}
-                <p class="coverage">
-                    Of <b>{coverage.totalNights.toLocaleString()}</b> tracked
-                    nights, this heuristic captures
-                    <b
-                        >{coverage.stationaryNights.toLocaleString()} ({pct(
-                            coverage.stationaryNights,
-                            coverage.totalNights,
-                        )}%)</b
-                    >. Missed:
-                    {coverage.movingOnlyNights.toLocaleString()} overnight travel,
-                    {coverage.uncoveredNights.toLocaleString()} tracking gaps.
-                </p>
-            {/if}
-            {#if nights.length}
-                <NightsPerPlaceChart data={nights} />
-            {:else}
-                <p class="empty">No stationary nights found.</p>
-            {/if}
-        </section>
-
-        <section class="viz">
-            <h2>The nights without a place — where do they come from?</h2>
-            <p class="sub">
-                Every night with no stationary visit at 04:00, tagged with the
-                country of the nearest segment in time (±2 days).
-            </p>
-            {#if uncovered.length}
-                <p class="coverage">
-                    <b>{uncovered.length.toLocaleString()}</b> nights missed.
-                    <b>{travelCount.toLocaleString()}</b> were spent in transit
-                    (a trip covers 04:00){#if homeCountry};
-                        <b>{abroadCount.toLocaleString()}</b> fall outside
-                        {homeCountry} by the nearest segment — so
-                        {pct(abroadCount, uncovered.length)}% look abroad /
-                        other timezone{/if}.
-                </p>
-
-                <div class="cols">
-                    <div class="col">
-                        <h3>By country</h3>
-                        <ul class="bars">
-                            {#each byCountry.slice(0, 12) as row (row.key)}
-                                <li>
-                                    <span class="lbl">{row.key}</span>
-                                    <span
-                                        class="bar"
-                                        style:width="{pct(
-                                            row.count,
-                                            byCountry[0].count,
-                                        )}%"
-                                    ></span>
-                                    <span class="num">{row.count}</span>
-                                </li>
-                            {/each}
-                        </ul>
-                    </div>
-                    <div class="col">
-                        <h3>By year</h3>
-                        <ul class="bars">
-                            {#each byYear as row (row.key)}
-                                <li>
-                                    <span class="lbl">{row.key}</span>
-                                    <span
-                                        class="bar"
-                                        style:width="{pct(
-                                            row.count,
-                                            Math.max(
-                                                ...byYear.map((y) => y.count),
-                                            ),
-                                        )}%"
-                                    ></span>
-                                    <span class="num">{row.count}</span>
-                                </li>
-                            {/each}
-                        </ul>
-                    </div>
-                </div>
-            {:else}
-                <p class="empty">No uncovered nights — full coverage.</p>
-            {/if}
-        </section>
-
         <section class="viz">
             <h2>How fast you move</h2>
             <p class="sub">
-                Google Timeline stores no speed, so this is derived: each raw GPS
-                path leg's distance over its duration. Glitchy legs above 400
-                km/h are dropped as GPS noise.
+                Google Timeline stores no speed, so this is derived: each moving
+                segment's travelled distance over its duration, in 1 km/h bins.
+                Glitchy segments above 400 km/h are dropped as GPS noise.
             </p>
             {#if speed && speed.totalLegs}
                 <p class="coverage">
-                    Across <b>{speed.totalLegs.toLocaleString()}</b> path legs, your
-                    median speed is <b>{speed.medianKmh.toFixed(0)} km/h</b>.
-                    <b>{shareBelow(15)}%</b> of legs are under 15 km/h (walking /
-                    cycling / crawling traffic).
+                    Across <b>{speed.totalLegs.toLocaleString()}</b> moving segments,
+                    your median speed is <b>{speed.medianKmh.toFixed(0)} km/h</b>.
+                    <b>{shareBelow(15)}%</b> are under 15 km/h (walking / cycling /
+                    crawling traffic).
                 </p>
                 <SpeedDistributionChart
-                    data={speed.buckets}
+                    bins={speed.bins}
+                    maxKmh={speed.maxKmh}
                     medianKmh={speed.medianKmh}
                 />
             {:else}
-                <p class="empty">No moving path legs to derive speed from.</p>
+                <p class="empty">No moving segments to derive speed from.</p>
             {/if}
         </section>
 
@@ -257,12 +111,28 @@
         <section class="viz">
             <h2>How far, and how far out</h2>
             <p class="sub">
-                One dot per day: horizontally, the total distance travelled;
-                vertically, the farthest you got from where the day started;
-                coloured by that starting city.
+                One dot per day. Pick any two metrics for the axes — distance,
+                speed, departure / return time, novelty, places — and colour the
+                cloud by start city, weekday, or the calendar. Everything
+                rearranges with a transition.
             </p>
             {#if days.length}
-                <DailyDistanceScatter data={days} />
+                <div class="bleed">
+                    <DailyDistanceScatter data={days} />
+                </div>
+            {:else}
+                <p class="empty">No per-day mobility data available.</p>
+            {/if}
+        </section>
+
+        <section class="viz">
+            <h2>Every day at once</h2>
+            <p class="sub">
+                One dot per day, all racing the same 24-hour clock: home in the
+                morning, fanning out across the city, converging back by night.
+            </p>
+            {#if days.length && raceSegments?.numRows}
+                <DayRaceMap {days} segments={raceSegments} />
             {:else}
                 <p class="empty">No per-day mobility data available.</p>
             {/if}
@@ -288,12 +158,21 @@
 
 <style>
     .guide {
-        max-width: 860px;
+        width: 100%;
         margin: 0 auto;
-        padding: 2rem 1.5rem 6rem;
+        padding: 2rem 2rem 6rem;
         display: flex;
         flex-direction: column;
         gap: 4rem;
+    }
+
+    /* Charts span the full page width; the narrative text stays at a readable
+       measure so lines don't stretch across the whole viewport. */
+    .viz > h2,
+    .viz > .sub,
+    .viz > .coverage,
+    .guide > .empty {
+        max-width: 860px;
     }
 
     .viz h2 {
@@ -328,56 +207,13 @@
         font-size: 0.9rem;
     }
 
-    .cols {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 2rem;
-    }
-    @media (max-width: 640px) {
-        .cols {
-            grid-template-columns: 1fr;
-        }
-    }
-
-    .col h3 {
-        font-size: 0.8rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-        color: hsl(var(--muted-foreground));
-        margin: 0 0 0.75rem;
-    }
-
-    .bars {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 0.3rem;
-    }
-    .bars li {
-        display: grid;
-        grid-template-columns: 6.5rem 1fr auto;
-        align-items: center;
-        gap: 0.5rem;
-        font-size: 0.82rem;
-    }
-    .lbl {
-        color: hsl(var(--foreground));
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    .bar {
-        height: 0.7rem;
-        min-width: 2px;
-        border-radius: 2px;
-        background: #ea4335;
-        opacity: 0.85;
-    }
-    .num {
-        color: hsl(var(--muted-foreground));
-        font-variant-numeric: tabular-nums;
+    /* Break a chart out of the 860px reading column to (nearly) the viewport. */
+    .bleed {
+        width: min(100vw, 1500px);
+        position: relative;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 0 1.5rem;
+        box-sizing: border-box;
     }
 </style>

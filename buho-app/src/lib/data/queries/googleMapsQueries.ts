@@ -1,5 +1,40 @@
-import { query } from '../db';
+import { query, queryColumnar } from '../db';
 import type { ConnectablePoint, ConstellationTimeDomain } from './behaviorQueries';
+
+// Coarse km/h buckets for the explore Speed dimension pie. Values above the
+// glitch threshold and NULLs (stationary / unresolved) collapse to 'Unknown'.
+// Ordered slow→fast; the pie itself sorts by magnitude.
+export const SPEED_BUCKETS = ['0', '1–5', '5–15', '15–30', '30–50', '50–90', '90–130', '130+'];
+const SPEED_BUCKET_SQL = `
+    CASE
+        WHEN speed_kmh IS NULL OR speed_kmh > 400 THEN 'Unknown'
+        WHEN speed_kmh < 1 THEN '0'
+        WHEN speed_kmh < 5 THEN '1–5'
+        WHEN speed_kmh < 15 THEN '5–15'
+        WHEN speed_kmh < 30 THEN '15–30'
+        WHEN speed_kmh < 50 THEN '30–50'
+        WHEN speed_kmh < 90 THEN '50–90'
+        WHEN speed_kmh < 130 THEN '90–130'
+        ELSE '130+'
+    END
+`;
+
+// 8-point compass heading for the explore Direction dimension pie. NULL azimuth
+// (stationary / single-point legs) collapses to 'Unknown'.
+export const AZIMUTH_BUCKETS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+const AZIMUTH_BUCKET_SQL = `
+    CASE
+        WHEN azimuth_degrees IS NULL THEN 'Unknown'
+        WHEN azimuth_degrees < 22.5 OR azimuth_degrees >= 337.5 THEN 'N'
+        WHEN azimuth_degrees < 67.5 THEN 'NE'
+        WHEN azimuth_degrees < 112.5 THEN 'E'
+        WHEN azimuth_degrees < 157.5 THEN 'SE'
+        WHEN azimuth_degrees < 202.5 THEN 'S'
+        WHEN azimuth_degrees < 247.5 THEN 'SW'
+        WHEN azimuth_degrees < 292.5 THEN 'W'
+        ELSE 'NW'
+    END
+`;
 
 /**
  * A constellation point for the Google Maps explorer, plus the normalized
@@ -26,6 +61,9 @@ export interface LocationBasePoint extends ConnectablePoint {
     nearestCity: string;
     arrondissement: string; // Paris/Lyon/Marseille only; 'Unknown' otherwise
     presenceMins: number; // gap until the next point in time (capped at 24h)
+    fNovelty: string; // 'New' the first time its ~110m cell is ever seen, else 'Seen'
+    fSpeed: string; // derived-speed bucket (moving only), else 'Unknown'
+    fAzimuth: string; // 8-point compass heading (moving only), else 'Unknown'
 }
 
 /**
@@ -52,6 +90,10 @@ export async function getGoogleMapsExplorerBasePoints(): Promise<LocationBasePoi
             COALESCE(department, 'Unknown') as department,
             COALESCE(nearest_city, 'Unknown') as nearestCity,
             COALESCE(arrondissement, 'Unknown') as arrondissement,
+            CASE WHEN timestamp = MIN(timestamp) OVER (PARTITION BY ROUND(lat, 3), ROUND(lon, 3))
+                 THEN 'New' ELSE 'Seen' END as fNovelty,
+            ${SPEED_BUCKET_SQL} as fSpeed,
+            ${AZIMUTH_BUCKET_SQL} as fAzimuth,
             lat,
             lon
         FROM google_maps_segments
@@ -93,6 +135,9 @@ export async function getGoogleMapsExplorerBasePoints(): Promise<LocationBasePoi
             nearestCity: row.nearestCity || 'Unknown',
             arrondissement: row.arrondissement || 'Unknown',
             presenceMins: 0,
+            fNovelty: row.fNovelty === 'New' ? 'New' : 'Seen',
+            fSpeed: row.fSpeed || 'Unknown',
+            fAzimuth: row.fAzimuth || 'Unknown',
         }));
         annotatePresenceMinutes(points);
         return points;
@@ -126,207 +171,6 @@ export function annotatePresenceMinutes(points: LocationBasePoint[]): void {
         }
         const gapMin = (instantMs(points[order[k + 1]]) - instantMs(p)) / 60_000;
         p.presenceMins = Math.min(Math.max(0, gapMin), GAP_CAP_MIN);
-    }
-}
-
-/** One place ranked by how many distinct nights were spent there. */
-export interface NightsPerPlace {
-    key: string;        // place_id, or a rounded-coord fallback when place_id is null
-    city: string;
-    department: string;
-    semanticType: string;
-    lat: number;
-    lon: number;
-    nights: number;
-}
-
-/**
- * Rank places by the number of distinct nights spent there. A "night" for a
- * stationary visit = the visit's interval covers the 04:00 local mark of a
- * given calendar night; multi-day stays count each night they cover. Places
- * are keyed by place_id (fallback: rounded lat/lon when place_id is missing),
- * labelled with the most common nearest city / department.
- */
-export async function getNightsPerPlace(limit = 25): Promise<NightsPerPlace[]> {
-    const sql = `
-        WITH nights AS (
-            SELECT
-                COALESCE(NULLIF(place_id, ''),
-                         'geo:' || ROUND(lat, 3) || ',' || ROUND(lon, 3)) AS key,
-                nearest_city, department, semantic_type, lat, lon,
-                CAST(anchor AS DATE) AS night
-            FROM google_maps_segments s,
-                 generate_series(
-                     date_trunc('day', s.timestamp) + INTERVAL 4 HOUR,
-                     date_trunc('day', s.end_timestamp) + INTERVAL 4 HOUR,
-                     INTERVAL 1 DAY
-                 ) AS t(anchor)
-            WHERE s.segment_type = 'stationary'
-              AND anchor BETWEEN s.timestamp AND s.end_timestamp
-        )
-        SELECT
-            key,
-            COALESCE(NULLIF(TRIM(mode(nearest_city)), ''), 'Unknown') AS city,
-            COALESCE(NULLIF(TRIM(mode(department)), ''), 'Unknown') AS department,
-            COALESCE(NULLIF(TRIM(mode(semantic_type)), ''), 'Unknown') AS semanticType,
-            AVG(lat) AS lat,
-            AVG(lon) AS lon,
-            COUNT(DISTINCT night) AS nights
-        FROM nights
-        GROUP BY key
-        ORDER BY nights DESC
-        LIMIT ${Math.max(1, Math.floor(limit))}
-    `;
-
-    try {
-        const result = await query<any>(sql);
-        return result.map((row) => ({
-            key: String(row.key),
-            city: row.city || 'Unknown',
-            department: row.department || 'Unknown',
-            semanticType: row.semanticType || 'Unknown',
-            lat: Number(row.lat),
-            lon: Number(row.lon),
-            nights: Number(row.nights) || 0,
-        }));
-    } catch (error) {
-        console.error('Error fetching nights per place:', error);
-        return [];
-    }
-}
-
-/** Coverage breakdown of the "presence at 04:00" night heuristic. */
-export interface NightCoverage {
-    totalNights: number;      // calendar nights across the tracked span
-    stationaryNights: number; // a stationary visit covers 04:00 (counted by the ranking)
-    movingOnlyNights: number; // only a moving segment covers 04:00 (overnight travel)
-    uncoveredNights: number;  // no segment at all covers 04:00 (tracking gap)
-}
-
-/**
- * How many nights the "presence at 04:00" heuristic actually captures. Walks
- * every calendar night between the first and last tracked day and checks, at
- * that night's 04:00 local mark, whether a stationary / moving / no segment
- * covers it — so the caller can tell how many nights the ranking misses.
- */
-export async function getNightCoverage(): Promise<NightCoverage | null> {
-    const sql = `
-        WITH bounds AS (
-            SELECT date_trunc('day', MIN(timestamp)) AS d0,
-                   date_trunc('day', MAX(end_timestamp)) AS d1
-            FROM google_maps_segments
-            WHERE timestamp IS NOT NULL
-        ),
-        anchors AS (
-            SELECT gs + INTERVAL 4 HOUR AS anchor
-            FROM bounds, generate_series(d0, d1, INTERVAL 1 DAY) AS t(gs)
-        ),
-        classified AS (
-            SELECT a.anchor,
-                MAX(CASE WHEN s.segment_type = 'stationary' THEN 1 ELSE 0 END) AS has_stationary,
-                MAX(CASE WHEN s.segment_type = 'moving' THEN 1 ELSE 0 END) AS has_moving
-            FROM anchors a
-            LEFT JOIN google_maps_segments s
-                ON a.anchor BETWEEN s.timestamp AND s.end_timestamp
-            GROUP BY a.anchor
-        )
-        SELECT
-            COUNT(*) AS totalNights,
-            CAST(SUM(has_stationary) AS BIGINT) AS stationaryNights,
-            CAST(SUM(CASE WHEN has_stationary = 0 AND has_moving = 1 THEN 1 ELSE 0 END) AS BIGINT) AS movingOnlyNights,
-            CAST(SUM(CASE WHEN has_stationary = 0 AND has_moving = 0 THEN 1 ELSE 0 END) AS BIGINT) AS uncoveredNights
-        FROM classified
-    `;
-
-    try {
-        const result = await query<any>(sql);
-        if (!result.length) return null;
-        const r = result[0];
-        return {
-            totalNights: Number(r.totalNights) || 0,
-            stationaryNights: Number(r.stationaryNights) || 0,
-            movingOnlyNights: Number(r.movingOnlyNights) || 0,
-            uncoveredNights: Number(r.uncoveredNights) || 0,
-        };
-    } catch (error) {
-        console.error('Error fetching night coverage:', error);
-        return null;
-    }
-}
-
-/** One night the "presence at 04:00" heuristic fails to attribute to a place. */
-export interface UncoveredNight {
-    night: string;   // 'YYYY-MM-DD' (the 04:00 mark's day)
-    year: string;
-    country: string; // country of the nearest-in-time segment ('None' if none within ±2 days)
-    region: string;
-    kind: 'travel' | 'gap'; // travel = a moving segment covers 04:00; gap = nothing does
-    gapHours: number | null; // hours to the nearest segment (null when none nearby)
-}
-
-/**
- * List every night with no stationary visit covering its 04:00 local mark, and
- * for each attach the country/region of the nearest segment in time (±2 days)
- * so the caller can see WHERE and WHEN the ranking loses nights. `kind` tells a
- * night spent in transit (a moving segment covers 04:00) apart from a plain
- * tracking gap. Lets us test whether misses cluster abroad / across timezones.
- */
-export async function getUncoveredNights(): Promise<UncoveredNight[]> {
-    const sql = `
-        WITH bounds AS (
-            SELECT date_trunc('day', MIN(timestamp)) AS d0,
-                   date_trunc('day', MAX(end_timestamp)) AS d1
-            FROM google_maps_segments
-            WHERE timestamp IS NOT NULL
-        ),
-        anchors AS (
-            SELECT gs + INTERVAL 4 HOUR AS anchor
-            FROM bounds, generate_series(d0, d1, INTERVAL 1 DAY) AS t(gs)
-        ),
-        cls AS (
-            SELECT a.anchor,
-                MAX(CASE WHEN s.segment_type = 'stationary' THEN 1 ELSE 0 END) AS has_stat,
-                MAX(CASE WHEN s.segment_type = 'moving' THEN 1 ELSE 0 END) AS has_mov
-            FROM anchors a
-            LEFT JOIN google_maps_segments s
-                ON a.anchor BETWEEN s.timestamp AND s.end_timestamp
-            GROUP BY a.anchor
-        ),
-        uncovered AS (SELECT anchor, has_mov FROM cls WHERE has_stat = 0),
-        near AS (
-            SELECT u.anchor, u.has_mov, s.country, s.region,
-                ROW_NUMBER() OVER (PARTITION BY u.anchor
-                    ORDER BY abs(epoch(s.timestamp) - epoch(u.anchor))) AS rn,
-                abs(epoch(s.timestamp) - epoch(u.anchor)) / 3600.0 AS gap_h
-            FROM uncovered u
-            LEFT JOIN google_maps_segments s
-                ON s.timestamp BETWEEN u.anchor - INTERVAL 2 DAY AND u.anchor + INTERVAL 2 DAY
-        )
-        SELECT
-            CAST(CAST(anchor AS DATE) AS VARCHAR) AS night,
-            CAST(YEAR(anchor) AS VARCHAR) AS year,
-            COALESCE(country, 'None') AS country,
-            COALESCE(region, 'None') AS region,
-            CASE WHEN has_mov = 1 THEN 'travel' ELSE 'gap' END AS kind,
-            ROUND(gap_h, 1) AS gapHours
-        FROM near
-        WHERE rn = 1
-        ORDER BY night
-    `;
-
-    try {
-        const result = await query<any>(sql);
-        return result.map((row) => ({
-            night: String(row.night),
-            year: String(row.year),
-            country: row.country || 'None',
-            region: row.region || 'None',
-            kind: row.kind === 'travel' ? 'travel' : 'gap',
-            gapHours: row.gapHours == null ? null : Number(row.gapHours),
-        }));
-    } catch (error) {
-        console.error('Error fetching uncovered nights:', error);
-        return [];
     }
 }
 
@@ -381,87 +225,76 @@ export function getMonthlyDurationByRegion(): Promise<MonthlyDurationData[]> {
     return getMonthlyDurationByDimension('region');
 }
 
-/** One bar of the speed histogram: legs whose derived speed falls in [lo, hi). */
-export interface SpeedBucket {
-    label: string;     // '5–10', '120+', …
-    lo: number;        // lower bound (km/h, inclusive)
-    hi: number | null; // upper bound (km/h, exclusive); null = open top bucket
-    count: number;     // number of path legs in the bucket
-}
-
-/** Derived-speed distribution over the raw GPS path legs. */
+/** Fine-grained derived-speed histogram over the moving segments. */
 export interface SpeedDistribution {
-    buckets: SpeedBucket[];
+    // bins[i] = count of moving segments whose speed falls in [i, i+1) km/h, for
+    // i in 0..SPEED_MAX_KMH-1; the final index (SPEED_MAX_KMH) is the '300+'
+    // overflow (up to the glitch threshold).
+    bins: number[];
+    maxKmh: number;   // overflow threshold (SPEED_MAX_KMH); bins.length === maxKmh + 1
     medianKmh: number;
-    totalLegs: number;
+    totalLegs: number; // total segments counted (all bins)
 }
 
-// Histogram edges (km/h). The last edge opens an unbounded top bucket ('120+').
-// Fine-grained at the low end (walking/cycling), coarser once on the road.
-const SPEED_EDGES = [0, 2, 5, 10, 15, 25, 40, 60, 90, 120];
-
-// Google Timeline has no native speed field, so we derive it from the raw path
-// legs (haversine distance to the next point / its duration). Legs faster than
-// this are GPS glitches — consumer travel tops out well below it and the tail
-// reaches into the thousands of km/h — so we drop them as noise.
+// Google Timeline has no native speed field, so we derive it from the segment's
+// travelled distance over its duration (see parseGoogleMaps). Values above this
+// are GPS glitches — the tail reaches into the thousands of km/h — so we drop
+// them as noise.
 const SPEED_GLITCH_KMH = 400;
 
-// Derived km/h of every moving leg, glitches excluded (shared by both queries).
-const SPEED_LEGS_CTE = `
-    legs AS (
-        SELECT distance_meters / duration_seconds * 3.6 AS kmh
+// Top of the 1-km/h histogram; everything from here up (to the glitch cap) folds
+// into the '300+' overflow bin.
+const SPEED_MAX_KMH = 300;
+
+// Every moving segment's derived speed, glitches excluded (shared by the queries).
+const SPEED_MOVING_CTE = `
+    moving AS (
+        SELECT speed_kmh AS kmh
         FROM google_maps_segments
-        WHERE segment_type = 'moving'
-          AND distance_meters IS NOT NULL
-          AND duration_seconds > 0
-          AND distance_meters / duration_seconds * 3.6 <= ${SPEED_GLITCH_KMH}
+        WHERE speed_kmh IS NOT NULL
+          AND speed_kmh >= 0
+          AND speed_kmh <= ${SPEED_GLITCH_KMH}
     )
 `;
 
 /**
- * Distribution of derived travel speed across the raw GPS path legs. Speed for a
- * `timelinePath` leg = its haversine distance (`distance_meters`) over its
- * duration; visits and routed activities carry no leg distance and are excluded.
- * Legs are bucketed by km/h into {@link SPEED_EDGES}; clearly non-physical legs
- * (> {@link SPEED_GLITCH_KMH}) are dropped as GPS noise.
+ * Fine (1-km/h) distribution of derived travel speed across the moving segments.
+ * Speed is `speed_kmh` (path-leg distance / duration, or the routed distance /
+ * duration for a lone activity — see parseGoogleMaps); stationary segments carry
+ * none and are excluded. Speeds ≥ {@link SPEED_MAX_KMH} fold into a single
+ * overflow bin; clearly non-physical ones (> {@link SPEED_GLITCH_KMH}) are
+ * dropped as GPS noise.
  */
 export async function getSpeedDistribution(): Promise<SpeedDistribution | null> {
-    const bucketCase = SPEED_EDGES.slice(1)
-        .map((hi, i) => `WHEN kmh < ${hi} THEN ${i}`)
-        .join(' ');
     const sql = `
-        WITH ${SPEED_LEGS_CTE}
+        WITH ${SPEED_MOVING_CTE}
         SELECT
-            CASE ${bucketCase} ELSE ${SPEED_EDGES.length - 1} END AS bucket,
+            CAST(LEAST(FLOOR(kmh), ${SPEED_MAX_KMH}) AS INTEGER) AS bin,
             CAST(COUNT(*) AS BIGINT) AS count
-        FROM legs
-        GROUP BY bucket
-        ORDER BY bucket
+        FROM moving
+        GROUP BY bin
+        ORDER BY bin
     `;
     const medianSql = `
-        WITH ${SPEED_LEGS_CTE}
-        SELECT median(kmh) AS medianKmh FROM legs
+        WITH ${SPEED_MOVING_CTE}
+        SELECT median(kmh) AS medianKmh, CAST(COUNT(*) AS BIGINT) AS total FROM moving
     `;
 
     try {
         const [rows, stats] = await Promise.all([
-            query<{ bucket: number; count: number }>(sql),
-            query<{ medianKmh: number }>(medianSql),
+            query<{ bin: number; count: number }>(sql),
+            query<{ medianKmh: number; total: number }>(medianSql),
         ]);
-        const counts = new Map(rows.map((r) => [Number(r.bucket), Number(r.count)]));
-        const buckets: SpeedBucket[] = SPEED_EDGES.map((lo, i) => {
-            const hi = i < SPEED_EDGES.length - 1 ? SPEED_EDGES[i + 1] : null;
-            return {
-                label: hi === null ? `${lo}+` : `${lo}–${hi}`,
-                lo,
-                hi,
-                count: counts.get(i) ?? 0,
-            };
-        });
+        const bins = new Array<number>(SPEED_MAX_KMH + 1).fill(0);
+        for (const r of rows) {
+            const i = Number(r.bin);
+            if (i >= 0 && i <= SPEED_MAX_KMH) bins[i] = Number(r.count);
+        }
         return {
-            buckets,
+            bins,
+            maxKmh: SPEED_MAX_KMH,
             medianKmh: Number(stats[0]?.medianKmh) || 0,
-            totalLegs: buckets.reduce((sum, b) => sum + b.count, 0),
+            totalLegs: Number(stats[0]?.total) || 0,
         };
     } catch (error) {
         console.error('Error fetching speed distribution:', error);
@@ -487,6 +320,10 @@ export interface DayRecord {
     movingMinutes: number;
     stationaryMinutes: number;
     segmentCount: number;
+    departureHour: number | null;
+    returnHour: number | null;
+    amplitudeHours: number | null;
+    discoveredNew: boolean;
 }
 
 /**
@@ -511,7 +348,11 @@ export async function getDays(): Promise<DayRecord[]> {
             visit_count AS visitCount,
             moving_minutes AS movingMinutes,
             stationary_minutes AS stationaryMinutes,
-            segment_count AS segmentCount
+            segment_count AS segmentCount,
+            departure_hour AS departureHour,
+            return_hour AS returnHour,
+            amplitude_hours AS amplitudeHours,
+            discovered_new AS discoveredNew
         FROM google_maps_days
         ORDER BY day ASC
     `;
@@ -535,10 +376,66 @@ export async function getDays(): Promise<DayRecord[]> {
             movingMinutes: Number(row.movingMinutes) || 0,
             stationaryMinutes: Number(row.stationaryMinutes) || 0,
             segmentCount: Number(row.segmentCount) || 0,
+            departureHour: row.departureHour == null ? null : Number(row.departureHour),
+            returnHour: row.returnHour == null ? null : Number(row.returnHour),
+            amplitudeHours: row.amplitudeHours == null ? null : Number(row.amplitudeHours),
+            discoveredNew: Boolean(row.discoveredNew),
         }));
     } catch (error) {
         console.error('Error fetching days dataset:', error);
         return [];
+    }
+}
+
+/**
+ * All timestamped segments as struct-of-arrays typed columns, for the "day race"
+ * map (one animated dot per logical day). Mirrors the columnar load `buildDays`
+ * uses; the caller buckets these into per-day tracks in JS. BIGINT columns arrive
+ * as BigInt — coerce with Number() at the use site.
+ */
+export interface DayRaceSegmentRows {
+    numRows: number;
+    startMs: Float64Array | number[];
+    endMs: Float64Array | number[];
+    lat: Float64Array | number[];
+    lon: Float64Array | number[];
+    isStationary: Uint8Array | number[];
+}
+
+const EMPTY_DAY_RACE_SEGMENTS: DayRaceSegmentRows = {
+    numRows: 0,
+    startMs: [],
+    endMs: [],
+    lat: [],
+    lon: [],
+    isStationary: [],
+};
+
+export async function getDayRaceSegments(): Promise<DayRaceSegmentRows> {
+    const sql = `
+        SELECT
+            CAST(epoch(timestamp) * 1000 AS BIGINT) AS startMs,
+            CAST(epoch(end_timestamp) * 1000 AS BIGINT) AS endMs,
+            lat, lon,
+            CAST(segment_type = 'stationary' AS INTEGER) AS isStationary
+        FROM google_maps_segments
+        WHERE timestamp IS NOT NULL AND lat IS NOT NULL AND lon IS NOT NULL
+        ORDER BY startMs ASC
+    `;
+
+    try {
+        const { numRows, columns } = await queryColumnar(sql);
+        return {
+            numRows,
+            startMs: columns.startMs as Float64Array | number[],
+            endMs: columns.endMs as Float64Array | number[],
+            lat: columns.lat as Float64Array | number[],
+            lon: columns.lon as Float64Array | number[],
+            isStationary: columns.isStationary as Uint8Array | number[],
+        };
+    } catch (error) {
+        console.error('Error fetching day-race segments:', error);
+        return EMPTY_DAY_RACE_SEGMENTS;
     }
 }
 

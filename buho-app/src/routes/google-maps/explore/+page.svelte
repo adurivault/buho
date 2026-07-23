@@ -127,6 +127,9 @@
         { key: "segment_type", field: "fSegmentType" },
         { key: "activity_type", field: "fActivityType" },
         { key: "semantic_type", field: "fSemanticType" },
+        { key: "speed", field: "fSpeed" },
+        { key: "azimuth", field: "fAzimuth" },
+        { key: "novelty", field: "fNovelty" },
         { key: "dayofweek", field: "dow" },
         { key: "year", field: "year" },
         // Geo dims drive the sunburst's cross-filtering (constellation + pies).
@@ -176,6 +179,9 @@
         { key: "segment_type", field: "fSegmentType", label: "Segment type" },
         { key: "activity_type", field: "fActivityType", label: "Activity" },
         { key: "semantic_type", field: "fSemanticType", label: "Place type" },
+        { key: "speed", field: "fSpeed", label: "Speed (km/h)" },
+        { key: "azimuth", field: "fAzimuth", label: "Direction" },
+        { key: "novelty", field: "fNovelty", label: "Novelty" },
         { key: "year", field: "year", label: "Year" },
         {
             key: "dayofweek",
@@ -636,7 +642,7 @@
 <div class="explorer-page">
     {#if !dbReady}
         <div class="empty-state">
-            <p>Upload your Google Maps Timeline export to explore it here.</p>
+            <p>Import your Google Maps Timeline export to explore it here.</p>
             <p class="empty-hint">
                 Use the upload control in the header above.
             </p>
@@ -782,6 +788,8 @@
                                 hourWindow={viewHourDomain}
                                 onViewportChange={(b) => (viewGeoBounds = b)}
                                 formatTooltip={constellationTooltip}
+                                colorField={colorByDim?.field ?? null}
+                                {colorCategories}
                             />
                         {:else}
                             <SunburstExplorer
