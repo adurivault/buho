@@ -1,4 +1,5 @@
 import type { SpotifyPlay } from '$lib/types/spotify';
+import type { LocationSegment } from '$lib/types/googleMaps';
 import * as duckdb from '@duckdb/duckdb-wasm';
 import duckdb_wasm from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url';
 import mvp_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url';
@@ -108,10 +109,65 @@ export async function query<T>(sql: string, params?: any[]): Promise<T[]> {
     return transformKeys(rows, toCamelCase) as T[];
 }
 
+/**
+ * Columnar variant of `query`: returns each result column as an array (Arrow
+ * vector → typed/JS array) instead of building one JS object per row. For large
+ * result sets (e.g. all location segments) this skips the per-row toJSON +
+ * snake→camel churn, at the cost of a struct-of-arrays shape. Column names are
+ * the SQL output names verbatim (no camelCase transform), so alias them as you
+ * want them. BIGINT columns arrive as BigInt64Array — coerce with Number().
+ */
+export async function queryColumnar(
+    sql: string,
+): Promise<{ numRows: number; columns: Record<string, ArrayLike<unknown>> }> {
+    const connection = await getConnection();
+    const result = await connection.query(sql);
+    const columns: Record<string, ArrayLike<unknown>> = {};
+    for (const field of result.schema.fields) {
+        const child = result.getChild(field.name);
+        columns[field.name] = child ? child.toArray() : [];
+    }
+    return { numRows: result.numRows, columns };
+}
+
 export async function createTable(name: string, schema: string): Promise<void> {
     validateIdentifier(name, 'table');
     const connection = await getConnection();
     await connection.query(`CREATE TABLE IF NOT EXISTS ${name} (${schema})`);
+}
+
+// Load the `spatial` extension (ST_Contains, ST_Point, …). Lazy and idempotent:
+// only the Google Maps path needs GIS, so Spotify-only users never pay the
+// one-time extension fetch from extensions.duckdb.org.
+let spatialLoaded = false;
+export async function loadSpatial(): Promise<void> {
+    if (spatialLoaded) return;
+    const connection = await getConnection();
+    await connection.query('INSTALL spatial');
+    await connection.query('LOAD spatial');
+    spatialLoaded = true;
+}
+
+/**
+ * Register `rows` as a temporary JSON file and run a single statement that reads
+ * from it. `buildSql` receives a `read_json_auto('…')` source expression. Use
+ * this when the insert needs SQL-side transformation that the plain insertData
+ * path can't express — e.g. building GEOMETRY via ST_GeomFromGeoJSON / ST_Point.
+ */
+export async function withJsonRows(
+    rows: unknown[],
+    buildSql: (source: string) => string,
+): Promise<void> {
+    if (!db || !conn) throw new Error('DB not initialized');
+    if (rows.length === 0) return;
+
+    const tempFile = `import_geo_${Date.now()}_${Math.random().toString(36).slice(2)}.json`;
+    await db.registerFileText(tempFile, JSON.stringify(rows));
+    try {
+        await conn.query(buildSql(`read_json_auto('${tempFile}')`));
+    } finally {
+        await db.registerFileText(tempFile, '');
+    }
 }
 
 export async function insertData<T>(table: string, data: T[]): Promise<void> {
@@ -222,5 +278,91 @@ export async function insertSpotifyPlays(plays: SpotifyPlay[]): Promise<void> {
     await conn.query(`INSERT INTO ${TABLE_NAME} SELECT DISTINCT * FROM read_json_auto('${tempFile}')`);
 
     // Clear temp file content
+    await db.registerFileText(tempFile, '');
+}
+
+/**
+ * Insert Google Maps location segments into the google_maps_segments table.
+ * Mirrors insertSpotifyPlays. The column named `timestamp` matches
+ * spotify_plays so the generic explorer filter helpers work unchanged.
+ *
+ * Unlike Spotify, the timestamps are already local wall-clock strings produced
+ * by parseGoogleMapsData (the per-event offset is resolved there), so they are
+ * inserted as-is rather than reformatted from a Date.
+ *
+ * @throws {Error} If database is not initialized.
+ */
+export async function insertLocationSegments(segments: LocationSegment[]): Promise<void> {
+    const TABLE_NAME = 'google_maps_segments';
+
+    // Geo columns (country…city_km) are declared up front so the explorer's base
+    // points query can always read them; attributeZones fills them in afterwards,
+    // leaving them NULL if geo attribution is skipped or fails.
+    const SCHEMA = `
+        timestamp TIMESTAMP,
+        date DATE,
+        end_timestamp TIMESTAMP,
+        duration_seconds DOUBLE,
+        lat DOUBLE,
+        lon DOUBLE,
+        segment_type VARCHAR,
+        activity_type VARCHAR,
+        semantic_type VARCHAR,
+        place_id VARCHAR,
+        distance_meters DOUBLE,
+        speed_kmh DOUBLE,
+        azimuth_degrees DOUBLE,
+        country VARCHAR,
+        region VARCHAR,
+        department VARCHAR,
+        nearest_city VARCHAR,
+        city_km DOUBLE,
+        arrondissement VARCHAR,
+        seg_id INTEGER
+    `;
+
+    await createTable(TABLE_NAME, SCHEMA);
+
+    validateIdentifier(TABLE_NAME, 'table');
+    if (!db || !conn) throw new Error('DB not initialized');
+    if (segments.length === 0) return;
+
+    // Keys ordered to match the schema columns: read_json_auto + SELECT * map
+    // positionally, so order matters.
+    const snakeData = segments.map((s) => ({
+        timestamp: s.timestamp,
+        date: s.date,
+        end_timestamp: s.endTimestamp,
+        duration_seconds: s.durationSeconds,
+        lat: s.lat,
+        lon: s.lon,
+        segment_type: s.segmentType,
+        activity_type: s.activityType,
+        semantic_type: s.semanticType,
+        place_id: s.placeId,
+        distance_meters: s.distanceMeters,
+        speed_kmh: s.speedKmh,
+        azimuth_degrees: s.azimuthDegrees,
+    }));
+    const jsonContent = JSON.stringify(snakeData);
+    const tempFile = `import_${TABLE_NAME}_${Date.now()}.json`;
+
+    await db.registerFileText(tempFile, jsonContent);
+
+    // Explicit column list: the source JSON has only the 13 base fields; the geo
+    // columns default to NULL until attributeZones populates them.
+    await conn.query(`INSERT INTO ${TABLE_NAME} (
+        timestamp, date, end_timestamp, duration_seconds, lat, lon,
+        segment_type, activity_type, semantic_type, place_id, distance_meters,
+        speed_kmh, azimuth_degrees
+    ) SELECT DISTINCT * FROM read_json_auto('${tempFile}')`);
+
+    // Stable per-row key, materialised once now that DISTINCT has settled the row
+    // set. Geo attribution runs in the background after the import unblocks, so
+    // its results are matched back onto already-loaded points by `seg_id`; the
+    // `rowid` pseudo-column itself can't be used, as the finalize UPDATE rewrites
+    // rows.
+    await conn.query(`UPDATE ${TABLE_NAME} SET seg_id = rowid`);
+
     await db.registerFileText(tempFile, '');
 }

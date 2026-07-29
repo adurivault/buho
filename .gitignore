@@ -176,3 +176,6 @@ data/*
 node_modules/
 .vite/
 
+# SvelteKit output generated at the repo root by mistake (the real one lives in buho-app/)
+.svelte-kit/
+

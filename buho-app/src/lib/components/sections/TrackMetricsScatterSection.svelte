@@ -9,6 +9,7 @@
     import { dataStore } from "$lib/stores/dataStore.svelte";
     import { spotifyFilterStore } from "$lib/stores/spotifyFilterStore.svelte";
     import { onMount } from "svelte";
+    import { trackControl } from "$lib/analytics";
 
     type TrackMetricKey =
         | "playCount"
@@ -21,17 +22,17 @@
         | "activeDays";
 
     const METRIC_OPTIONS: Array<{ value: TrackMetricKey; label: string }> = [
-        { value: "playCount", label: "Nb d'écoutes" },
-        { value: "totalMinutes", label: "Durée d'écoute (minutes)" },
-        { value: "intentionalityRate", label: "Taux d'intentionnalité (%)" },
-        { value: "skipRate", label: "Taux de skip (%)" },
-        { value: "recencyDays", label: "Recency (jours)" },
-        { value: "maxSameDayPlays", label: "Max écoutes le même jour" },
+        { value: "playCount", label: "Plays" },
+        { value: "totalMinutes", label: "Listening time (minutes)" },
+        { value: "intentionalityRate", label: "Intentionality rate (%)" },
+        { value: "skipRate", label: "Skip rate (%)" },
+        { value: "recencyDays", label: "Recency (days)" },
+        { value: "maxSameDayPlays", label: "Max plays in a single day" },
         {
             value: "artistPrevalenceRate",
-            label: "Prévalence dans l'artiste (%)",
+            label: "Prevalence within the artist (%)",
         },
-        { value: "activeDays", label: "Nb de jours actifs" },
+        { value: "activeDays", label: "Active days" },
     ];
 
     const METRIC_LABELS = Object.fromEntries(
@@ -125,6 +126,7 @@
             <select
                 class="w-full rounded-md border border-surface-700 bg-surface-950 px-3 py-2"
                 bind:value={xMetric}
+                onchange={() => trackControl("track-scatter", "x-axis", xMetric)}
             >
                 {#each METRIC_OPTIONS as option}
                     <option value={option.value}>{option.label}</option>
@@ -136,6 +138,7 @@
             <select
                 class="w-full rounded-md border border-surface-700 bg-surface-950 px-3 py-2"
                 bind:value={yMetric}
+                onchange={() => trackControl("track-scatter", "y-axis", yMetric)}
             >
                 {#each METRIC_OPTIONS as option}
                     <option value={option.value}>{option.label}</option>

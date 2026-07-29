@@ -1,10 +1,10 @@
-// Couleurs partagées des dimensions de l'Explorer (pies, constellation, barcharts).
-// Une valeur donnée (ex. "iOS") garde toujours la même couleur, indépendamment
-// de son rang. Le registre est partagé entre composants et scoped par dimension
-// (filterKey), pour que le camembert "platform", les points de la constellation
-// et les barcharts empilés s'accordent au pixel.
+// Shared colors for the Explorer's dimensions (pies, constellation, barcharts).
+// A given value (e.g. "iOS") always keeps the same color, regardless of its rank.
+// The registry is shared across components and scoped by dimension (filterKey), so
+// the "platform" pie, the constellation points, and the stacked barcharts match to
+// the pixel.
 
-// Palette douce accordée au thème (Other = gris).
+// Soft palette tuned to the theme (Other = gray).
 export const PALETTE = [
     "#4cc38a",
     "#5ab0d6",

@@ -17,7 +17,7 @@ export function artistRidgelinePlot(data: ArtistMonthlyDurationData[], options: 
         const root = document.createElement("div");
         root.style.cssText =
             "display:flex;align-items:center;justify-content:center;min-height:320px;opacity:0.6";
-        root.textContent = "Pas de données d'artistes sur cette plage.";
+        root.textContent = "No artist data in this range.";
         return root as HTMLElement | SVGElement;
     }
 

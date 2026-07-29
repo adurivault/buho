@@ -1,23 +1,30 @@
 <script lang="ts">
     import * as d3 from "d3";
     import type { DimensionSlice } from "$lib/data/queries/dimensionQueries";
-    import { spotifyExplorerFilters } from "$lib/stores/spotifyExplorerFilters.svelte";
-    import type { FilterScalar } from "$lib/types/filters";
     import { stickyColor } from "$lib/utils/dimensionColors";
+    import { trackControl } from "$lib/analytics";
 
     interface Props {
         title: string;
-        /** Clé du store cross-filtering, ex. "ip_addr". */
+        /** Dimension key (used for sticky coloring), e.g. "ip_addr". */
         filterKey: string;
         slices: DimensionSlice[];
         size?: number;
-        /** Formatage de la valeur pour l'affichage (tooltip), ex. jour de semaine. */
+        /** Value formatting for display (tooltip), e.g. day of week. */
         format?: (value: string) => string;
-        /** Affiche le toggle « color by » (colore la constellation par cette dimension). */
+        /** Magnitude that drives a slice's angle (default: its minutes). */
+        sliceValue?: (slice: DimensionSlice) => number;
+        /** Tooltip formatting for the magnitude (default: "N min"). */
+        formatValue?: (value: number) => string;
+        /** Currently selected value (null = none). */
+        selectedValue?: string | null;
+        /** Select/deselect a slice (null = deselect). */
+        onSelect?: (value: string | null) => void;
+        /** Shows the "color by" toggle (colors the constellation by this dimension). */
         colorByEnabled?: boolean;
-        /** Cette dimension est-elle la source de couleur active ? */
+        /** Is this dimension the active color source? */
         colorByActive?: boolean;
-        /** Bascule la source de couleur. */
+        /** Toggles the color source. */
         onToggleColorBy?: () => void;
     }
 
@@ -27,6 +34,10 @@
         slices,
         size = 132,
         format = (v: string) => v,
+        sliceValue = (s: DimensionSlice) => s.minutes,
+        formatValue = (m: number) => `${Math.round(m).toLocaleString()} min`,
+        selectedValue = null,
+        onSelect,
         colorByEnabled = false,
         colorByActive = false,
         onToggleColorBy,
@@ -36,29 +47,9 @@
     let hostEl = $state<HTMLDivElement>();
     let tooltip = $state({ visible: false, x: 0, y: 0, label: "", value: "" });
 
-    function selectedValue(): string | null {
-        const v = spotifyExplorerFilters.activeFilters[filterKey];
-        if (v === undefined || v === null) return null;
-        if (v instanceof Set) {
-            const a = [...v];
-            return a.length ? String(a[0]) : null;
-        }
-        if (Array.isArray(v)) return v.length ? String(v[0]) : null;
-        if (typeof v === "object") return null;
-        return String(v as FilterScalar);
-    }
-
     function toggle(value: string) {
-        if (value === "Other") return; // pas filtrable
-        if (selectedValue() === value) {
-            spotifyExplorerFilters.removeFilter(filterKey);
-        } else {
-            spotifyExplorerFilters.setFilter(filterKey, value);
-        }
-    }
-
-    function formatMinutes(m: number): string {
-        return `${Math.round(m).toLocaleString()} min`;
+        if (value === "Other") return; // not filterable
+        onSelect?.(selectedValue === value ? null : value);
     }
 
     function positionTooltip(event: PointerEvent) {
@@ -78,14 +69,14 @@
         if (slices.length === 0) return;
 
         const radius = size / 2;
-        const selected = selectedValue();
+        const selected = selectedValue;
 
         const fill = (s: DimensionSlice) => stickyColor(filterKey, s.value);
 
         const pie = d3
             .pie<DimensionSlice>()
             .sort(null)
-            .value((d) => d.minutes);
+            .value((d) => sliceValue(d));
         const arc = d3
             .arc<d3.PieArcDatum<DimensionSlice>>()
             .innerRadius(radius * 0.55)
@@ -111,7 +102,7 @@
             .on("click", (_event, d) => toggle(d.data.value))
             .on("pointerenter", (event, d) => {
                 tooltip.label = format(d.data.value);
-                tooltip.value = formatMinutes(d.data.minutes);
+                tooltip.value = formatValue(sliceValue(d.data));
                 tooltip.visible = true;
                 positionTooltip(event as PointerEvent);
             })
@@ -123,8 +114,9 @@
 
     $effect(() => {
         const _slices = slices;
-        const _filters = spotifyExplorerFilters.activeFilters;
+        const _selected = selectedValue;
         const _size = size;
+        const _sliceValue = sliceValue;
         render();
     });
 </script>
@@ -140,7 +132,10 @@
             aria-checked={colorByActive}
             aria-label="Color the constellation by {title}"
             title="Color the constellation by this dimension"
-            onclick={() => onToggleColorBy?.()}
+            onclick={() => {
+                trackControl("dimension-pie", "color-by", filterKey);
+                onToggleColorBy?.();
+            }}
         >
             <span class="color-by-btn"></span>
             <span class="pie-title">{title}</span>

@@ -9,6 +9,7 @@
     import { dataStore } from "$lib/stores/dataStore.svelte";
     import { spotifyFilterStore } from "$lib/stores/spotifyFilterStore.svelte";
     import { onMount } from "svelte";
+    import { trackControl } from "$lib/analytics";
 
     type DailyMetricKey =
         | "dateEpochMs"
@@ -27,26 +28,26 @@
 
     const METRIC_OPTIONS: Array<{ value: DailyMetricKey; label: string }> = [
         { value: "dateEpochMs", label: "Date" },
-        { value: "playCount", label: "Nb d'écoutes" },
-        { value: "totalMinutes", label: "Durée d'écoute (minutes)" },
-        { value: "uniqueArtists", label: "Nb d'artistes uniques" },
-        { value: "uniqueTracks", label: "Nb de chansons uniques" },
-        { value: "maxSameTrackPlays", label: "Max écoutes d'une même chanson" },
-        { value: "shuffleRate", label: "Taux shuffle (%)" },
+        { value: "playCount", label: "Plays" },
+        { value: "totalMinutes", label: "Listening time (minutes)" },
+        { value: "uniqueArtists", label: "Unique artists" },
+        { value: "uniqueTracks", label: "Unique tracks" },
+        { value: "maxSameTrackPlays", label: "Max plays of a single track" },
+        { value: "shuffleRate", label: "Shuffle rate (%)" },
         {
             value: "intentionalStopRate",
-            label: "Taux d'arrêt intentionnel (%)",
+            label: "Intentional stop rate (%)",
         },
         {
             value: "intentionalStartRate",
-            label: "Taux de lancement intentionnel (%)",
+            label: "Intentional start rate (%)",
         },
-        { value: "skipRate", label: "Taux de skip (%)" },
-        { value: "eveningRate", label: "Taux d'écoute soirée (19h-5h) (%)" },
-        { value: "meanListenHour", label: "Heure moyenne d'écoute" },
+        { value: "skipRate", label: "Skip rate (%)" },
+        { value: "eveningRate", label: "Evening listening rate (7pm-5am) (%)" },
+        { value: "meanListenHour", label: "Mean listen hour" },
         {
             value: "repeatIntensity",
-            label: "Intensité de répétition (écoutes/track)",
+            label: "Repeat intensity (plays/track)",
         },
     ];
 
@@ -140,6 +141,7 @@
             <select
                 class="w-full rounded-md border border-surface-700 bg-surface-950 px-3 py-2"
                 bind:value={xMetric}
+                onchange={() => trackControl("daily-metrics-scatter", "x-axis", xMetric)}
             >
                 {#each METRIC_OPTIONS as option}
                     <option value={option.value}>{option.label}</option>
@@ -151,6 +153,7 @@
             <select
                 class="w-full rounded-md border border-surface-700 bg-surface-950 px-3 py-2"
                 bind:value={yMetric}
+                onchange={() => trackControl("daily-metrics-scatter", "y-axis", yMetric)}
             >
                 {#each METRIC_OPTIONS as option}
                     <option value={option.value}>{option.label}</option>

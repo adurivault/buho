@@ -121,7 +121,7 @@ export async function getTopItemsByDimensions(filters: FilterState = {}): Promis
     }
 }
 
-// Colonnes autorisées pour un breakdown (interpolées en SQL ⇒ whitelist stricte).
+// Allowed columns for a breakdown (interpolated into SQL ⇒ strict whitelist).
 const ALLOWED_BREAKDOWN_COLUMNS = new Set([
     'ip_addr',
     'country',
@@ -135,4 +135,6 @@ export interface DimensionSlice {
     value: string;
     minutes: number;
     plays: number;
+    /** Optional measure magnitude that drives the slice (e.g. km, points). */
+    amount?: number;
 }

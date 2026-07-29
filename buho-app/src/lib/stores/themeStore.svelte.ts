@@ -1,9 +1,9 @@
 export type Theme = "light" | "dark";
 
-// Le thème vit en mémoire uniquement : aucune persistance (pas de localStorage),
-// conformément à la promesse privacy. Au chargement on suit prefers-color-scheme
-// (appliqué très tôt par un script inline dans app.html pour éviter le flash),
-// et le toggle override pour la durée de la session.
+// The theme lives in memory only: no persistence (no localStorage), in line with
+// the privacy promise. On load we follow prefers-color-scheme (applied very early
+// by an inline script in app.html to avoid the flash), and the toggle overrides it
+// for the duration of the session.
 let state = $state<{ theme: Theme }>({ theme: "dark" });
 
 function apply(theme: Theme) {
@@ -21,7 +21,7 @@ export function toggleTheme() {
     setTheme(state.theme === "dark" ? "light" : "dark");
 }
 
-/** Synchronise le store avec la classe déjà posée sur <html> par le script inline. */
+/** Syncs the store with the class already set on <html> by the inline script. */
 export function initTheme() {
     if (typeof document === "undefined") return;
     state.theme = document.documentElement.classList.contains("dark")

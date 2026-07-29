@@ -97,8 +97,8 @@ const EMPTY_EXPLORER_MACRO_STATS: ExplorerMacroStats = {
 };
 
 /**
- * Indicateurs globaux du mode Explorer, recalculés selon TOUS les filtres
- * actifs (y compris artist/album/track) : ils reflètent la sélection finale.
+ * Global indicators for the Explorer mode, recomputed from ALL active filters
+ * (including artist/album/track): they reflect the final selection.
  */
 export async function getExplorerMacroStats(filters: FilterState = {}): Promise<ExplorerMacroStats> {
     const where = buildExplorerWhereClause(filters);
@@ -213,17 +213,14 @@ export async function getReasonStartEndFlow(dateRange?: DateRange): Promise<Reas
     }
 }
 
-// Connectable points are a visual abstraction of behavior/timeline
+// Connectable points are a visual abstraction of behavior/timeline.
+// `metadata` is opaque to the chart: each caller fills it with whatever its
+// tooltip/click callbacks read (Spotify: track/artist/playedAt/trackUri).
 export interface ConnectablePoint {
     x: number;      // timestamp
     y: number;      // hour of day, fractional (hour + minute/60 + second/3600)
     matched: boolean; // true when the point satisfies the active dimension filters
-    metadata: {
-        track: string;
-        artist: string;
-        playedAt: string; // ISO date string
-        trackUri: string | null; // spotify:track:<id> — pour ouvrir le titre sur Spotify
-    };
+    metadata: Record<string, unknown>;
 }
 
 const VALID_SQL_IDENTIFIER = /^[a-z_][a-z0-9_]*$/i;
@@ -470,9 +467,9 @@ export async function getExplorerConnectablePoints(filters: FilterState = {}): P
 }
 
 /**
- * Point de constellation + ses dimensions normalisées (artiste/album/titre),
- * pour recalculer le flag `matched` côté JS sans round-trip DB. Les valeurs
- * normalisées suivent exactement celles du sunburst (cf. getArtistSunburstFiltered).
+ * A constellation point + its normalized dimensions (artist/album/track), to
+ * recompute the `matched` flag in JS without a DB round-trip. The normalized
+ * values follow exactly those of the sunburst (cf. getArtistSunburstFiltered).
  */
 export interface ExplorerBasePoint extends ConnectablePoint {
     fArtist: string;
@@ -492,9 +489,9 @@ export interface ExplorerBasePoint extends ConnectablePoint {
 }
 
 /**
- * Tous les points de la constellation, chargés UNE fois. Le jeu de points ne
- * change jamais selon les filtres (le `matched` est recalculé en JS), ce qui
- * évite de reconstruire le quadtree (~1,3 s) à chaque interaction.
+ * All constellation points, loaded ONCE. The point set never changes with the
+ * filters (`matched` is recomputed in JS), which avoids rebuilding the quadtree
+ * (~1.3 s) on every interaction.
  */
 export async function getExplorerBasePoints(): Promise<ExplorerBasePoint[]> {
     const sql = `

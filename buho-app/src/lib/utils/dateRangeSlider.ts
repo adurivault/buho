@@ -61,9 +61,9 @@ export function nextEndIndex(
 }
 
 /**
- * Normalise une saisie libre en date ISO `YYYY-MM-DD`.
- * Accepte `YYYY-MM-DD`, `JJ/MM/AAAA` et `JJ-MM-AAAA`.
- * Renvoie `null` si la saisie est vide ou ne représente pas une date valide.
+ * Normalizes free-form input into an ISO date `YYYY-MM-DD`.
+ * Accepts `YYYY-MM-DD`, `DD/MM/YYYY` and `DD-MM-YYYY`.
+ * Returns `null` if the input is empty or does not represent a valid date.
  */
 export function parseDateText(text: string): string | null {
     const trimmed = text.trim();
@@ -88,7 +88,7 @@ export function parseDateText(text: string): string | null {
 
     if (month < 1 || month > 12 || day < 1 || day > 31) return null;
 
-    // Vérifie que la date existe réellement (ex: 31/02 rejeté).
+    // Verify the date actually exists (e.g. 31/02 rejected).
     const date = new Date(Date.UTC(year, month - 1, day));
     if (
         date.getUTCFullYear() !== year ||

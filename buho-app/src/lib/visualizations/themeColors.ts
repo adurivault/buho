@@ -1,8 +1,8 @@
 /**
- * Lit les tokens de thème (définis en HSL dans app.css) depuis le DOM, pour que
- * les visualisations Canvas/D3 — qui manipulent des chaînes de couleur, pas du
- * CSS — suivent le toggle light/dark. À appeler au moment du rendu ; côté charts,
- * dépendre de `themeStore.theme` dans l'effet de rendu suffit à re-render au toggle.
+ * Reads the theme tokens (defined in HSL in app.css) from the DOM, so that the
+ * Canvas/D3 visualizations — which manipulate color strings, not CSS — follow the
+ * light/dark toggle. Call it at render time; on the chart side, depending on
+ * `themeStore.theme` inside the render effect is enough to re-render on toggle.
  */
 function readToken(token: string): string {
     if (typeof document === "undefined") return "";
@@ -11,13 +11,13 @@ function readToken(token: string): string {
         .trim();
 }
 
-/** Renvoie un token couleur sous forme `hsl(...)` (ou un fallback si indisponible). */
+/** Returns a color token as `hsl(...)` (or a fallback if unavailable). */
 export function themeHsl(token: string, fallback = "transparent"): string {
     const v = readToken(token);
     return v ? `hsl(${v})` : fallback;
 }
 
-/** Couleurs de thème usuelles pour les visualisations. */
+/** Common theme colors for the visualizations. */
 export function vizColors() {
     return {
         background: themeHsl("--background", "#16130f"),

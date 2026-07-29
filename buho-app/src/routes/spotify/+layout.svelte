@@ -1,14 +1,20 @@
 <script lang="ts">
 	import { onMount } from "svelte";
-	import { base } from "$app/paths";
+	import { base, resolve } from "$app/paths";
 	import { dataStore } from "$lib/stores/dataStore.svelte";
+	import SourceNav from "$lib/components/SourceNav.svelte";
+	import ImportStatus from "$lib/components/ImportStatus.svelte";
 	import { initDuckDB, isReady, insertSpotifyPlays } from "$lib/data/db";
 	import { parseSpotifyData } from "$lib/data/parseSpotify";
 	import type { RawSpotifyEntry } from "$lib/types/spotify";
 	import FileUpload from "$lib/components/FileUpload.svelte";
-	import SpotifyNav from "$lib/components/SpotifyNav.svelte";
 
 	let { children } = $props();
+
+	const tabs = [
+		{ label: "Explore", href: resolve("/spotify/explore") },
+		{ label: "Other", href: resolve("/spotify/guide") },
+	];
 
 	onMount(async () => {
 		/**
@@ -57,12 +63,14 @@
 			<span class="source-title">Spotify</span>
 		</div>
 		<div class="header-center">
-			<SpotifyNav />
+			<SourceNav tabs={tabs} ariaLabel="Spotify views" />
 		</div>
 		<div class="header-right">
 			<FileUpload />
 		</div>
 	</header>
+
+	<ImportStatus />
 
 	<div class="spotify-content">
 		{@render children()}
@@ -70,8 +78,8 @@
 </div>
 
 <style>
-	/* Colonne plein écran : header fixe en haut, contenu qui prend le reste.
-	   L'Explore s'y cale pile (pas de scroll) ; le Guide y défile (overflow). */
+	/* Full-screen column: header fixed at the top, content takes the rest.
+	   Explore fits it exactly (no scroll); the Guide scrolls within it (overflow). */
 	.spotify-shell {
 		display: flex;
 		flex-direction: column;
@@ -113,6 +121,7 @@
 
 	.header-center {
 		justify-self: center;
+		--source-accent: var(--accent-spotify, #1db954);
 	}
 
 	.header-right {

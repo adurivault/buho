@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     buildSunburstHierarchy,
+    buildPathHierarchy,
     bucketByDegree,
     nodeTotal,
     type SunburstNode
@@ -44,6 +45,82 @@ describe('buildSunburstHierarchy', () => {
         expect(root.children![1].children![0].name).toBe('Greatest Hits');
         expect(root.children![0].children![0].children![0].name).toBe('Song 1');
         expect(root.children![1].children![0].children![0].name).toBe('Song 2');
+    });
+});
+
+describe('buildPathHierarchy', () => {
+    const lvl = (name: string, key: string) => ({ name, key });
+
+    it('builds a full path, tags each node with its filterKey, and sums values', () => {
+        const fr = [
+            lvl('France', 'country'),
+            lvl('Île-de-France', 'region'),
+            lvl('Paris', 'department'),
+            lvl('Paris', 'nearest_city'),
+        ];
+        const root = buildPathHierarchy(
+            [{ levels: fr, value: 10 }, { levels: fr, value: 5 }],
+            'All',
+        );
+        const country = root.children![0];
+        expect(country.name).toBe('France');
+        expect(country.filterKey).toBe('country');
+        const dept = country.children![0].children![0];
+        expect(dept.filterKey).toBe('department');
+        const city = dept.children![0];
+        expect(city.name).toBe('Paris');
+        expect(city.filterKey).toBe('nearest_city');
+        expect(city.value).toBe(15);
+        expect(city.children).toBeUndefined(); // leaf
+    });
+
+    it('compacts skipped levels: a foreign point reaches its city without a department', () => {
+        const root = buildPathHierarchy(
+            [{
+                levels: [
+                    lvl('Spain', 'country'),
+                    lvl('Madrid', 'region'),
+                    lvl('Madrid', 'nearest_city'),
+                ],
+                value: 20,
+            }],
+            'All',
+        );
+        const region = root.children![0].children![0];
+        expect(region.name).toBe('Madrid');
+        expect(region.filterKey).toBe('region');
+        const city = region.children![0];
+        expect(city.name).toBe('Madrid');
+        expect(city.filterKey).toBe('nearest_city'); // city shows, keyed correctly
+        expect(city.value).toBe(20);
+    });
+
+    it('splits a node that is both a destination and a parent with a "—" leaf', () => {
+        const base = [lvl('France', 'country'), lvl('Île-de-France', 'region'), lvl('Paris', 'department')];
+        const root = buildPathHierarchy(
+            [
+                { levels: [...base, lvl('Paris', 'nearest_city')], value: 10 },
+                { levels: base, value: 4 },
+            ],
+            'All',
+        );
+        const dept = root.children![0].children![0].children![0];
+        expect(dept.name).toBe('Paris');
+        expect(dept.value).toBeUndefined();
+        const names = dept.children!.map((c) => c.name).sort();
+        expect(names).toEqual(['Paris', '—']);
+        expect(nodeTotal(dept)).toBe(14); // 10 (city) + 4 (placeholder)
+    });
+
+    it('skips rows with no levels', () => {
+        const root = buildPathHierarchy(
+            [
+                { levels: [], value: 5 },
+                { levels: [{ name: '', key: 'country' }], value: 3 },
+            ],
+            'All',
+        );
+        expect(root.children).toHaveLength(0);
     });
 });
 

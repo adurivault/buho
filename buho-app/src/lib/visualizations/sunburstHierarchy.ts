@@ -5,16 +5,16 @@ export interface SunburstNode {
     isOther?: boolean;
     playCount?: number;
     value?: number;
-    trackUri?: string | null; // porté par les feuilles "titre" pour ouvrir sur Spotify
+    trackUri?: string | null; // carried by the "track" leaves to open on Spotify
+    filterKey?: string; // explicit cross-filter dimension (geo: levels can be skipped, so depth ≠ key)
     children?: SunburstNode[];
 }
 
 const OTHER_NAMES = ['Other artists', 'Other albums', 'Other tracks'];
-const THRESHOLD_DEGREES = 0.5; // Seuil de bucketing en degrés (part du parent < ½/360 ⇒ "Other")
+const THRESHOLD_DEGREES = 0.5; // Bucketing threshold in degrees (share of parent < ½/360 ⇒ "Other")
 /**
- * Transforme les lignes plates artiste/album/titre (non bucketées) en arbre
- * complet pour d3.hierarchy. Le regroupement "Other" est fait ensuite par
- * bucketByDegree.
+ * Transforms the flat artist/album/track rows (un-bucketed) into a full tree for
+ * d3.hierarchy. The "Other" grouping is done afterwards by bucketByDegree.
  */
 export function buildSunburstHierarchy(data: ArtistSunburstRow[]): SunburstNode {
     const root: SunburstNode = { name: 'All artists', children: [] };
@@ -45,7 +45,7 @@ export function buildSunburstHierarchy(data: ArtistSunburstRow[]): SunburstNode 
     return root;
 }
 
-/** Total des minutes d'un sous-arbre (les valeurs ne sont portées que par les feuilles). */
+/** Total minutes of a subtree (values are carried only by the leaves). */
 export function nodeTotal(node: SunburstNode): number {
     if (!node.children) return node.value ?? 0;
     return node.children.reduce((sum, child) => sum + nodeTotal(child), 0);
@@ -57,19 +57,24 @@ function nodePlays(node: SunburstNode): number {
 }
 
 /**
- * Replie, à chaque niveau, les enfants qui pèsent moins d'1° du cercle de leur
- * parent (part < total(parent) / 360) dans une feuille "Other …". Le seuil est
- * donc relatif au parent : comme un nœud zoomé occupe tout le cercle, "part du
- * parent < 1/360" équivaut à "moins d'1° de la vue affichée" une fois zoomé.
+ * Folds, at each level, the children that weigh less than 1° of their parent's
+ * circle (share < total(parent) / 360) into an "Other …" leaf. The threshold is
+ * therefore relative to the parent: since a zoomed node fills the whole circle,
+ * "share of parent < 1/360" is equivalent to "less than 1° of the displayed view"
+ * once zoomed.
  *
- * Le bucketing est statique (calculé une seule fois), ce qui permet de garder
- * UNE partition fixe et donc la transition de zoom d3 classique (interpolation
- * current → target), au lieu de reconstruire l'arbre à chaque clic.
+ * The bucketing is static (computed once), which lets us keep ONE fixed partition
+ * and thus the classic d3 zoom transition (current → target interpolation),
+ * instead of rebuilding the tree on every click.
  *
- * `level` est la profondeur des enfants traités (0 = artistes, 1 = albums, …),
- * utilisée pour nommer le bucket.
+ * `level` is the depth of the processed children (0 = artists, 1 = albums, …),
+ * used to name the bucket.
  */
-export function bucketByDegree(node: SunburstNode, level = 0): SunburstNode {
+export function bucketByDegree(
+    node: SunburstNode,
+    level = 0,
+    otherNames: string[] = OTHER_NAMES
+): SunburstNode {
     if (!node.children) return { ...node };
 
     const threshold = nodeTotal(node) / 360 * THRESHOLD_DEGREES;
@@ -82,16 +87,80 @@ export function bucketByDegree(node: SunburstNode, level = 0): SunburstNode {
             otherMinutes += childTotal;
             otherPlays += nodePlays(child);
         } else {
-            kept.push(bucketByDegree(child, level + 1));
+            kept.push(bucketByDegree(child, level + 1, otherNames));
         }
     }
     if (otherMinutes > 0) {
         kept.push({
-            name: OTHER_NAMES[Math.min(level, OTHER_NAMES.length - 1)],
+            name: otherNames[Math.min(level, otherNames.length - 1)] ?? 'Other',
             isOther: true,
             value: otherMinutes,
             playCount: otherPlays
         });
     }
     return { ...node, children: kept };
+}
+
+/**
+ * Build a hierarchy from rows that carry an ordered list of `levels`, each a
+ * `{ name, key }` pair, plus a `value`. The caller passes only the levels it
+ * wants (skipping absent ones), so a foreign point can be
+ * country → region → city even though it has no department in between — the
+ * level's `key` (not its depth) drives cross-filtering. A node that is BOTH a
+ * destination (rows end there) and a parent (deeper rows exist) gets a
+ * placeholder "—" leaf for its direct value, so d3.sum (leaves only) doesn't
+ * drop it. Generic counterpart of buildSunburstHierarchy, used by the Google
+ * Maps geo sunburst.
+ */
+export interface PathLevel {
+    name: string;
+    key?: string; // the cross-filter dimension this level belongs to
+}
+export interface PathRow {
+    levels: PathLevel[];
+    value: number;
+}
+
+export function buildPathHierarchy(rows: PathRow[], rootName: string): SunburstNode {
+    const root: SunburstNode = { name: rootName, children: [] };
+    const nodeByKey = new Map<string, SunburstNode>([['', root]]);
+
+    for (const row of rows) {
+        const levels = row.levels.filter((l) => l && l.name != null && l.name !== '');
+        if (levels.length === 0) continue;
+
+        let parent = root;
+        const prefix: string[] = [];
+        for (const level of levels) {
+            prefix.push(level.name);
+            const nk = JSON.stringify(prefix);
+            let node = nodeByKey.get(nk);
+            if (!node) {
+                node = { name: level.name, filterKey: level.key, children: [] };
+                nodeByKey.set(nk, node);
+                parent.children!.push(node);
+            }
+            parent = node;
+        }
+        parent.value = (parent.value ?? 0) + row.value;
+    }
+
+    normalizePathNode(root);
+    // The root stays a container even when empty (normalize would otherwise turn
+    // a childless node into a leaf).
+    if (!root.children) root.children = [];
+    return root;
+}
+
+/** Turn empty-children nodes into leaves; split mixed nodes via a "—" leaf. */
+function normalizePathNode(node: SunburstNode): void {
+    if (!node.children || node.children.length === 0) {
+        node.children = undefined;
+        return;
+    }
+    if (node.value && node.value > 0) {
+        node.children.push({ name: '—', value: node.value });
+        node.value = undefined;
+    }
+    for (const child of node.children) normalizePathNode(child);
 }

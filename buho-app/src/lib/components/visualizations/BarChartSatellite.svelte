@@ -183,9 +183,9 @@
         }
 
         if (selected.size === 0) {
-            spotifyExplorerFilters.removeFilter(filterKey);
+            spotifyExplorerFilters.removeFilter(filterKey, "bar");
         } else {
-            spotifyExplorerFilters.setFilter(filterKey, Array.from(selected));
+            spotifyExplorerFilters.setFilter(filterKey, Array.from(selected), "bar");
         }
     };
 

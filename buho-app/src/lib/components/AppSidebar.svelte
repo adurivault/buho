@@ -44,10 +44,11 @@
         </a>
       </li>
       <li>
-        <span
-          class="nav-link disabled"
-          title="Google Maps — coming soon"
-          aria-disabled="true"
+        <a
+          href={resolve("/google-maps/explore")}
+          class="nav-link maps"
+          title="Google Maps"
+          class:active={page.url.pathname.startsWith(resolve("/google-maps"))}
         >
           <svg
             class="nav-icon"
@@ -64,8 +65,8 @@
               d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"
             /><circle cx="12" cy="9" r="2.5" />
           </svg>
-          <span class="sr-only">Google Maps (coming soon)</span>
-        </span>
+          <span class="sr-only">Google Maps</span>
+        </a>
       </li>
       <li>
         <span
@@ -174,12 +175,16 @@
     height: 40px;
     border-radius: 10px;
     font-size: 1.375rem;
+    color: hsl(var(--muted-foreground));
     text-decoration: none;
-    transition: background-color 0.15s;
+    transition:
+      color 0.15s,
+      background-color 0.15s;
   }
 
   .logo:hover,
   .logo.active {
+    color: hsl(var(--foreground));
     background-color: hsl(var(--accent));
   }
 
@@ -220,6 +225,15 @@
     background-color: color-mix(
       in srgb,
       var(--accent-spotify, #1db954) 12%,
+      transparent
+    );
+  }
+
+  .nav-link.maps.active {
+    color: var(--accent-maps, #ea4335);
+    background-color: color-mix(
+      in srgb,
+      var(--accent-maps, #ea4335) 12%,
       transparent
     );
   }

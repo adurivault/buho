@@ -46,7 +46,10 @@ class SpotifyFilterStore {
     setRange(startDate: string, endDate: string) {
         if (!this.minDate || !this.maxDate) return;
         // Dates are the user's data — send only that a date filter was used.
-        trackThrottled("date-filter", "range");
+        trackThrottled("filter-set", "date:date-range", {
+            dimension: "date",
+            origin: "date-range"
+        });
         const clampedStart = startDate < this.minDate ? this.minDate : startDate;
         const clampedEnd = endDate > this.maxDate ? this.maxDate : endDate;
         this.startDate = clampedStart <= clampedEnd ? clampedStart : clampedEnd;

@@ -7,6 +7,7 @@
 		"dev": "vite dev",
 		"build": "vite build",
 		"preview": "vite preview",
+		"build:geo": "node scripts/build-geo-assets.mjs",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
@@ -22,9 +23,11 @@
 		"@testing-library/jest-dom": "^6.9.1",
 		"@testing-library/svelte": "^5.3.1",
 		"@types/d3": "^7.4.3",
+		"@types/topojson-client": "^3.1.5",
 		"autoprefixer": "^10.4.24",
 		"jsdom": "^28.0.0",
 		"lucide-svelte": "^0.563.0",
+		"mapshaper": "^0.7.33",
 		"postcss": "^8.5.6",
 		"svelte": "^5.48.2",
 		"svelte-check": "^4.3.5",
@@ -34,9 +37,14 @@
 		"vitest": "^4.0.18"
 	},
 	"dependencies": {
+		"@deck.gl/core": "^9.3.5",
+		"@deck.gl/layers": "^9.3.5",
+		"@deck.gl/mapbox": "^9.3.5",
 		"@duckdb/duckdb-wasm": "^1.33.1-dev18.0",
 		"@observablehq/plot": "^0.6.17",
 		"d3": "^7.9.0",
-		"jszip": "^3.10.1"
+		"jszip": "^3.10.1",
+		"maplibre-gl": "^5.24.0",
+		"topojson-client": "^3.1.0"
 	}
 }

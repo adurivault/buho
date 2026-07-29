@@ -33,7 +33,7 @@ export function discoveryRecencyScatterPlot(
     }
 ) {
     const { data, width = 1200, height = 720 } = options;
-    if (data.length === 0) return emptyState("Pas assez d'artistes sur cette plage.");
+    if (data.length === 0) return emptyState("Not enough artists in this range.");
 
     const pts = data.map((d) => ({
         ...d,
@@ -51,9 +51,9 @@ export function discoveryRecencyScatterPlot(
         marginLeft: 64,
         marginBottom: 48,
         marginRight: 20,
-        x: { label: "Découverte →", type: "time", grid: true },
-        y: { label: "↑ Dernière écoute", type: "time", grid: true },
-        r: { range: [2, 22], label: "Écoutes" },
+        x: { label: "Discovery →", type: "time", grid: true },
+        y: { label: "↑ Last listen", type: "time", grid: true },
+        r: { range: [2, 22], label: "Plays" },
         marks: [
             Plot.line(
                 [
@@ -73,9 +73,9 @@ export function discoveryRecencyScatterPlot(
                 tip: true,
                 title: (d) =>
                     `${d.artist}\n` +
-                    `Découvert: ${d.firstDate}\n` +
-                    `Dernière écoute: ${d.lastDate}\n` +
-                    `${d.plays.toLocaleString()} écoutes · ${Math.round(d.minutes).toLocaleString()} min`
+                    `Discovered: ${d.firstDate}\n` +
+                    `Last listen: ${d.lastDate}\n` +
+                    `${d.plays.toLocaleString()} plays · ${Math.round(d.minutes).toLocaleString()} min`
             })
         ],
         ...DARK_THEME
@@ -87,7 +87,7 @@ export function discoveryRecencyScatterPlot(
  * Thin line = full lifespan, fat dot = peak week (size = plays that week, color = concentration).
  */
 export function trackObsessionsPlot(data: TrackObsessionData[], options: any = {}) {
-    if (data.length === 0) return emptyState("Aucune obsession détectée sur cette plage.");
+    if (data.length === 0) return emptyState("No obsession detected in this range.");
 
     const rows = data.map((d) => ({
         ...d,
@@ -111,9 +111,9 @@ export function trackObsessionsPlot(data: TrackObsessionData[], options: any = {
         marginLeft: 290,
         marginBottom: 40,
         marginRight: 64,
-        x: { label: "Quand l'obsession a eu lieu", type: "time", grid: true },
+        x: { label: "When the obsession happened", type: "time", grid: true },
         y: { domain: order, label: null },
-        r: { range: [3, 16], label: "Écoutes / semaine de pic" },
+        r: { range: [3, 16], label: "Plays / peak week" },
         color: {
             type: "linear",
             scheme: "greens",
@@ -140,8 +140,8 @@ export function trackObsessionsPlot(data: TrackObsessionData[], options: any = {
                 tip: true,
                 title: (d) =>
                     `${d.track} — ${d.artist}\n` +
-                    `Pic: semaine du ${d.peakWeek} (${d.peakWeekPlays} écoutes)\n` +
-                    `${d.totalPlays} écoutes au total · ${(d.concentration * 100).toFixed(0)}% concentrées sur cette semaine`
+                    `Peak: week of ${d.peakWeek} (${d.peakWeekPlays} plays)\n` +
+                    `${d.totalPlays} plays total · ${(d.concentration * 100).toFixed(0)}% concentrated in that week`
             })
         ],
         ...DARK_THEME,
