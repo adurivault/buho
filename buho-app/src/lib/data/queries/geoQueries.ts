@@ -1,82 +1,81 @@
 import { query } from '../db';
+import type { ZoneRollupRow } from '$lib/visualizations/zoneChoropleth';
 
 /**
- * Consumption queries over the geo-enriched `google_maps_segments` (columns
- * country / region / department / nearest_city / city_km, added by
- * attributeZones). Counts/sums are CAST so rows come back as JS numbers.
+ * Consumption queries over the geo-enriched `google_maps_segments` (the
+ * country / region / department / arrondissement columns added by attributeZones).
+ * Counts/sums are CAST so rows come back as JS numbers rather than BigInt.
  */
 
-export interface ZoneStat {
-    /** Zone name (country / region / department / city). */
-    zone: string;
-    segments: number;
-    hours: number;
-    days: number;
-}
-
-async function zoneStats(column: string, where = ''): Promise<ZoneStat[]> {
-    const sql = `
-        SELECT
-            ${column} AS zone,
-            CAST(COUNT(*) AS INTEGER) AS segments,
-            CAST(SUM(duration_seconds) / 3600.0 AS DOUBLE) AS hours,
-            CAST(COUNT(DISTINCT date) AS INTEGER) AS days
+/**
+ * SQL for the zone ROLLUP, exported so the headless test runs this exact text.
+ *
+ * The `n` CTE mirrors `normalizePath` in zoneChoropleth.ts — country falling back
+ * to region for the 16 unparented territories, and a region equal to its country
+ * collapsing away. It has to happen *before* the ROLLUP so the grouping columns are
+ * already canonical: normalizing afterwards would fold every unparented territory
+ * into one bucket, because the depth-1 row has its region column rolled up to NULL.
+ */
+export const ZONE_ROLLUP_SQL = `
+    WITH b AS (
+        SELECT duration_seconds, distance_meters,
+            NULLIF(TRIM(country), '') AS c,
+            NULLIF(TRIM(region), '') AS r,
+            NULLIF(TRIM(department), '') AS d,
+            NULLIF(TRIM(arrondissement), '') AS a
         FROM google_maps_segments
-        WHERE ${column} IS NOT NULL ${where}
-        GROUP BY ${column}
-        ORDER BY hours DESC`;
+    ), n AS (
+        SELECT duration_seconds, distance_meters,
+            COALESCE(c, r) AS l1,
+            CASE WHEN r IS DISTINCT FROM COALESCE(c, r) THEN r END AS l2,
+            d AS l3,
+            a AS l4
+        FROM b
+    )
+    SELECT
+        CAST(GROUPING(l1, l2, l3, l4) AS INTEGER) AS depth_mask,
+        l1 AS country, l2 AS region, l3 AS department, l4 AS arrondissement,
+        CAST(SUM(duration_seconds) / 3600.0 AS DOUBLE) AS hours,
+        CAST(SUM(distance_meters) / 1000.0 AS DOUBLE) AS km,
+        CAST(COUNT(*) AS INTEGER) AS points
+    FROM n
+    WHERE l1 IS NOT NULL
+      AND l1 NOT IN (
+          SELECT country FROM geo_zones WHERE level = 'ocean' AND country IS NOT NULL
+      )
+    GROUP BY ROLLUP(l1, l2, l3, l4)
+    ORDER BY depth_mask, hours DESC`;
+
+/**
+ * Time spent per geographic zone at all four depths in a single pass, for the
+ * guide's choropleth.
+ *
+ * `ROLLUP` gives country / +region / +department / +arrondissement subtotals plus a
+ * grand total; `GROUPING()` tags each row with the bitmask that says which columns
+ * were rolled up, which is what makes the depths distinguishable — a row like
+ * `(Spain, Madrid, NULL, NULL)` is otherwise ambiguous between "the Madrid leaf"
+ * and "the subtotal for Madrid", since only France has deeper levels.
+ *
+ * `COUNT(DISTINCT date)` has to be computed per depth by the engine: distinct days
+ * are not additive across children, so a JS roll-up could not recover a parent's
+ * value from its children's.
+ *
+ * Ocean rows are excluded. Attribution assigns offshore points the sea name as
+ * their `country`, but a sea is not an administrative zone, and its area dwarfs any
+ * country's — a couple of flights would paint a huge slab of the map. There is no
+ * `country_code` on the segments table, so they are identified by name against the
+ * ocean layer of `geo_zones` (118 rows; loaded by loadGeoAssets, which always runs
+ * before this query since the section waits on `geoVersion`).
+ *
+ * Note `hours` must keep its explicit `AS`: it is a keyword in bare-alias position
+ * and DuckDB rejects `… / 3600.0 hours`. `GROUPING()`/`COUNT()` return BIGINT, so
+ * the CASTs are what keep the rows from arriving as unusable BigInt values.
+ */
+export async function getZoneRollup(): Promise<ZoneRollupRow[]> {
     try {
-        return await query<ZoneStat>(sql);
+        return await query<ZoneRollupRow>(ZONE_ROLLUP_SQL);
     } catch (error) {
-        console.error(`Error fetching zone stats for ${column}:`, error);
+        console.error('Error fetching zone rollup:', error);
         return [];
-    }
-}
-
-/** Time spent per country, most to least. */
-export function getCountryStats(): Promise<ZoneStat[]> {
-    return zoneStats('country');
-}
-
-/** Regions, optionally scoped to one country (e.g. 'France'). */
-export function getRegionStats(country?: string): Promise<ZoneStat[]> {
-    const where = country ? `AND country = '${country.replace(/'/g, "''")}'` : '';
-    return zoneStats('region', where);
-}
-
-/** Departments (France only, per current asset scope). */
-export function getDepartmentStats(): Promise<ZoneStat[]> {
-    return zoneStats('department');
-}
-
-/** Nearest-city ranking. */
-export function getCityStats(): Promise<ZoneStat[]> {
-    return zoneStats('nearest_city');
-}
-
-export interface AttributionCoverage {
-    total: number;
-    withCountry: number;
-    withRegion: number;
-    withDepartment: number;
-    withCity: number;
-}
-
-/** Sanity/debug: how many segments got each level attributed. */
-export async function getAttributionCoverage(): Promise<AttributionCoverage | null> {
-    const sql = `
-        SELECT
-            CAST(COUNT(*) AS INTEGER) AS total,
-            CAST(COUNT(country) AS INTEGER) AS withCountry,
-            CAST(COUNT(region) AS INTEGER) AS withRegion,
-            CAST(COUNT(department) AS INTEGER) AS withDepartment,
-            CAST(COUNT(nearest_city) AS INTEGER) AS withCity
-        FROM google_maps_segments`;
-    try {
-        const rows = await query<AttributionCoverage>(sql);
-        return rows[0] ?? null;
-    } catch (error) {
-        console.error('Error fetching attribution coverage:', error);
-        return null;
     }
 }

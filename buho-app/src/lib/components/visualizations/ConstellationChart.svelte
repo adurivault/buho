@@ -6,6 +6,7 @@
     import { hasOpenModifier } from "$lib/utils/spotify";
     import { vizColors } from "$lib/visualizations/themeColors";
     import { themeStore } from "$lib/stores/themeStore.svelte";
+    import { trackControl } from "$lib/analytics";
 
     interface ColorCategory {
         value: string;
@@ -1087,7 +1088,13 @@
             width={panel.mainWidth * dpr}
             height={panel.mainHeight * dpr}
         ></canvas>
-        <button class="reset-btn" type="button" onclick={resetView}
+        <button
+            class="reset-btn"
+            type="button"
+            onclick={() => {
+                trackControl("constellation", "reset-view", true);
+                resetView();
+            }}
             >Reset view</button
         >
         {#if tooltipInfo}

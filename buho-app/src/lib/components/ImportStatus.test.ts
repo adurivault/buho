@@ -24,6 +24,23 @@ describe('ImportStatus', () => {
         expect(link).toHaveAttribute('href', '/test-link');
     });
 
+    it('shows the background geo enrichment on its own row', () => {
+        dataStore.geo = {
+            status: 'running',
+            message: 'Locating points... 20,000 / 90,000',
+            progress: 0.22
+        };
+        render(ImportStatus);
+        expect(screen.getByText('Locating points... 20,000 / 90,000')).toBeTruthy();
+        expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '22');
+    });
+
+    it('drops the enrichment row once it is done', () => {
+        dataStore.geo = { status: 'done', message: 'Location details ready', progress: 1 };
+        const { container } = render(ImportStatus);
+        expect(container.textContent?.trim()).toBe('');
+    });
+
     it('renders nothing when idle', () => {
         const { container } = render(ImportStatus);
         expect(container.textContent?.trim()).toBe('');

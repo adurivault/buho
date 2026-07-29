@@ -10,9 +10,13 @@
     import * as d3 from "d3";
     import { RACE_PALETTE } from "$lib/visualizations/racePalette";
     import { onMount } from "svelte";
+    import { trackControl, trackOnce } from "$lib/analytics";
+    import InfoHint from "$lib/components/InfoHint.svelte";
 
     type Props = {
         title: string;
+        // Optional explanation, shown behind a "?" next to the title.
+        hint?: string;
         rows: RaceRow[];
         formatValue?: (v: number) => string;
         // Applied to bar labels only (join keys stay the full name), e.g. to
@@ -27,10 +31,13 @@
         minWidth?: number;
         // Fired once when the section scrolls into view, so parents can lazy-load.
         onVisible?: () => void;
+        // Analytics id for this race (a literal, never derived from data).
+        trackId?: string;
     };
 
     let {
         title,
+        hint,
         rows,
         formatValue = (v: number) => v.toFixed(1),
         formatName = (name: string) => name,
@@ -40,7 +47,19 @@
         leftMargin = 220,
         minWidth = 920,
         onVisible,
+        trackId,
     }: Props = $props();
+
+    // Falls back to a slug of the (literal) title so every race is
+    // distinguishable in analytics without touching each call site.
+    const vizId = $derived(
+        trackId ??
+            title
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, "-")
+                .replace(/^-|-$/g, "")
+                .slice(0, 40),
+    );
 
     type RankedItem = {
         name: string;
@@ -563,6 +582,7 @@
             (entries) => {
                 if (entries[0].isIntersecting) {
                     isVisible = true;
+                    trackOnce("section-view", vizId, { section: vizId });
                     onVisible?.();
                     observer.disconnect();
                 }
@@ -590,7 +610,9 @@
 
 <section bind:this={element} class="guide-section py-8">
     <div class="text-content mb-6">
-        <h2 class="text-2xl font-bold mb-2">{title}</h2>
+        <h2 class="text-2xl font-bold mb-2">
+            {title}{#if hint}<InfoHint text={hint} />{/if}
+        </h2>
     </div>
 
     <div
@@ -602,7 +624,10 @@
                 <button
                     type="button"
                     class="race-btn"
-                    onclick={playRace}
+                    onclick={() => {
+                        trackControl(vizId, "playback", "play");
+                        playRace();
+                    }}
                     disabled={isPlaying}
                 >
                     Play
@@ -610,7 +635,10 @@
                 <button
                     type="button"
                     class="race-btn"
-                    onclick={stopRace}
+                    onclick={() => {
+                        trackControl(vizId, "playback", "stop");
+                        stopRace();
+                    }}
                     disabled={!isPlaying}
                 >
                     Stop
@@ -618,7 +646,10 @@
                 <button
                     type="button"
                     class="race-btn"
-                    onclick={() => stepFrame(-1)}
+                    onclick={() => {
+                        trackControl(vizId, "step", "back");
+                        stepFrame(-1);
+                    }}
                     disabled={isPlaying || currentFrameIndex === 0}
                 >
                     ←
@@ -626,7 +657,10 @@
                 <button
                     type="button"
                     class="race-btn"
-                    onclick={() => stepFrame(1)}
+                    onclick={() => {
+                        trackControl(vizId, "step", "forward");
+                        stepFrame(1);
+                    }}
                     disabled={isPlaying ||
                         currentFrameIndex === keyframes.length - 1}
                 >
@@ -645,7 +679,10 @@
                     max={keyframes.length - 1}
                     step="1"
                     value={currentFrameIndex}
-                    oninput={(e) => scrubToFrame(+e.currentTarget.value)}
+                    oninput={(e) => {
+                        trackControl(vizId, "scrub", "drag");
+                        scrubToFrame(+e.currentTarget.value);
+                    }}
                     aria-label="Position in the timeline"
                     style={`--progress:${progressPct}%`}
                 />

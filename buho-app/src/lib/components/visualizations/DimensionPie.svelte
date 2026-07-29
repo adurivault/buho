@@ -2,6 +2,7 @@
     import * as d3 from "d3";
     import type { DimensionSlice } from "$lib/data/queries/dimensionQueries";
     import { stickyColor } from "$lib/utils/dimensionColors";
+    import { trackControl } from "$lib/analytics";
 
     interface Props {
         title: string;
@@ -131,7 +132,10 @@
             aria-checked={colorByActive}
             aria-label="Color the constellation by {title}"
             title="Color the constellation by this dimension"
-            onclick={() => onToggleColorBy?.()}
+            onclick={() => {
+                trackControl("dimension-pie", "color-by", filterKey);
+                onToggleColorBy?.();
+            }}
         >
             <span class="color-by-btn"></span>
             <span class="pie-title">{title}</span>

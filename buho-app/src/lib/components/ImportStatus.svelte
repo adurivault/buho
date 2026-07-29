@@ -24,6 +24,27 @@
     </div>
 {/if}
 
+{#if dataStore.geo?.status === "running"}
+    <!-- Background enrichment: the app is already usable, so this row stays
+         quieter than the blocking import bar above. -->
+    <div class="loading-banner subtle">
+        <span class="loading-text">{dataStore.geo.message}</span>
+    </div>
+    <div
+        class="progress-track"
+        role="progressbar"
+        aria-label={dataStore.geo.message}
+        aria-valuenow={Math.round((dataStore.geo.progress ?? 0) * 100)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+    >
+        <div
+            class="progress-fill subtle"
+            style:width={`${(dataStore.geo.progress ?? 0) * 100}%`}
+        ></div>
+    </div>
+{/if}
+
 {#if dataStore.error}
     <div class="error-bar" role="alert">
         <span>{dataStore.error.message}</span>
@@ -82,6 +103,23 @@
         );
         transform: translateX(-100%);
         animation: progress-sheen 1.3s ease-in-out infinite;
+    }
+
+    .loading-banner.subtle {
+        padding: 0.35rem 1rem 0.3rem;
+    }
+
+    .loading-banner.subtle .loading-text {
+        font-size: 0.78rem;
+        opacity: 0.75;
+    }
+
+    .progress-fill.subtle {
+        background: hsl(var(--primary) / 0.45);
+    }
+
+    .progress-fill.subtle::after {
+        animation: none;
     }
 
     .progress-fill.indeterminate {

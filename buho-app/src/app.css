@@ -81,10 +81,10 @@
     /* Heading face color (slightly deeper than body text in light mode). */
     --heading: 30 16% 11%;
 
-    /* Spotify "universe" accent — full color value (consumed directly as
-       var(--accent-spotify), not via hsl()). Other sources get their own
-       anchor hue here later. */
+    /* Source "universe" accents — full color values (consumed directly as
+       var(--accent-spotify), not via hsl()). */
     --accent-spotify: #1db954;
+    --accent-maps: #ea4335;
 
     /* Observable Plot tip mark vars (theme-aware). */
     --plot-background: rgb(252 250 247 / 0.97);

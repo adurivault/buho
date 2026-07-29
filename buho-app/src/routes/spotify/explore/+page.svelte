@@ -496,12 +496,13 @@
         view: [number, number] | null,
     ) {
         if (view) {
-            spotifyExplorerFilters.setFilter(key, {
-                min: view[0],
-                max: view[1],
-            });
+            spotifyExplorerFilters.setFilter(
+                key,
+                { min: view[0], max: view[1] },
+                "constellation",
+            );
         } else {
-            spotifyExplorerFilters.removeFilter(key);
+            spotifyExplorerFilters.removeFilter(key, "constellation");
         }
     }
 
@@ -667,8 +668,8 @@
                     selectedValue={firstFilterValue(activeFilters, pd.key)}
                     onSelect={(v) =>
                         v === null
-                            ? spotifyExplorerFilters.removeFilter(pd.key)
-                            : spotifyExplorerFilters.setFilter(pd.key, v)}
+                            ? spotifyExplorerFilters.removeFilter(pd.key, "pie")
+                            : spotifyExplorerFilters.setFilter(pd.key, v, "pie")}
                     colorByEnabled
                     colorByActive={colorBy === pd.key}
                     onToggleColorBy={() => toggleColorBy(pd.key)}

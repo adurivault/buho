@@ -2,6 +2,7 @@
     import { onDestroy, onMount, tick } from "svelte";
     import LazySection from "$lib/components/LazySection.svelte";
     import { sections } from "./sections";
+    import { sectionView } from "$lib/actions/sectionView";
     import {
         uiStore,
         setSpotifyGuideScrollTop,
@@ -49,7 +50,11 @@
 <div class="guide-container w-full max-w-none px-6 pt-10 pb-6">
     <main class="space-y-12" data-testid="guide-sections">
         {#each sections as section (section.id)}
-            <div id={section.id} data-testid="section-{section.id}">
+            <div
+                id={section.id}
+                data-testid="section-{section.id}"
+                use:sectionView={section.id}
+            >
                 <LazySection
                     component={section.component}
                     props={section.props}

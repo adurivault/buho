@@ -14,7 +14,9 @@ const DAYS_SCHEMA = `
 
 /**
  * Build (or rebuild) the `google_maps_days` table from `google_maps_segments`.
- * Run after `attributeZones` so the start place carries geo labels. Loads the
+ * Runs once before `attributeZones` — everything but the place labels comes from
+ * the segments alone — then again after it, so the start place carries its city
+ * and country (see `dataStore.enrichGeo`). Loads the
  * segments once (as epoch-ms, mirroring the other Google Maps queries), computes
  * the day rows in JS (see `daysDataset.ts`), and materialises them.
  */

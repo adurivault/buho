@@ -9,6 +9,7 @@
     import { dataStore } from "$lib/stores/dataStore.svelte";
     import { spotifyFilterStore } from "$lib/stores/spotifyFilterStore.svelte";
     import { onMount } from "svelte";
+    import { trackControl } from "$lib/analytics";
 
     type TrackMetricKey =
         | "playCount"
@@ -125,6 +126,7 @@
             <select
                 class="w-full rounded-md border border-surface-700 bg-surface-950 px-3 py-2"
                 bind:value={xMetric}
+                onchange={() => trackControl("track-scatter", "x-axis", xMetric)}
             >
                 {#each METRIC_OPTIONS as option}
                     <option value={option.value}>{option.label}</option>
@@ -136,6 +138,7 @@
             <select
                 class="w-full rounded-md border border-surface-700 bg-surface-950 px-3 py-2"
                 bind:value={yMetric}
+                onchange={() => trackControl("track-scatter", "y-axis", yMetric)}
             >
                 {#each METRIC_OPTIONS as option}
                     <option value={option.value}>{option.label}</option>

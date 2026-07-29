@@ -8,6 +8,7 @@
     import {
         getGoogleMapsConstellationTimeDomain,
         getGoogleMapsExplorerBasePoints,
+        patchGeoAttributes,
         type LocationBasePoint,
     } from "$lib/data/queries/googleMapsQueries";
     import type { ConnectablePoint } from "$lib/data/queries/behaviorQueries";
@@ -24,6 +25,7 @@
     import { formatDuration, formatDurationLong } from "$lib/utils/duration";
     import { firstFilterValue } from "$lib/utils/filters";
     import { stickyColor } from "$lib/utils/dimensionColors";
+    import { trackControl, trackThrottled } from "$lib/analytics";
 
     // Accent for matched points in this explorer (red), vs the Spotify green.
     const MATCHED_COLOR = "#EA4335";
@@ -106,6 +108,11 @@
     const dbReady = $derived(
         dataStore.source === "google-maps" && !dataStore.isLoading,
     );
+    // Zone attribution runs in the background after the import unblocks, so the
+    // sunburst (the only geo-dependent view here) waits on it while everything
+    // else is already live.
+    const geoReady = $derived(dataStore.geoReady);
+    const geoFailed = $derived(dataStore.geo?.status === "failed");
 
     /** Set<string> of a filter's values, or null if not applicable (range, etc.). */
     function filterValueSet(f: FilterState, key: string): Set<string> | null {
@@ -473,7 +480,14 @@
         const f = googleMapsExplorerFilters.activeFilters;
         const rest: FilterState = {};
         for (const k in f) if (!GEO_KEYS.has(k)) rest[k] = f[k];
-        return JSON.stringify([rest, basePoints.length, measure]);
+        // geoVersion: the points are patched in place, so nothing else in this
+        // signature changes when the attribution lands.
+        return JSON.stringify([
+            rest,
+            basePoints.length,
+            measure,
+            dataStore.geoVersion,
+        ]);
     }
 
     function maybeRecomputeSunburst() {
@@ -532,6 +546,7 @@
         prevMatchSig = "";
         sunburstTree = { name: "All locations" };
         prevSunburstSig = "";
+        patchedGeoVersion = 0;
     }
 
     // Loading the points: ONCE when the source is ready.
@@ -546,6 +561,25 @@
         if (basePointsLoaded) return;
         basePointsLoaded = true;
         void loadBasePoints();
+    });
+
+    // Background attribution landed: fold the geo columns into the points already
+    // loaded, then let the sunburst and the tooltips pick them up.
+    let patchedGeoVersion = 0;
+    $effect(() => {
+        const version = dataStore.geoVersion;
+        const pts = basePoints;
+        // Both are tracked: attribution can land before the points are loaded,
+        // and the patch must then wait for them (the base query may itself have
+        // read the columns mid-attribution).
+        if (!dbReady || version === 0 || pts.length === 0) return;
+        if (version === patchedGeoVersion) return;
+        patchedGeoVersion = version;
+        void (async () => {
+            await patchGeoAttributes(pts);
+            computeMatched();
+            scheduleRecompute();
+        })();
     });
 
     // Highlight: JS recompute of `matched` when the selection or the map's
@@ -575,8 +609,27 @@
 
     // Leaving the map drops its geographic filter so the other views go full again.
     $effect(() => {
-        if (spatialView !== "map") viewGeoBounds = null;
+        if (spatialView !== "map") {
+            viewGeoBounds = null;
+            mapFitted = false;
+        }
     });
+
+    // The map fits to the data on load, which emits a viewport before anyone has
+    // touched it — only the moves after that one are a real geographic filter.
+    let mapFitted = false;
+
+    function onMapViewport(bounds: MapBounds) {
+        viewGeoBounds = bounds;
+        if (!mapFitted) {
+            mapFitted = true;
+            return;
+        }
+        trackThrottled("filter-set", "map_viewport", {
+            dimension: "map_viewport",
+            origin: "map",
+        });
+    }
 
     // Sync brush → filtres globaux (throttle leading + trailing).
     let timeRangeSyncTimer: ReturnType<typeof setTimeout> | null = null;
@@ -589,12 +642,13 @@
         view: [number, number] | null,
     ) {
         if (view) {
-            googleMapsExplorerFilters.setFilter(key, {
-                min: view[0],
-                max: view[1],
-            });
+            googleMapsExplorerFilters.setFilter(
+                key,
+                { min: view[0], max: view[1] },
+                "constellation",
+            );
         } else {
-            googleMapsExplorerFilters.removeFilter(key);
+            googleMapsExplorerFilters.removeFilter(key, "constellation");
         }
     }
 
@@ -688,7 +742,10 @@
                             class="measure-btn"
                             class:active={measure === m.key}
                             aria-pressed={measure === m.key}
-                            onclick={() => (measure = m.key)}
+                            onclick={() => {
+                                trackControl("maps-explorer", "measure", m.key);
+                                measure = m.key;
+                            }}
                         >
                             {m.label}
                         </button>
@@ -751,7 +808,15 @@
                             class="measure-btn"
                             class:active={spatialView === "sunburst"}
                             aria-pressed={spatialView === "sunburst"}
-                            onclick={() => (spatialView = "sunburst")}
+                            title={geoReady
+                                ? undefined
+                                : geoFailed
+                                  ? "Location details unavailable"
+                                  : "Still locating your points…"}
+                            onclick={() => {
+                                trackControl("maps-explorer", "spatial-view", "sunburst");
+                                spatialView = "sunburst";
+                            }}
                         >
                             Sunburst
                         </button>
@@ -760,7 +825,10 @@
                             class="measure-btn"
                             class:active={spatialView === "map"}
                             aria-pressed={spatialView === "map"}
-                            onclick={() => (spatialView = "map")}
+                            onclick={() => {
+                                trackControl("maps-explorer", "spatial-view", "map");
+                                spatialView = "map";
+                            }}
                         >
                             Map
                         </button>
@@ -786,11 +854,32 @@
                                 height={sunburstHeight}
                                 timeWindow={viewTimeDomain}
                                 hourWindow={viewHourDomain}
-                                onViewportChange={(b) => (viewGeoBounds = b)}
+                                onViewportChange={onMapViewport}
                                 formatTooltip={constellationTooltip}
                                 colorField={colorByDim?.field ?? null}
                                 {colorCategories}
                             />
+                        {:else if !geoReady}
+                            <div class="geo-pending" role="status">
+                                {#if geoFailed}
+                                    <p>Location details unavailable.</p>
+                                    <p class="geo-pending-hint">
+                                        The map and the timeline above still work.
+                                    </p>
+                                {:else}
+                                    <p>Locating your points…</p>
+                                    <p class="geo-pending-hint">
+                                        {dataStore.geo?.message ??
+                                            "Preparing map data…"}
+                                    </p>
+                                    <div class="geo-pending-track">
+                                        <div
+                                            class="geo-pending-fill"
+                                            style:width={`${Math.round((dataStore.geo?.progress ?? 0) * 100)}%`}
+                                        ></div>
+                                    </div>
+                                {/if}
+                            </div>
                         {:else}
                             <SunburstExplorer
                                 data={sunburstTree}
@@ -823,8 +912,8 @@
                         selectedValue={firstFilterValue(activeFilters, pd.key)}
                         onSelect={(v) =>
                             v === null
-                                ? googleMapsExplorerFilters.removeFilter(pd.key)
-                                : googleMapsExplorerFilters.setFilter(pd.key, v)}
+                                ? googleMapsExplorerFilters.removeFilter(pd.key, "pie")
+                                : googleMapsExplorerFilters.setFilter(pd.key, v, "pie")}
                         colorByEnabled
                         colorByActive={colorBy === pd.key}
                         onToggleColorBy={() => toggleColorBy(pd.key)}
@@ -1018,6 +1107,39 @@
         display: flex;
         align-items: center;
         justify-content: center;
+    }
+
+    .geo-pending {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.35rem;
+        max-width: 18rem;
+        text-align: center;
+        font-size: 0.85rem;
+        color: hsl(var(--muted-foreground));
+    }
+
+    .geo-pending-hint {
+        font-size: 0.75rem;
+        opacity: 0.75;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .geo-pending-track {
+        width: 100%;
+        height: 3px;
+        margin-top: 0.35rem;
+        border-radius: 999px;
+        overflow: hidden;
+        background: hsl(var(--secondary) / 0.6);
+    }
+
+    .geo-pending-fill {
+        height: 100%;
+        border-radius: 999px;
+        background: hsl(var(--primary));
+        transition: width 0.4s ease;
     }
 
     /* Below a certain width, stack constellation + sunburst (cf. Spotify). */

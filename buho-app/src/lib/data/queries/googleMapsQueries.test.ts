@@ -1,5 +1,12 @@
-import { describe, it, expect } from 'vitest';
-import { annotatePresenceMinutes, type LocationBasePoint } from './googleMapsQueries';
+import { describe, it, expect, vi } from 'vitest';
+import {
+    annotatePresenceMinutes,
+    patchGeoAttributes,
+    type LocationBasePoint
+} from './googleMapsQueries';
+
+const queryColumnar = vi.hoisted(() => vi.fn());
+vi.mock('../db', () => ({ query: vi.fn(), queryColumnar }));
 
 // annotatePresenceMinutes only reads the instant (x + y*3_600_000) and writes
 // presenceMins, so a point is faked from x alone (y = 0 → x carries the instant
@@ -63,5 +70,84 @@ describe('annotatePresenceMinutes', () => {
         annotatePresenceMinutes(pts);
         const total = pts.reduce((s, p) => s + p.presenceMins, 0);
         expect(total).toBe(260); // = last − first, in minutes
+    });
+});
+
+/** Point as loaded before attribution: geo columns still all Unknown. */
+function geoPt(segId: number): LocationBasePoint {
+    return {
+        segId,
+        country: 'Unknown', region: 'Unknown', department: 'Unknown',
+        nearestCity: 'Unknown', arrondissement: 'Unknown',
+        metadata: {}
+    } as unknown as LocationBasePoint;
+}
+
+describe('patchGeoAttributes', () => {
+    it('writes the attributed columns onto the matching points, in place', async () => {
+        queryColumnar.mockResolvedValue({
+            numRows: 2,
+            columns: {
+                segId: [7, 3],
+                country: ['France', 'Spain'],
+                region: ['Île-de-France', 'Madrid'],
+                department: ['Paris', 'Unknown'],
+                nearestCity: ['Paris', 'Madrid'],
+                arrondissement: ['Paris 4e', 'Unknown']
+            }
+        });
+
+        const a = geoPt(3);
+        const b = geoPt(7);
+        const points = [a, b];
+        await patchGeoAttributes(points);
+
+        expect(b.country).toBe('France');
+        expect(b.nearestCity).toBe('Paris');
+        expect(b.arrondissement).toBe('Paris 4e');
+        expect(a.country).toBe('Spain');
+        expect(a.region).toBe('Madrid');
+        // Same array, same objects: the map keeps its viewport, the
+        // constellation its quadtree.
+        expect(points[0]).toBe(a);
+    });
+
+    it('mirrors the geo fields onto metadata (the tooltip reads those)', async () => {
+        queryColumnar.mockResolvedValue({
+            numRows: 1,
+            columns: {
+                segId: [1], country: ['France'], region: ['Occitanie'],
+                department: ['Tarn-et-Garonne'], nearestCity: ['Unknown'],
+                arrondissement: ['Unknown']
+            }
+        });
+
+        const p = geoPt(1);
+        await patchGeoAttributes([p]);
+
+        expect(p.metadata.country).toBe('France');
+        expect(p.metadata.department).toBe('Tarn-et-Garonne');
+    });
+
+    it('leaves a point with no attributed row untouched', async () => {
+        queryColumnar.mockResolvedValue({
+            numRows: 1,
+            columns: {
+                segId: [42], country: ['France'], region: ['Bretagne'],
+                department: ['Finistère'], nearestCity: ['Brest'],
+                arrondissement: ['Unknown']
+            }
+        });
+
+        const p = geoPt(1);
+        await patchGeoAttributes([p]);
+
+        expect(p.country).toBe('Unknown');
+    });
+
+    it('does not query at all for an empty point set', async () => {
+        queryColumnar.mockClear();
+        await patchGeoAttributes([]);
+        expect(queryColumnar).not.toHaveBeenCalled();
     });
 });

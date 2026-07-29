@@ -16,6 +16,7 @@
     } from "$lib/visualizations/dayRaceData";
     import { interpolateTurbo, rgb } from "d3";
     import { themeStore, type Theme } from "$lib/stores/themeStore.svelte";
+    import { trackControl } from "$lib/analytics";
 
     interface Props {
         days: DayRecord[];
@@ -362,7 +363,10 @@
         <button
             type="button"
             class="race-btn"
-            onclick={togglePlay}
+            onclick={() => {
+                trackControl("day-race-map", "playback", playing ? "pause" : "play");
+                togglePlay();
+            }}
             aria-pressed={playing}
         >
             {playing ? "Pause" : "Play"}
@@ -373,7 +377,10 @@
                     type="button"
                     class="race-btn speed"
                     class:active={speed === s}
-                    onclick={() => (speed = s)}
+                    onclick={() => {
+                        trackControl("day-race-map", "speed", s);
+                        speed = s;
+                    }}
                 >
                     {s}×
                 </button>
@@ -386,7 +393,10 @@
                 type="button"
                 class="race-btn color"
                 class:active={colorMode === "red"}
-                onclick={() => (colorMode = "red")}
+                onclick={() => {
+                    trackControl("day-race-map", "color-mode", "red");
+                    colorMode = "red";
+                }}
             >
                 Red
             </button>
@@ -394,7 +404,10 @@
                 type="button"
                 class="race-btn color"
                 class:active={colorMode === "doy"}
-                onclick={() => (colorMode = "doy")}
+                onclick={() => {
+                    trackControl("day-race-map", "color-mode", "doy");
+                    colorMode = "doy";
+                }}
             >
                 Day of year
             </button>
@@ -402,7 +415,10 @@
                 type="button"
                 class="race-btn color"
                 class:active={colorMode === "date"}
-                onclick={() => (colorMode = "date")}
+                onclick={() => {
+                    trackControl("day-race-map", "color-mode", "date");
+                    colorMode = "date";
+                }}
             >
                 Date
             </button>
@@ -427,7 +443,10 @@
         max={DAY_MINUTES}
         step="1"
         value={clockMin}
-        oninput={(e) => scrub(+e.currentTarget.value)}
+        oninput={(e) => {
+            trackControl("day-race-map", "scrub", "drag");
+            scrub(+e.currentTarget.value);
+        }}
         aria-label="Time of day"
         style={`--progress:${(clockMin / DAY_MINUTES) * 100}%`}
     />
@@ -488,7 +507,7 @@
     }
 
     .map-shell {
-        height: 520px;
+        height: 660px;
         border-radius: 8px;
         overflow: hidden;
         border: 1px solid hsl(var(--border));

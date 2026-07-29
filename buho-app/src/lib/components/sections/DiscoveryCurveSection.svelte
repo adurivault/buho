@@ -12,6 +12,7 @@
     } from "$lib/visualizations/d3/discoverySediment";
     import { dataStore } from "$lib/stores/dataStore.svelte";
     import { spotifyFilterStore } from "$lib/stores/spotifyFilterStore.svelte";
+    import { trackControl } from "$lib/analytics";
 
     let data = $state<MonthlyCohortPoint[]>([]);
     let element: HTMLElement;
@@ -151,7 +152,10 @@
         <button
             type="button"
             class="px-3 py-1.5 rounded-md bg-surface-700 hover:bg-surface-600 border border-surface-600 text-sm transition-colors disabled:opacity-50"
-            onclick={playAnimation}
+            onclick={() => {
+                trackControl("discovery-curve", "playback", "replay");
+                playAnimation();
+            }}
             disabled={data.length < 2 || isPlaying}
         >
             {isPlaying ? "▶ Playing…" : "↻ Replay animation"}
@@ -167,7 +171,10 @@
                 class="px-3 py-1.5 transition-colors {colorMode === 'discovery'
                     ? 'bg-surface-600 text-white'
                     : 'bg-surface-800 hover:bg-surface-700 opacity-70'}"
-                onclick={() => (colorMode = "discovery")}
+                onclick={() => {
+                    trackControl("discovery-curve", "color-mode", "discovery");
+                    colorMode = "discovery";
+                }}
             >
                 Discovery date
             </button>
@@ -176,7 +183,10 @@
                 class="px-3 py-1.5 transition-colors border-l border-surface-600 {colorMode === 'age'
                     ? 'bg-surface-600 text-white'
                     : 'bg-surface-800 hover:bg-surface-700 opacity-70'}"
-                onclick={() => (colorMode = "age")}
+                onclick={() => {
+                    trackControl("discovery-curve", "color-mode", "age");
+                    colorMode = "age";
+                }}
             >
                 Age when played
             </button>

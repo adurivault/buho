@@ -317,7 +317,8 @@ export async function insertLocationSegments(segments: LocationSegment[]): Promi
         department VARCHAR,
         nearest_city VARCHAR,
         city_km DOUBLE,
-        arrondissement VARCHAR
+        arrondissement VARCHAR,
+        seg_id INTEGER
     `;
 
     await createTable(TABLE_NAME, SCHEMA);
@@ -355,6 +356,13 @@ export async function insertLocationSegments(segments: LocationSegment[]): Promi
         segment_type, activity_type, semantic_type, place_id, distance_meters,
         speed_kmh, azimuth_degrees
     ) SELECT DISTINCT * FROM read_json_auto('${tempFile}')`);
+
+    // Stable per-row key, materialised once now that DISTINCT has settled the row
+    // set. Geo attribution runs in the background after the import unblocks, so
+    // its results are matched back onto already-loaded points by `seg_id`; the
+    // `rowid` pseudo-column itself can't be used, as the finalize UPDATE rewrites
+    // rows.
+    await conn.query(`UPDATE ${TABLE_NAME} SET seg_id = rowid`);
 
     await db.registerFileText(tempFile, '');
 }

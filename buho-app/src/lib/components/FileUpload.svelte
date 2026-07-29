@@ -7,7 +7,10 @@
     let dialogOpen = $state(false);
 
     function handleExplorePersonalData() {
-        trackEvent("use-own-data", { source: dataStore.source ?? "unknown" });
+        trackEvent("import-open", {
+            source: dataStore.source ?? "unknown",
+            replace: !dataStore.isDemo,
+        });
         dialogOpen = true;
     }
 
@@ -21,7 +24,6 @@
     }
 
     function handleSwitchToDemo() {
-        trackEvent("switch-to-demo", { source: dataStore.source ?? "unknown" });
         dataStore.loadDemoData();
     }
 </script>

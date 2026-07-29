@@ -11,6 +11,7 @@
     import { toMinimalStyle } from "$lib/visualizations/minimalMapStyle";
     import { OTHER_COLOR } from "$lib/utils/dimensionColors";
     import { themeStore, type Theme } from "$lib/stores/themeStore.svelte";
+    import { trackControl } from "$lib/analytics";
 
     /** Tooltip content for a hovered point, built by the caller from metadata. */
     interface TooltipInfo {
@@ -454,7 +455,10 @@
         class:active={showPaths}
         aria-pressed={showPaths}
         title="Connect points into a chronological trail"
-        onclick={() => (showPaths = !showPaths)}
+        onclick={() => {
+            trackControl("location-map", "connect-points", !showPaths);
+            showPaths = !showPaths;
+        }}
     >
         Connect points
     </button>

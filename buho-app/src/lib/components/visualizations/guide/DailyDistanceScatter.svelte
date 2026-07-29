@@ -82,6 +82,7 @@
 
 <script lang="ts">
     import { RACE_PALETTE } from "$lib/visualizations/racePalette";
+    import { trackControl } from "$lib/analytics";
 
     let { data, width = 960 }: { data: DayRecord[]; width?: number } = $props();
 
@@ -320,7 +321,10 @@
     <div class="controls">
         <label>
             <span>X</span>
-            <select bind:value={xKey}>
+            <select
+                bind:value={xKey}
+                onchange={() => trackControl("daily-scatter", "x-axis", xKey)}
+            >
                 {#each METRICS as m (m.key)}
                     <option value={m.key}>{m.label}</option>
                 {/each}
@@ -328,7 +332,10 @@
         </label>
         <label>
             <span>Y</span>
-            <select bind:value={yKey}>
+            <select
+                bind:value={yKey}
+                onchange={() => trackControl("daily-scatter", "y-axis", yKey)}
+            >
                 {#each METRICS as m (m.key)}
                     <option value={m.key}>{m.label}</option>
                 {/each}
@@ -336,7 +343,10 @@
         </label>
         <label>
             <span>Colour</span>
-            <select bind:value={colorBy}>
+            <select
+                bind:value={colorBy}
+                onchange={() => trackControl("daily-scatter", "color-by", colorBy)}
+            >
                 {#each COLOR_OPTIONS as c (c.key)}
                     <option value={c.key}>{c.label}</option>
                 {/each}

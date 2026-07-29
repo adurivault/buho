@@ -2,7 +2,11 @@
     import * as d3 from "d3";
     import type { DayRecord } from "$lib/data/queries/googleMapsQueries";
 
-    let { data, width = 820 }: { data: DayRecord[]; width?: number } = $props();
+    let {
+        data,
+        yearWidth = 760,
+        columns = 2,
+    }: { data: DayRecord[]; yearWidth?: number; columns?: number } = $props();
 
     let svgEl: SVGSVGElement;
     let tooltipEl: HTMLDivElement;
@@ -55,16 +59,18 @@
         const fillOf = (km: number | undefined) =>
             km === undefined ? "empty" : km <= 0 ? "empty" : color(km);
 
+        // Years are laid out left-to-right then down: 2016 2017 / 2018 2019 / …
+        const cols = Math.max(1, Math.min(columns, years.length));
+        const rowCount = Math.ceil(years.length / cols);
         const yearH = 7 * CELL;
+        const width = cols * yearWidth;
         const height =
-            margin.top +
-            margin.bottom +
-            years.length * (yearH + yearGap) -
-            yearGap;
+            margin.top + margin.bottom + rowCount * (yearH + yearGap) - yearGap;
 
         svg.attr("viewBox", `0 0 ${width} ${height}`)
             .attr("width", "100%")
-            .attr("height", height);
+            .attr("height", null)
+            .attr("preserveAspectRatio", "xMinYMin meet");
 
         const tip = d3.select(tooltipEl);
         const fmt = d3.utcFormat("%a %d %b %Y");
@@ -72,10 +78,11 @@
         years.forEach((year, yi) => {
             const yearStart = new Date(Date.UTC(year, 0, 1));
             const gy =
-                margin.top + yi * (yearH + yearGap);
+                margin.top + Math.floor(yi / cols) * (yearH + yearGap);
+            const gx = margin.left + (yi % cols) * yearWidth;
             const g = svg
                 .append("g")
-                .attr("transform", `translate(${margin.left},${gy})`);
+                .attr("transform", `translate(${gx},${gy})`);
 
             // Year label.
             g.append("text")
@@ -166,6 +173,7 @@
     }
     .cal {
         display: block;
+        height: auto;
         overflow: visible;
     }
     .tip {

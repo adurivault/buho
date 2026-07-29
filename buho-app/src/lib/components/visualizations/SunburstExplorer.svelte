@@ -201,12 +201,12 @@
 
     /** Filter = path up to `node`. Root → everything cleared. */
     function setFiltersToPath(node: RectNode) {
-        for (const key of SELECTABLE_KEYS) filters.removeFilter(key);
+        for (const key of SELECTABLE_KEYS) filters.removeFilter(key, "sunburst");
         if (node.depth === 0) return;
         const path = node.ancestors().reverse().slice(1) as RectNode[];
         for (const n of path) {
             const key = keyOf(n);
-            if (key) filters.setFilter(key, n.data.name);
+            if (key) filters.setFilter(key, n.data.name, "sunburst");
         }
     }
 
@@ -232,7 +232,7 @@
         if (focus && focus.depth > 0) {
             setFiltersToPath((focus.parent as RectNode) ?? focus);
         } else {
-            for (const key of SELECTABLE_KEYS) filters.removeFilter(key);
+            for (const key of SELECTABLE_KEYS) filters.removeFilter(key, "sunburst");
         }
     }
 

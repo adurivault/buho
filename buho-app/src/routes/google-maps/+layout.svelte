@@ -3,16 +3,24 @@
 	import { dataStore } from "$lib/stores/dataStore.svelte";
 	import SourceNav from "$lib/components/SourceNav.svelte";
 	import ImportStatus from "$lib/components/ImportStatus.svelte";
+	import GoogleMapsImportDialog from "$lib/components/GoogleMapsImportDialog.svelte";
+	import { trackEvent } from "$lib/analytics";
 
 	let { children } = $props();
 
 	let fileInput: HTMLInputElement;
+	let dialogOpen = $state(false);
+
+	function openImportDialog() {
+		trackEvent("import-open", { source: "google-maps", replace: onMaps });
+		dialogOpen = true;
+	}
 
 	const onMaps = $derived(dataStore.source === "google-maps");
 
 	const tabs = [
 		{ label: "Explore", href: resolve("/google-maps/explore") },
-		{ label: "Guide", href: resolve("/google-maps/guide") },
+		{ label: "Other", href: resolve("/google-maps/guide") },
 	];
 
 	async function handleFileChange(event: Event) {
@@ -44,6 +52,11 @@
 				bind:this={fileInput}
 				onchange={handleFileChange}
 			/>
+			<GoogleMapsImportDialog
+				bind:open={dialogOpen}
+				onClose={() => (dialogOpen = false)}
+				onPickFile={() => fileInput?.click()}
+			/>
 			<div class="upload-pill">
 				{#if dataStore.loading}
 					<span class="dot loading"></span>
@@ -54,14 +67,14 @@
 					<button
 						class="upload-btn"
 						type="button"
-						onclick={() => fileInput?.click()}
+						onclick={openImportDialog}
 						disabled={!!dataStore.loading}>Replace</button
 					>
 				{:else}
 					<button
 						class="upload-btn primary"
 						type="button"
-						onclick={() => fileInput?.click()}
+						onclick={openImportDialog}
 						disabled={!!dataStore.loading}>Import Timeline</button
 					>
 				{/if}
@@ -118,7 +131,7 @@
 	.header-center {
 		justify-self: center;
 		/* Maps keeps its own brand hue on the shared segmented toggle. */
-		--source-accent: #ea4335;
+		--source-accent: var(--accent-maps);
 	}
 
 	.header-right {

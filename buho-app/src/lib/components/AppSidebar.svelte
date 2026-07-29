@@ -175,12 +175,16 @@
     height: 40px;
     border-radius: 10px;
     font-size: 1.375rem;
+    color: hsl(var(--muted-foreground));
     text-decoration: none;
-    transition: background-color 0.15s;
+    transition:
+      color 0.15s,
+      background-color 0.15s;
   }
 
   .logo:hover,
   .logo.active {
+    color: hsl(var(--foreground));
     background-color: hsl(var(--accent));
   }
 
@@ -226,8 +230,12 @@
   }
 
   .nav-link.maps.active {
-    color: #4285f4;
-    background-color: color-mix(in srgb, #4285f4 12%, transparent);
+    color: var(--accent-maps, #ea4335);
+    background-color: color-mix(
+      in srgb,
+      var(--accent-maps, #ea4335) 12%,
+      transparent
+    );
   }
 
   .nav-link.disabled {

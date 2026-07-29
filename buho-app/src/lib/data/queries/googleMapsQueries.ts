@@ -47,6 +47,7 @@ export interface LocationBasePoint extends ConnectablePoint {
     // (unlike `matched`, which also folds the viewport box in). The map trail reads
     // this so it can span points outside the current view.
     matchedDims?: boolean;
+    segId: number; // stable segment key, for patchGeoAttributes
     fSegmentType: string; // stationary | moving
     fActivityType: string; // walking, in passenger vehicle, … (or Unknown)
     fSemanticType: string; // Home, Work, Unknown, …
@@ -74,6 +75,7 @@ export interface LocationBasePoint extends ConnectablePoint {
 export async function getGoogleMapsExplorerBasePoints(): Promise<LocationBasePoint[]> {
     const sql = `
         SELECT
+            seg_id as segId,
             CAST(epoch(DATE(timestamp)) * 1000 AS BIGINT) as x,
             CAST(hour(timestamp) + (minute(timestamp) / 60.0) + (second(timestamp) / 3600.0) AS DOUBLE) as y,
             CAST(timestamp AS VARCHAR) as playedAt,
@@ -104,6 +106,7 @@ export async function getGoogleMapsExplorerBasePoints(): Promise<LocationBasePoi
     try {
         const result = await query<any>(sql);
         const points: LocationBasePoint[] = result.map((row) => ({
+            segId: Number(row.segId),
             x: Number(row.x),
             y: Number(row.y),
             matched: true,
@@ -144,6 +147,60 @@ export async function getGoogleMapsExplorerBasePoints(): Promise<LocationBasePoi
     } catch (error) {
         console.error('Error fetching Google Maps base points:', error);
         return [];
+    }
+}
+
+/**
+ * Write the geo columns onto points already loaded by
+ * {@link getGoogleMapsExplorerBasePoints}, once the background attribution has
+ * filled them in. Patches in place, keyed by `seg_id`: the array reference is
+ * left untouched, so the map keeps its viewport and the constellation its
+ * quadtree instead of refitting on a fresh point set.
+ *
+ * Columnar (like buildDays) — six columns over every segment, so the per-row
+ * toJSON + camelCase churn of query() is worth avoiding.
+ */
+export async function patchGeoAttributes(points: LocationBasePoint[]): Promise<void> {
+    if (points.length === 0) return;
+
+    const sql = `
+        SELECT
+            seg_id AS segId,
+            COALESCE(country, 'Unknown') AS country,
+            COALESCE(region, 'Unknown') AS region,
+            COALESCE(department, 'Unknown') AS department,
+            COALESCE(nearest_city, 'Unknown') AS nearestCity,
+            COALESCE(arrondissement, 'Unknown') AS arrondissement
+        FROM google_maps_segments
+        WHERE timestamp IS NOT NULL
+    `;
+
+    try {
+        const { numRows, columns } = await queryColumnar(sql);
+        const byId = new Map<number, LocationBasePoint>();
+        for (const p of points) byId.set(p.segId, p);
+
+        const segId = columns.segId, country = columns.country, region = columns.region;
+        const department = columns.department, nearestCity = columns.nearestCity;
+        const arrondissement = columns.arrondissement;
+
+        for (let i = 0; i < numRows; i++) {
+            const p = byId.get(Number(segId[i]));
+            if (!p) continue;
+            p.country = String(country[i]);
+            p.region = String(region[i]);
+            p.department = String(department[i]);
+            p.nearestCity = String(nearestCity[i]);
+            p.arrondissement = String(arrondissement[i]);
+            // The tooltip reads its geo line off `metadata`, so keep both in sync.
+            p.metadata.country = p.country;
+            p.metadata.region = p.region;
+            p.metadata.department = p.department;
+            p.metadata.nearestCity = p.nearestCity;
+            p.metadata.arrondissement = p.arrondissement;
+        }
+    } catch (error) {
+        console.error('Error patching geo attributes:', error);
     }
 }
 

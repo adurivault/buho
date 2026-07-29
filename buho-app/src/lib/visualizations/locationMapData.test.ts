@@ -5,6 +5,7 @@ import type { LocationBasePoint } from '$lib/data/queries/googleMapsQueries';
 /** Minimal base point carrying only what the map helpers read (lat/lon). */
 function mk(lat: unknown, lon: unknown): LocationBasePoint {
     return {
+        segId: 0,
         x: 0,
         y: 0,
         matched: true,

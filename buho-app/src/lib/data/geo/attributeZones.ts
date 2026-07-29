@@ -22,12 +22,23 @@ import {
  * of an upload), so `onProgress(processed, total)` is called after each batch with
  * the number of positions located so far — the UI can show real, steadily
  * advancing progress with a point count.
+ *
+ * Attribution runs in the background while the app is already usable, so a new
+ * upload can land mid-run: `signal.aborted` is polled between batches and stops
+ * the run before it writes into a table the new import has meanwhile rebuilt.
+ * Returns false when it stopped early, true when it completed.
  */
+export interface AttributionSignal {
+    readonly aborted: boolean;
+}
+
 export async function attributeZones(
-    onProgress?: (processed: number, total: number) => void
-): Promise<void> {
+    onProgress?: (processed: number, total: number) => void,
+    signal?: AttributionSignal
+): Promise<boolean> {
     const batchSize = DEFAULT_BATCH_SIZE;
     for (const sql of buildSetupStatements(batchSize)) {
+        if (signal?.aborted) return false;
         await query(sql);
     }
 
@@ -36,12 +47,15 @@ export async function attributeZones(
     const batchCount = Math.ceil(totalPositions / batchSize);
 
     for (let b = 0; b < batchCount; b++) {
+        if (signal?.aborted) return false;
         await query(attributionBatchSql(b));
         onProgress?.(Math.min((b + 1) * batchSize, totalPositions), totalPositions);
     }
 
     for (const sql of FINALIZE_STATEMENTS) {
+        if (signal?.aborted) return false;
         await query(sql);
     }
     onProgress?.(totalPositions, totalPositions);
+    return true;
 }
