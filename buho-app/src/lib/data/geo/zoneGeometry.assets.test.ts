@@ -46,11 +46,15 @@ describe('sanitizeFeatures', () => {
     it('keeps every vertex inside the projectable latitude range', () => {
         // deck.gl's lngLatToWorld hard-asserts this; Antarctica's ring reaches
         // -90.00000000000001 raw, and one bad vertex blanks the whole fill layer.
+        // Reduced to the worst vertex first: asserting per vertex over the whole
+        // dataset costs seconds of matcher overhead.
+        let worst = 0;
         for (const f of zones) {
             eachLat(f, (lat) => {
-                expect(Math.abs(lat)).toBeLessThanOrEqual(MAX_LATITUDE);
+                if (Math.abs(lat) > worst) worst = Math.abs(lat);
             });
         }
+        expect(worst).toBeLessThanOrEqual(MAX_LATITUDE);
     });
 
     it('drops any feature simplification emptied', () => {
