@@ -35,7 +35,7 @@ export function topTracksPlot(data: TrackData[], options: any = {}) {
                 text: d => d.plays.toLocaleString(),
                 dx: 5,
                 textAnchor: "start",
-                fill: "#e0e6ed"
+                fill: "currentColor"
             })
         ],
         ...DARK_THEME,
@@ -93,7 +93,7 @@ export function trackAnalysisScatterPlot(
                 r: 4.1,
                 fill: ACCENT_COLOR,
                 fillOpacity: 0.72,
-                stroke: "#0f172a",
+                stroke: "var(--plot-background)",
                 strokeWidth: 0.7,
                 tip: true,
                 title: d =>

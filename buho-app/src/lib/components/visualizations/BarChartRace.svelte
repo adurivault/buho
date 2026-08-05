@@ -74,6 +74,7 @@
 
     const INTERPOLATION_STEPS = 10;
     const FRAME_DURATION_MS = 120;
+    const SPEEDS = [1, 2, 4] as const;
     const BAR_SIZE = 36;
     const MARGIN = $derived({ top: 24, right: 90, bottom: 16, left: leftMargin });
 
@@ -82,6 +83,7 @@
     let chartHost = $state<HTMLDivElement | undefined>(undefined);
     let isVisible = $state(false);
     let isPlaying = $state(false);
+    let speed = $state<(typeof SPEEDS)[number]>(1);
     let currentFrameIndex = $state(0);
     let chartWidth = $state(1200);
     let resizeObserver: ResizeObserver | undefined;
@@ -487,12 +489,18 @@
             );
     }
 
-    async function drawFrame(index: number, duration = 0) {
+    /**
+     * `fromIndex` is the frame currently on screen, which is not always
+     * `index - 1`: playback can skip keyframes to go faster. Every tween starts
+     * from it — the counting labels and the month ticker would otherwise animate
+     * across one step while the bars travel several.
+     */
+    async function drawFrame(index: number, duration = 0, fromIndex = index - 1) {
         if (keyframes.length === 0) return;
         ensureChart();
 
         const frame = keyframes[index];
-        const prevFrame = keyframes[Math.max(0, index - 1)] ?? frame;
+        const prevFrame = keyframes[Math.max(0, fromIndex)] ?? frame;
         const nextFrame =
             keyframes[Math.min(keyframes.length - 1, index + 1)] ?? frame;
         const prev = new Map(prevFrame.items.map((d) => [d.name, d]));
@@ -535,10 +543,16 @@
         currentFrameIndex = start;
         await drawFrame(start, 0);
 
-        for (let i = start + 1; i < keyframes.length; i++) {
-            if (stopPlayback) break;
-            currentFrameIndex = i;
-            await drawFrame(i, FRAME_DURATION_MS);
+        let from = start;
+        while (!stopPlayback && from < keyframes.length - 1) {
+            // Speed skips keyframes instead of shortening the transition: each
+            // step still animates over its full duration, so the race stays
+            // fluid rather than degrading into a stutter of near-instant hops.
+            // `speed` is read per step, so a change lands on the next one.
+            const next = Math.min(from + speed, keyframes.length - 1);
+            currentFrameIndex = next;
+            await drawFrame(next, FRAME_DURATION_MS, from);
+            from = next;
         }
 
         isPlaying = false;
@@ -643,6 +657,22 @@
                 >
                     Stop
                 </button>
+                <div class="speeds" role="group" aria-label="Playback speed">
+                    {#each SPEEDS as s (s)}
+                        <button
+                            type="button"
+                            class="race-btn speed"
+                            class:active={speed === s}
+                            aria-pressed={speed === s}
+                            onclick={() => {
+                                trackControl(vizId, "speed", String(s));
+                                speed = s;
+                            }}
+                        >
+                            {s}×
+                        </button>
+                    {/each}
+                </div>
                 <button
                     type="button"
                     class="race-btn"
@@ -718,6 +748,23 @@
     .race-btn:disabled {
         opacity: 0.45;
         cursor: not-allowed;
+    }
+
+    .speeds {
+        display: inline-flex;
+        gap: 0.25rem;
+    }
+
+    .race-btn.speed {
+        padding: 0.35rem 0.6rem;
+        opacity: 0.6;
+    }
+
+    .race-btn.speed.active {
+        opacity: 1;
+        font-weight: 600;
+        border-color: rgb(148 163 184 / 0.9);
+        background: rgb(51 65 85 / 0.9);
     }
 
     .race-scrubber {

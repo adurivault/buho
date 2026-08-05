@@ -1,6 +1,6 @@
 import * as Plot from "@observablehq/plot";
 import * as d3 from "d3";
-import { ACCENT_COLOR, ACCENT_SECONDARY, DARK_THEME } from "./common";
+import { ACCENT_COLOR, ACCENT_SECONDARY, DARK_THEME, emptyPlot } from "./common";
 import type {
     DailyAnalysisData,
     TracklistSizePoint,
@@ -19,11 +19,7 @@ export function calendarHeatmapPlot(data: DailyCalendarPoint[], options: any = {
         .map((d) => ({ date: new Date(`${d.date}T00:00:00Z`), minutes: d.minutes }));
 
     if (days.length === 0) {
-        const root = document.createElement("div");
-        root.style.cssText =
-            "display:flex;align-items:center;justify-content:center;min-height:240px;opacity:0.6";
-        root.textContent = "No data in this date range.";
-        return root as HTMLElement | SVGElement;
+        return emptyPlot("No data in this date range.", 240) as HTMLElement | SVGElement;
     }
 
     const years = Array.from(new Set(days.map((d) => d.date.getUTCFullYear()))).sort(
@@ -120,7 +116,7 @@ export function dailyAnalysisScatterPlot(
             r: 4.2,
             fill: ACCENT_SECONDARY,
             fillOpacity: 0.75,
-            stroke: "#0f172a",
+            stroke: "var(--plot-background)",
             strokeWidth: 0.75,
             tip: true,
             title: d =>

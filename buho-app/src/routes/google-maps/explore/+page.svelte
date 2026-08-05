@@ -2,6 +2,9 @@
     import { onDestroy, untrack } from "svelte";
     import ConstellationChart from "$lib/components/visualizations/ConstellationChart.svelte";
     import DimensionPie from "$lib/components/visualizations/DimensionPie.svelte";
+    import MeasureToggle, {
+        type MeasureOption,
+    } from "$lib/components/visualizations/MeasureToggle.svelte";
     import SunburstExplorer from "$lib/components/visualizations/SunburstExplorer.svelte";
     import LocationMap from "$lib/components/visualizations/LocationMap.svelte";
     import type { MapBounds } from "$lib/visualizations/locationMapData";
@@ -46,10 +49,10 @@
     // unaffected; the indicator bar always shows the full picture regardless.
     type Measure = "time" | "km" | "points";
     let measure = $state<Measure>("time");
-    const MEASURES: { key: Measure; label: string }[] = [
-        { key: "time", label: "time" },
-        { key: "km", label: "km" },
-        { key: "points", label: "points" },
+    const MEASURES: MeasureOption[] = [
+        { key: "time", label: "Time", hint: "Weighted by hours spent" },
+        { key: "km", label: "Distance", hint: "Weighted by kilometres covered" },
+        { key: "points", label: "Points", hint: "One unit per recorded point" },
     ];
 
     function measureOf(m: Measure, p: LocationBasePoint): number {
@@ -731,27 +734,6 @@
             </div>
 
             <div class="header-right">
-                <div
-                    class="measure-toggle"
-                    role="group"
-                    aria-label="Measure"
-                >
-                    {#each MEASURES as m (m.key)}
-                        <button
-                            type="button"
-                            class="measure-btn"
-                            class:active={measure === m.key}
-                            aria-pressed={measure === m.key}
-                            onclick={() => {
-                                trackControl("maps-explorer", "measure", m.key);
-                                measure = m.key;
-                            }}
-                        >
-                            {m.label}
-                        </button>
-                    {/each}
-                </div>
-
                 {#if googleMapsExplorerFilters.hasActiveFilters}
                     <button
                         class="clear-filters-btn"
@@ -900,6 +882,16 @@
 
         {#if !initialLoad}
             <section class="dimensions-row" aria-label="Dimension breakdowns">
+                <MeasureToggle
+                    options={MEASURES}
+                    value={measure}
+                    onChange={(key) => {
+                        trackControl("maps-explorer", "measure", key);
+                        measure = key as Measure;
+                    }}
+                />
+                <div class="dimensions-divider" aria-hidden="true"></div>
+
                 {#each PIE_DIMS as pd (pd.key)}
                     <DimensionPie
                         title={pd.label}
@@ -926,6 +918,8 @@
 
 <style>
     .explorer-page {
+        /* Lets the measure toggle pick up the source hue. */
+        --source-accent: var(--accent-maps, #ea4335);
         height: 100%;
         box-sizing: border-box;
         display: flex;
@@ -958,6 +952,13 @@
         align-items: center;
         justify-content: space-between;
         gap: 0.65rem;
+    }
+
+    .dimensions-divider {
+        align-self: stretch;
+        width: 1px;
+        background: hsl(var(--border));
+        flex: none;
     }
 
     .dimensions-row {

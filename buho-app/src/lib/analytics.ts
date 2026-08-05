@@ -55,7 +55,7 @@ export type EventName =
 	| "promise-rejection";
 
 /** Data source a page belongs to, derived from the route. */
-export type SourceKey = "spotify" | "google-maps" | "whatsapp" | "home" | "none";
+export type SourceKey = "spotify" | "google-maps" | "messages" | "home" | "none";
 
 /** Guide narration vs. Explorer, derived from the route. */
 export type ModeKey = "guide" | "explore" | "home" | "none";
@@ -77,8 +77,8 @@ export function pageContext(): PageContext {
 		? "spotify"
 		: path.includes("/google-maps")
 			? "google-maps"
-			: path.includes("/whatsapp")
-				? "whatsapp"
+			: path.includes("/messages")
+				? "messages"
 				: path === "/" || path === ""
 					? "home"
 					: "none";

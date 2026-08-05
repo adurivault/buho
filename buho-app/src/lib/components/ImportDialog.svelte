@@ -9,6 +9,11 @@
         accent: string;
         /** When provided, a ← button is rendered next to the title. */
         onBack?: () => void;
+        /**
+         * Tailwind max-width class. Dialogs that only ask a question stay narrow;
+         * one that walks you through an export needs the room.
+         */
+        maxWidth?: string;
         children: Snippet;
     }
 
@@ -18,6 +23,7 @@
         title,
         accent,
         onBack,
+        maxWidth = "max-w-lg",
         children,
     }: Props = $props();
 
@@ -56,7 +62,7 @@
         onclick={close}
     >
         <div
-            class="relative w-full max-w-lg rounded-2xl border border-border bg-background p-7 shadow-2xl sm:p-8"
+            class="relative max-h-[85vh] w-full {maxWidth} overflow-y-auto rounded-2xl border border-border bg-background p-7 shadow-2xl sm:p-8"
             style:--dialog-accent={accent}
             role="dialog"
             aria-modal="true"

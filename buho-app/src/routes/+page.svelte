@@ -21,10 +21,11 @@
 			image: "",
 		},
 		{
-			title: "WhatsApp",
-			description: "Explore chat statistics and communication trends.",
-			available: false,
-			link: "#",
+			title: "Messages",
+			description:
+				"Explore who you talk to, when, and how the back-and-forth flows.",
+			available: true,
+			link: resolve("/messages/explore"),
 			image: "",
 		},
 	];

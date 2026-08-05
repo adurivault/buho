@@ -21,8 +21,8 @@
     import BarChartRace, {
         type RaceRow,
     } from "$lib/components/visualizations/BarChartRace.svelte";
-    import { sectionView } from "$lib/actions/sectionView";
-    import InfoHint from "$lib/components/InfoHint.svelte";
+    import GuidePage from "$lib/components/guide/GuidePage.svelte";
+    import GuideSection from "$lib/components/guide/GuideSection.svelte";
 
     const dbReady = $derived(
         dataStore.source === "google-maps" && !dataStore.isLoading,
@@ -112,20 +112,15 @@
     </p>
 {/snippet}
 
-<div class="guide">
+<GuidePage accent="var(--accent-maps)">
     {#if !dbReady}
         <p class="empty">Import your Google Timeline export to see the guide.</p>
     {:else}
-        <section class="viz" use:sectionView={"maps-day-race"}>
-            <h2>
-                Every day at once
-                <InfoHint
-                    text="Every day you were tracked, replayed together on a single
-                    24-hour clock. Each dot is one day of your life moving through
-                    the map: still at home in the morning, spreading out across the
-                    city, drifting back home at night."
-                />
-            </h2>
+        <GuideSection
+            id="maps-day-race"
+            title="Every day at once"
+            hint="Every day you were tracked, replayed together on a single 24-hour clock. Each dot is one day of your life moving through the map: still at home in the morning, spreading out across the city, drifting back home at night."
+        >
             {#if days.length && raceSegments?.numRows}
                 <DayRaceMap {days} segments={raceSegments} />
             {:else if geoPending}
@@ -133,18 +128,13 @@
             {:else}
                 <p class="empty">No per-day mobility data available.</p>
             {/if}
-        </section>
+        </GuideSection>
 
-        <section class="viz" use:sectionView={"maps-zone-choropleth"}>
-            <h2>
-                Where your time went
-                <InfoHint
-                    text="Every zone shaded by how much of your life you spent
-                    inside it. Zoom in and the map follows you down a level on its
-                    own — countries, then regions, then departments, then
-                    arrondissements. Click a zone to fly to it."
-                />
-            </h2>
+        <GuideSection
+            id="maps-zone-choropleth"
+            title="Where your time went"
+            hint="Every zone shaded by how much of your life you spent inside it. Zoom in and the map follows you down a level on its own — countries, then regions, then departments, then arrondissements. Click a zone to fly to it."
+        >
             <p class="sub">
                 The darker the fill, the more time you spent there. Zoom into a
                 country and it breaks apart into its regions; keep going and the
@@ -159,7 +149,7 @@
             {:else}
                 <p class="empty">No located segments to map.</p>
             {/if}
-        </section>
+        </GuideSection>
 
         <BarChartRace
             trackId="maps-country-race"
@@ -185,16 +175,11 @@
             loadingLabel="Loading region race…"
         />
 
-        <section class="viz" use:sectionView={"maps-distance-calendar"}>
-            <h2>
-                Your year in kilometres
-                <InfoHint
-                    text="One square per day, from January to December, the darker
-                    the further you travelled that day. Holidays, commutes and quiet
-                    weeks at home all leave their own pattern; pale grey squares are
-                    days with no tracking at all."
-                />
-            </h2>
+        <GuideSection
+            id="maps-distance-calendar"
+            title="Your year in kilometres"
+            hint="One square per day, from January to December, the darker the further you travelled that day. Holidays, commutes and quiet weeks at home all leave their own pattern; pale grey squares are days with no tracking at all."
+        >
             {#if days.length}
                 <DistanceCalendar data={days} />
             {:else if geoPending}
@@ -202,18 +187,13 @@
             {:else}
                 <p class="empty">No per-day mobility data available.</p>
             {/if}
-        </section>
+        </GuideSection>
 
-        <section class="viz" use:sectionView={"maps-speed"}>
-            <h2>
-                How fast you move
-                <InfoHint
-                    text="How your trips split between walking, cycling, driving and
-                    flying, measured as the average speed of every trip you made.
-                    The peaks tell you which of those fills most of your travelling
-                    life."
-                />
-            </h2>
+        <GuideSection
+            id="maps-speed"
+            title="How fast you move"
+            hint="How your trips split between walking, cycling, driving and flying, measured as the average speed of every trip you made. The peaks tell you which of those fills most of your travelling life."
+        >
             {#if speed && speed.totalLegs}
                 <p class="coverage">
                     Across <b>{speed.totalLegs.toLocaleString()}</b> moving segments,
@@ -229,19 +209,13 @@
             {:else}
                 <p class="empty">No moving segments to derive speed from.</p>
             {/if}
-        </section>
+        </GuideSection>
 
-        <section class="viz" use:sectionView={"maps-daily-scatter"}>
-            <h2>
-                How far, and how far out
-                <InfoHint
-                    text="One dot per day, placed by whichever two measures you
-                    choose — kilometres covered, average speed, when you left and
-                    came back, how many new places you saw. Colour the cloud by city,
-                    weekday or year and the days regroup around what they have in
-                    common."
-                />
-            </h2>
+        <GuideSection
+            id="maps-daily-scatter"
+            title="How far, and how far out"
+            hint="One dot per day, placed by whichever two measures you choose — kilometres covered, average speed, when you left and came back, how many new places you saw. Colour the cloud by city, weekday or year and the days regroup around what they have in common."
+        >
             {#if days.length}
                 <div class="bleed">
                     <DailyDistanceScatter data={days} />
@@ -251,66 +225,14 @@
             {:else}
                 <p class="empty">No per-day mobility data available.</p>
             {/if}
-        </section>
+        </GuideSection>
     {/if}
-</div>
+</GuidePage>
 
 <style>
-    .guide {
-        width: 100%;
-        margin: 0 auto;
-        padding: 2rem 2rem 6rem;
-        display: flex;
-        flex-direction: column;
-        gap: 4rem;
-    }
-
-    /* Charts span the full page width; the narrative text stays at a readable
-       measure so lines don't stretch across the whole viewport. */
-    .viz > h2,
-    .viz > .coverage,
-    .guide > .empty {
-        max-width: 860px;
-    }
-
-    .viz h2 {
-        font-size: 1.35rem;
-        font-weight: 600;
-        color: hsl(var(--foreground));
-        margin: 0 0 1.25rem;
-    }
-
-    .coverage {
-        font-size: 0.85rem;
-        color: hsl(var(--muted-foreground));
-        margin: 0 0 1.25rem;
-        padding: 0.6rem 0.8rem;
-        border-left: 2px solid #ea4335;
-        background: hsl(var(--secondary) / 0.3);
-        border-radius: 0 0.4rem 0.4rem 0;
-    }
-    .coverage b {
-        color: hsl(var(--foreground));
-        font-weight: 600;
-    }
-
-    .empty {
-        color: hsl(var(--muted-foreground));
-        font-size: 0.9rem;
-    }
-
+    /* Only what is specific to this guide; the rest comes from GuidePage. */
     .pending-detail {
         opacity: 0.7;
         font-variant-numeric: tabular-nums;
-    }
-
-    /* Break a chart out of the 860px reading column to (nearly) the viewport. */
-    .bleed {
-        width: min(100vw, 1500px);
-        position: relative;
-        left: 50%;
-        transform: translateX(-50%);
-        padding: 0 1.5rem;
-        box-sizing: border-box;
     }
 </style>

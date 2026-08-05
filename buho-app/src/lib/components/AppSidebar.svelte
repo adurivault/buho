@@ -69,10 +69,11 @@
         </a>
       </li>
       <li>
-        <span
-          class="nav-link disabled"
-          title="WhatsApp — coming soon"
-          aria-disabled="true"
+        <a
+          href={resolve("/messages/explore")}
+          class="nav-link messages"
+          title="Messages"
+          class:active={page.url.pathname.startsWith(resolve("/messages"))}
         >
           <svg
             class="nav-icon"
@@ -89,8 +90,8 @@
               d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
             />
           </svg>
-          <span class="sr-only">WhatsApp (coming soon)</span>
-        </span>
+          <span class="sr-only">Messages</span>
+        </a>
       </li>
     </ul>
   </nav>
@@ -238,9 +239,13 @@
     );
   }
 
-  .nav-link.disabled {
-    opacity: 0.35;
-    cursor: not-allowed;
+  .nav-link.messages.active {
+    color: var(--accent-messages, #3b82f6);
+    background-color: color-mix(
+      in srgb,
+      var(--accent-messages, #3b82f6) 12%,
+      transparent
+    );
   }
 
   .theme-toggle {
@@ -265,7 +270,7 @@
     background-color: hsl(var(--accent));
   }
 
-  /* Mobile: fixed bottom bar, only real destinations */
+  /* Mobile: fixed bottom bar */
   @media (max-width: 767px) {
     .sidebar {
       width: 100%;
@@ -286,9 +291,6 @@
     }
     .sidebar nav ul {
       display: contents;
-    }
-    .nav-link.disabled {
-      display: none;
     }
     .theme-toggle {
       margin-top: 0;

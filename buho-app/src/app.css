@@ -85,6 +85,7 @@
        var(--accent-spotify), not via hsl()). */
     --accent-spotify: #1db954;
     --accent-maps: #ea4335;
+    --accent-messages: #3b82f6;
 
     /* Observable Plot tip mark vars (theme-aware). */
     --plot-background: rgb(252 250 247 / 0.97);

@@ -68,7 +68,7 @@ export function discoveryRecencyScatterPlot(
                 r: "plays",
                 fill: ACCENT_COLOR,
                 fillOpacity: 0.55,
-                stroke: "#0f172a",
+                stroke: "var(--plot-background)",
                 strokeWidth: 0.5,
                 tip: true,
                 title: (d) =>
@@ -135,7 +135,7 @@ export function trackObsessionsPlot(data: TrackObsessionData[], options: any = {
                 y: "label",
                 r: "peakWeekPlays",
                 fill: "concentration",
-                stroke: "#0f172a",
+                stroke: "var(--plot-background)",
                 strokeWidth: 0.5,
                 tip: true,
                 title: (d) =>

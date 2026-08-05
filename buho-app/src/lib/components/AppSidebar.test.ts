@@ -28,28 +28,21 @@ describe('AppSidebar', () => {
 		expect(screen.getByText('Home')).toBeInTheDocument();
 		expect(screen.getByText('Spotify')).toBeInTheDocument();
 		expect(screen.getByText(/Google Maps/)).toBeInTheDocument();
-		expect(screen.getByText(/WhatsApp/)).toBeInTheDocument();
+		expect(screen.getByText(/Messages/)).toBeInTheDocument();
 	});
 
-	test('home, spotify and google maps links point to correct routes', () => {
+	test('every source links to its explorer', () => {
 		render(AppSidebar);
 
 		const homeLink = screen.getByText('Home').closest('a');
 		const spotifyLink = screen.getByText('Spotify').closest('a');
 		const mapsLink = screen.getByText(/Google Maps/).closest('a');
+		const messagesLink = screen.getByText(/Messages/).closest('a');
 
 		expect(homeLink).toHaveAttribute('href', '/');
 		expect(spotifyLink).toHaveAttribute('href', '/spotify/explore');
 		expect(mapsLink).toHaveAttribute('href', '/google-maps/explore');
-	});
-
-	test('unavailable sources are disabled, not links', () => {
-		render(AppSidebar);
-
-		const whatsapp = screen.getByText(/WhatsApp/).closest('.nav-link');
-
-		expect(whatsapp?.tagName).not.toBe('A');
-		expect(whatsapp).toHaveAttribute('aria-disabled', 'true');
+		expect(messagesLink).toHaveAttribute('href', '/messages/explore');
 	});
 
 	test('has a theme toggle button and no collapse toggle', () => {
@@ -85,7 +78,7 @@ describe('AppSidebar', () => {
 		const logoLink = container.querySelector('a.logo');
 		expect(logoLink).toBeTruthy();
 
-		// Data sources are in the list (3 items: Spotify, Google Maps, WhatsApp)
+		// Data sources are in the list (3 items: Spotify, Google Maps, Messages)
 		const listItems = container.querySelectorAll('li');
 		expect(listItems).toHaveLength(3);
 	});

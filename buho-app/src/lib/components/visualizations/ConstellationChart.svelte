@@ -48,6 +48,10 @@
         // Tooltip content for the hovered point, derived from its metadata.
         // When omitted, no tooltip is shown.
         formatTooltip?: (metadata: Record<string, unknown>) => TooltipInfo;
+        // Skip the tooltip on points the active filters exclude. A dimmed point
+        // is "not in your selection", so describing it on hover reads as though
+        // it still counted.
+        tooltipMatchedOnly?: boolean;
         // ⌘/Ctrl+click handler. Receives the clicked point's metadata; returns
         // true if it handled the click (the chart then prevents default).
         onPointClick?: (
@@ -69,6 +73,7 @@
         matchedColor = "#1DB954",
         barValue = () => 1,
         formatTooltip,
+        tooltipMatchedOnly = false,
         onPointClick,
     }: Props = $props();
 
@@ -779,7 +784,7 @@
         if (!mainCanvas || !quadtree) return;
         const [mx, my] = d3.pointer(event, mainCanvas);
         const hit = quadtree.find(mx, my, 12);
-        if (!hit) {
+        if (!hit || (tooltipMatchedOnly && !hit.original.matched)) {
             hideTooltip();
             return;
         }

@@ -1,11 +1,18 @@
 <script lang="ts">
     import { base } from "$app/paths";
+
+    interface Props {
+        /** Explorer this guide hands off to; defaults to Spotify's. */
+        explorePath?: string;
+    }
+
+    let { explorePath = "/spotify/explore/" }: Props = $props();
 </script>
 
 <section class="handoff-section" aria-label="Explorer Handoff">
     <div class="handoff-content">
         <a
-            href={`${base}/spotify/explore/`}
+            href={`${base}${explorePath}`}
             class="cta-button"
             data-testid="explore-cta"
         >

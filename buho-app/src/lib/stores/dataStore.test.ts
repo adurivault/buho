@@ -1,6 +1,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { dataStore } from './dataStore.svelte';
+import * as db from '$lib/data/db';
 
 // Mocks
 vi.mock('$lib/data/parseSpotify', () => ({
@@ -12,6 +13,7 @@ vi.mock('$lib/data/db', () => ({
     dropTable: vi.fn().mockResolvedValue(undefined),
     insertSpotifyPlays: vi.fn().mockResolvedValue(undefined),
     insertLocationSegments: vi.fn().mockResolvedValue(undefined),
+    insertMessages: vi.fn().mockResolvedValue(undefined),
     loadSpatial: vi.fn().mockResolvedValue(undefined)
 }));
 
@@ -51,6 +53,23 @@ const VISIT_ENTRY = {
     startTime: '2024-05-01T08:00:00.000+02:00',
     endTime: '2024-05-01T09:00:00.000+02:00',
     visit: { topCandidate: { placeLocation: 'geo:48.8566,2.3522', semanticType: 'HOME' } }
+};
+
+/** One conversation file of a Meta messages export. */
+const THREAD = {
+    participants: ['Augustin Du Rivet', 'David Nvs'],
+    threadName: 'David Nvs_0',
+    messages: [
+        {
+            senderName: 'Augustin Du Rivet',
+            text: 'Hello',
+            timestamp: 1714550400000,
+            type: 'text',
+            media: [],
+            reactions: [],
+            isUnsent: false
+        }
+    ]
 };
 
 function asFileList(files: File[]): FileList {
@@ -247,5 +266,114 @@ describe('dataStore', () => {
         expect(dataStore.daysVersion).toBe(2);
         expect(dataStore.geoReady).toBe(true);
         expect(dataStore.geoVersion).toBe(1);
+    });
+
+    it('handleMessagesFilesUpload accepts a thread JSON file', async () => {
+        await dataStore.handleMessagesFilesUpload(
+            asFileList([jsonFile('David Nvs_0.json', THREAD)])
+        );
+
+        expect(dataStore.error).toBeNull();
+        expect(dataStore.source).toBe('messages');
+        expect(dataStore.loading).toBeNull();
+        // Nothing runs in the background for this source.
+        expect(dataStore.geo).toBeNull();
+    });
+
+    it('handleMessagesFilesUpload reads an unzipped folder, skipping its media', async () => {
+        // What a `webkitdirectory` input hands over: every entry of the folder,
+        // conversations and attachments alike.
+        const media = { name: 'photo.jpeg', text: async () => { throw new Error('read'); } } as unknown as File;
+
+        await dataStore.handleMessagesFilesUpload(
+            asFileList([jsonFile('David Nvs_0.json', THREAD), media])
+        );
+
+        expect(dataStore.error).toBeNull();
+        expect(dataStore.source).toBe('messages');
+    });
+
+    it('handleMessagesFilesUpload says how many files it made nothing of', async () => {
+        // Auto-detection means the user never declares a format, so a drop that
+        // matches nothing has to explain itself rather than just fail.
+        await dataStore.handleMessagesFilesUpload(
+            asFileList([jsonFile('other.json', { somethingElse: [1, 2, 3] })])
+        );
+
+        expect(dataStore.error?.message).toContain('No conversation recognised');
+        expect(dataStore.error?.message).toContain('1 file');
+    });
+
+    it('handleMessagesFilesUpload surfaces an oversized zip as a readable error', async () => {
+        // The entries are gathered inside the import's own try/catch; if they
+        // weren't, this would be an unhandled rejection and the user would see
+        // nothing at all.
+        const huge = new File([new Uint8Array()], 'facebook-export.zip');
+        Object.defineProperty(huge, 'size', { value: 3 * 1024 ** 3 });
+
+        await dataStore.handleMessagesFilesUpload(asFileList([huge]));
+
+        expect(dataStore.error?.message).toContain('facebook-export.zip');
+        expect(dataStore.error?.message).toContain('Choose a folder');
+        expect(dataStore.loading).toBeNull();
+    });
+
+    it('handleMessagesFilesUpload explains a media-only drop instead of just failing', async () => {
+        // Meta splits large exports across several zips, some holding nothing but
+        // photos. That drop has zero readable files, and the reason is not
+        // guessable from the folder alone.
+        await dataStore.handleMessagesFilesUpload(
+            asFileList([
+                { name: 'photo.jpeg', text: async () => '' } as unknown as File,
+                { name: 'clip.mp4', text: async () => '' } as unknown as File
+            ])
+        );
+
+        expect(dataStore.error?.message).toContain('split across several zips');
+    });
+
+    it('handleMessagesFilesUpload errors on a conversation with no messages', async () => {
+        await dataStore.handleMessagesFilesUpload(
+            asFileList([
+                jsonFile('Empty_0.json', {
+                    participants: ['Me', 'Empty'],
+                    threadName: 'Empty_0',
+                    messages: []
+                })
+            ])
+        );
+
+        expect(dataStore.error?.message).toContain('No messages found');
+    });
+
+    it('handleMessagesFilesUpload detects the service without being told', async () => {
+        await dataStore.handleMessagesFilesUpload(asFileList([jsonFile('David Nvs_0.json', THREAD)]));
+
+        expect(dataStore.lastMessagesImport?.networks).toEqual([
+            { network: 'messenger', threads: 1, messages: 1 }
+        ]);
+        expect(dataStore.lastMessagesImport?.unrecognisedFiles).toBe(0);
+    });
+
+    it('handleMessagesFilesUpload reports the files it recognised nothing in', async () => {
+        await dataStore.handleMessagesFilesUpload(
+            asFileList([
+                jsonFile('David Nvs_0.json', THREAD),
+                jsonFile('settings.json', { theme: 'dark' })
+            ])
+        );
+
+        expect(dataStore.error).toBeNull();
+        expect(dataStore.lastMessagesImport?.unrecognisedFiles).toBe(1);
+    });
+
+    it('handleMessagesFilesUpload appends by default and only drops when asked', async () => {
+        const files = () => asFileList([jsonFile('David Nvs_0.json', THREAD)]);
+
+        await dataStore.handleMessagesFilesUpload(files());
+        expect(db.dropTable).not.toHaveBeenCalledWith('messages');
+
+        await dataStore.handleMessagesFilesUpload(files(), { replace: true });
+        expect(db.dropTable).toHaveBeenCalledWith('messages');
     });
 });

@@ -3,6 +3,12 @@
 import JSZip from 'jszip';
 import { parseSpotifyData } from '$lib/data/parseSpotify';
 import { parseGoogleMapsData } from '$lib/data/parseGoogleMaps';
+import { entriesFromFileList } from '$lib/data/import/entries';
+import { buildMessageRows, type SelfByNetwork } from '$lib/data/import/buildRows';
+import { readThreads } from '$lib/data/sources/registry';
+import type { ImportEntry } from '$lib/data/sources/types';
+import { getNetworkSummary, type NetworkSummary } from '$lib/data/queries/messageQueries';
+import type { Network, ParsedThread } from '$lib/types/messages';
 import * as db from '$lib/data/db';
 import { loadGeoAssets } from '$lib/data/geo/loadGeoAssets';
 import { attributeZones } from '$lib/data/geo/attributeZones';
@@ -48,6 +54,25 @@ async function extractJsonFromZip(file: File): Promise<unknown[]> {
     return jsonArrays;
 }
 
+/** Threads and messages recognised per service, for the post-import summary. */
+function countByNetwork(threads: ParsedThread[]): NetworkImportCount[] {
+    const counts = new Map<Network, NetworkImportCount>();
+    for (const thread of threads) {
+        const existing = counts.get(thread.network);
+        if (existing) {
+            existing.threads += 1;
+            existing.messages += thread.messages.length;
+        } else {
+            counts.set(thread.network, {
+                network: thread.network,
+                threads: 1,
+                messages: thread.messages.length
+            });
+        }
+    }
+    return [...counts.values()].sort((a, b) => b.messages - a.messages);
+}
+
 /** "zip" / "json" / "mixed" — what people actually drop, with no file names. */
 function fileFormats(files: FileList | File[]): string {
     let zip = false;
@@ -88,7 +113,26 @@ function computeBoundsFromHistory(history: Array<{ date?: Date; timestamp?: Date
     return { minDate, maxDate };
 }
 
-export type DataSource = 'spotify' | 'google-maps' | 'whatsapp' | null;
+export type DataSource = 'spotify' | 'google-maps' | 'messages' | null;
+
+/** One service's share of a single import. */
+export interface NetworkImportCount {
+    network: Network;
+    threads: number;
+    messages: number;
+}
+
+/**
+ * What the last import actually recognised. Auto-detection means the user never
+ * declares a format, so the app has to say what it found — including the files
+ * it made nothing of.
+ */
+export interface MessagesImportReport {
+    networks: NetworkImportCount[];
+    unrecognisedFiles: number;
+    /** Which identity was taken as "me" on each network. */
+    self: SelfByNetwork;
+}
 export type DataMode = 'demo' | 'user';
 
 export interface LoadingState {
@@ -124,6 +168,11 @@ class DataStore {
     // New complex states
     loading = $state<LoadingState | null>(null);
     error = $state<ErrorState | null>(null);
+
+    /** What is stored per messaging service, refreshed after every import. */
+    messagesSummary = $state<NetworkSummary[]>([]);
+    /** Outcome of the most recent messages import, for the dialog's feedback. */
+    lastMessagesImport = $state<MessagesImportReport | null>(null);
 
     // Background geo enrichment of the Google Maps import (see enrichGeo).
     geo = $state<GeoState | null>(null);
@@ -201,6 +250,8 @@ class DataStore {
         this.files = [];
         this.loading = null;
         this.error = null;
+        this.messagesSummary = [];
+        this.lastMessagesImport = null;
         this.geo = null;
         this.geoVersion = 0;
         this.daysVersion = 0;
@@ -424,6 +475,124 @@ class DataStore {
                 message: e instanceof Error ? e.message : 'Failed to process files'
             });
             this.loading = null;
+        }
+    }
+
+    /**
+     * Handles a messages import, whatever service it came from.
+     *
+     * The format is never declared by the user: entries are routed through the
+     * source registry, which sniffs each file and hands it to the parser that
+     * claims it. One drop can therefore carry several services at once.
+     *
+     * Imports **accumulate** by default — `replace` is the explicit opt-out —
+     * and re-importing the same archive is a no-op thanks to the dedupe in
+     * `db.insertMessages`.
+     */
+    async handleMessagesImport(
+        source: ImportEntry[] | (() => Promise<ImportEntry[]>),
+        { replace = false }: { replace?: boolean } = {}
+    ) {
+        this.setLoading({ status: 'reading', message: 'Reading files...', progress: 0.05 });
+        const startedAt = Date.now();
+
+        try {
+            // Gathering happens inside the try: opening a zip is where an import
+            // most often fails (an oversized archive can't be unpacked in a tab),
+            // and that message has to reach the user.
+            const entries = typeof source === 'function' ? await source() : source;
+
+            if (entries.length === 0) {
+                // Almost always the same cause: Meta splits a big export across
+                // several zips, and some of them hold nothing but photos and
+                // videos. Dropping that one — or the folder it was unzipped to —
+                // yields no readable file at all, which is baffling without a hint.
+                throw new Error(
+                    'No .json or .txt file in what you selected. Big exports are split across several zips and some contain only photos — try the other ones.'
+                );
+            }
+
+            this.setLoading({
+                status: 'parsing',
+                message: 'Looking for conversations...',
+                progress: 0.25
+            });
+            const { threads, unrecognisedFiles } = await readThreads(entries);
+
+            if (threads.length === 0) {
+                throw new Error(
+                    `No conversation recognised in ${entries.length.toLocaleString()} file${entries.length > 1 ? 's' : ''}`
+                );
+            }
+
+            this.setLoading({
+                status: 'parsing',
+                message: `Reading ${threads.length.toLocaleString()} conversations...`,
+                progress: 0.45
+            });
+            const { rows, self } = buildMessageRows(threads);
+
+            if (rows.length === 0) {
+                throw new Error('No messages found in the selected files');
+            }
+
+            this.setLoading({
+                status: 'importing',
+                message: `Importing ${rows.length.toLocaleString()} messages...`,
+                progress: 0.65
+            });
+            await db.initDuckDB();
+            if (replace) await db.dropTable('messages');
+            await db.insertMessages(rows);
+
+            this.loadUserData('messages');
+            await this.refreshMessagesSummary();
+            this.lastMessagesImport = {
+                networks: countByNetwork(threads),
+                unrecognisedFiles,
+                self
+            };
+
+            this.setLoading({ status: 'done', message: 'Done', progress: 1 });
+            await new Promise((r) => setTimeout(r, 300));
+            this.loading = null;
+
+            trackEvent('upload', {
+                source: 'messages',
+                files: smallBucket(entries.length),
+                // Which services were recognised — never how many messages each held.
+                networks: [...new Set(threads.map((t) => t.network))].sort().join('+'),
+                replace,
+                rows: bucket(rows.length),
+                ms: durationBucket(Date.now() - startedAt)
+            });
+
+        } catch (e) {
+            console.error(e);
+            trackEvent('upload-error', {
+                source: 'messages',
+                reason: failureReason(e),
+                ms: durationBucket(Date.now() - startedAt)
+            });
+            this.setError({
+                message: e instanceof Error ? e.message : 'Failed to process files'
+            });
+            this.loading = null;
+        }
+    }
+
+    /** Convenience wrapper for the file/folder inputs, which hand over a FileList. */
+    async handleMessagesFilesUpload(files: FileList, options: { replace?: boolean } = {}) {
+        return this.handleMessagesImport(() => entriesFromFileList(files), options);
+    }
+
+    /** What is currently stored, per network — drives the header pill. */
+    async refreshMessagesSummary() {
+        try {
+            this.messagesSummary = await getNetworkSummary();
+        } catch (error) {
+            console.error('Failed to summarise imported messages:', error);
+            this.messagesSummary = [];
         }
     }
 

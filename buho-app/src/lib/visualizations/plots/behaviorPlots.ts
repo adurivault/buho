@@ -36,7 +36,7 @@ export function platformDistributionPlot(data: PlatformData[], options: any = {}
                 text: d => d.minutes.toLocaleString(),
                 dx: 5,
                 textAnchor: "start",
-                fill: "#e0e6ed"
+                fill: "currentColor"
             })
         ],
         ...DARK_THEME,
@@ -200,7 +200,7 @@ export function reasonStartEndFlowPlot(data: ReasonFlowData[], options: any = {}
             label.setAttribute("dominant-baseline", "middle");
             label.setAttribute("text-anchor", anchor === "start" ? "end" : "start");
             label.setAttribute("font-size", "11");
-            label.setAttribute("fill", "#e0e6ed");
+            label.setAttribute("fill", "currentColor");
             label.textContent = `${node.key} (${Math.round((node.value / total) * 100)}%)`;
             svg.appendChild(label);
         }
@@ -213,7 +213,7 @@ export function reasonStartEndFlowPlot(data: ReasonFlowData[], options: any = {}
     startTitle.setAttribute("x", `${leftX}`);
     startTitle.setAttribute("y", "14");
     startTitle.setAttribute("font-size", "12");
-    startTitle.setAttribute("fill", "#94a3b8");
+    startTitle.setAttribute("fill", "currentColor");
     startTitle.textContent = "reason_start";
     svg.appendChild(startTitle);
 
@@ -221,7 +221,7 @@ export function reasonStartEndFlowPlot(data: ReasonFlowData[], options: any = {}
     endTitle.setAttribute("x", `${rightX}`);
     endTitle.setAttribute("y", "14");
     endTitle.setAttribute("font-size", "12");
-    endTitle.setAttribute("fill", "#94a3b8");
+    endTitle.setAttribute("fill", "currentColor");
     endTitle.textContent = "reason_end";
     svg.appendChild(endTitle);
 
