@@ -97,7 +97,7 @@
         display: flex;
         justify-content: center;
         width: 100%;
-        margin-top: 2.75rem;
+        margin-top: clamp(1.5rem, 4vh, 2.75rem);
     }
 
     .doors {
@@ -105,7 +105,7 @@
         flex-wrap: wrap;
         justify-content: center;
         gap: 0.75rem;
-        margin-top: 3rem;
+        margin-top: clamp(1.5rem, 4vh, 3rem);
     }
 
     .start,

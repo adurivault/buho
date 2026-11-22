@@ -33,6 +33,12 @@ export interface DataModule {
     label: string;
     /** What lands in it, in one line. */
     blurb: string;
+    /**
+     * The heading of the module's welcome, the screen it shows while it holds
+     * nothing: "Your", then `subject` in the module's colour, then `rest`.
+     * Descriptive on purpose — it names the data, it does not sell it.
+     */
+    heading: { subject: string; rest?: string };
     /** The DuckDB table it is stored in. */
     table: string;
     /**
@@ -79,7 +85,8 @@ export const DATA_MODULES: DataModule[] = [
     {
         id: 'listening',
         label: 'Listening',
-        blurb: 'Every track you played, with the moment and how long it lasted.',
+        blurb: 'Plays by artist, track, hour and day.',
+        heading: { subject: 'listening', rest: 'history' },
         table: 'plays',
         icon: 'music-note',
         href: 'listening/explore',
@@ -90,7 +97,8 @@ export const DATA_MODULES: DataModule[] = [
     {
         id: 'positions',
         label: 'Positions',
-        blurb: 'Timestamped points, stationary or moving, from any recorder.',
+        blurb: 'Places, trips and routes.',
+        heading: { subject: 'location', rest: 'history' },
         table: 'location_segments',
         icon: 'map-pin',
         href: 'positions/explore',
@@ -100,7 +108,8 @@ export const DATA_MODULES: DataModule[] = [
     {
         id: 'messages',
         label: 'Messages',
-        blurb: 'Conversations, their participants, and every message in them.',
+        blurb: 'Messages by conversation, person and hour.',
+        heading: { subject: 'conversations' },
         table: 'messages',
         icon: 'message',
         href: 'messages/explore',
@@ -111,7 +120,8 @@ export const DATA_MODULES: DataModule[] = [
     {
         id: 'activity',
         label: 'Google activity',
-        blurb: 'What you watched, searched and looked up, entry by entry.',
+        blurb: 'YouTube, Search and Maps history.',
+        heading: { subject: 'Google activity' },
         table: 'google_activity',
         icon: 'google-activity',
         href: 'activity/explore',
@@ -120,7 +130,8 @@ export const DATA_MODULES: DataModule[] = [
     {
         id: 'steps',
         label: 'Steps',
-        blurb: 'The all-day counters a watch keeps, window by window.',
+        blurb: 'Steps per day and per hour.',
+        heading: { subject: 'step', rest: 'counts' },
         table: 'step_packets',
         icon: 'footprints',
         href: 'steps/explore',
@@ -129,7 +140,8 @@ export const DATA_MODULES: DataModule[] = [
     {
         id: 'health',
         label: 'Health',
-        blurb: 'What the watch measured of you, minute by minute, while worn.',
+        blurb: 'Heart rate, stress and breathing.',
+        heading: { subject: 'heart rate', rest: 'and stress' },
         table: 'health_readings',
         icon: 'heartbeat',
         href: 'health/explore',

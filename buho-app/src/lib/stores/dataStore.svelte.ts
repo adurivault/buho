@@ -33,7 +33,8 @@ export type { ImportReport, ModuleImportCount } from '#lib/data/import/runImport
  * of the two is failing is only answerable if they are told apart.
  */
 export type ImportPick = 'drop' | 'file' | 'folder';
-export type ImportSurface = 'window' | 'dialog' | 'onboarding' | 'source-page' | 'unknown';
+export type ImportSurface =
+    'window' | 'dialog' | 'onboarding' | 'source-page' | 'module' | 'unknown';
 
 export interface ImportOrigin {
     pick?: ImportPick;

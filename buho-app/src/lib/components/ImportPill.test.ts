@@ -6,15 +6,38 @@ import { dataStore } from '#lib/stores/dataStore.svelte.ts';
 import { moduleById } from '#lib/data/modules.ts';
 import type { LoadedSource } from '#lib/data/queries/inventory.ts';
 
+// Whether this is a phone is a media query; here it is a switch.
+const device = vi.hoisted(() => ({ showcase: false }));
+vi.mock('#lib/stores/deviceStore.svelte.ts', () => ({
+    deviceStore: {
+        get showcase() {
+            return device.showcase;
+        },
+    },
+}));
+
 // The dialog it owns is portalled into <body>, so it outlives the container.
 afterEach(cleanup);
 
 describe('ImportPill', () => {
     beforeEach(() => {
         dataStore.reset();
+        device.showcase = false;
     });
 
-    it('invites an import when the module is empty', () => {
+    /**
+     * On a computer an empty module's page is its welcome, with the drop zone
+     * and the sample: the header offering both again said everything twice.
+     */
+    it('leaves an empty module to its welcome on a computer', () => {
+        render(ImportPill, { props: { module: moduleById('listening') } });
+
+        expect(screen.queryByRole('button')).toBeNull();
+    });
+
+    /** A phone gets the explorer's poster, which has no import of its own. */
+    it('invites an import when the module is empty, on a phone', () => {
+        device.showcase = true;
         render(ImportPill, { props: { module: moduleById('positions') } });
 
         expect(screen.getByRole('button', { name: /Import my positions/i })).toBeInTheDocument();
@@ -27,6 +50,7 @@ describe('ImportPill', () => {
      * for — and only where there is one to ask for.
      */
     it('offers the sample where one exists, and never loads it unasked', () => {
+        device.showcase = true;
         render(ImportPill, { props: { module: moduleById('listening') } });
 
         expect(screen.getByRole('button', { name: /Load demo data/i })).toBeInTheDocument();
@@ -35,6 +59,7 @@ describe('ImportPill', () => {
     });
 
     it('offers no sample for a module that has none', () => {
+        device.showcase = true;
         render(ImportPill, { props: { module: moduleById('positions') } });
 
         expect(screen.queryByRole('button', { name: /Load demo data/i })).not.toBeInTheDocument();
@@ -137,6 +162,7 @@ describe('ImportPill', () => {
     });
 
     it('opens the dialog', async () => {
+        device.showcase = true;
         render(ImportPill, { props: { module: moduleById('messages') } });
         await fireEvent.click(screen.getByRole('button', { name: /Import my messages/i }));
 
