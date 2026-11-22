@@ -51,6 +51,14 @@ const QUALITY = 0.7;
 const ALLOWED_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', 'tiles.openfreemap.org']);
 
 /**
+ * Where the positions map is framed for its capture: the city the demo lives
+ * in, at a zoom that holds it whole. The app fits the whole history instead,
+ * trips included, which is a country; that stays the app's behaviour, and
+ * only the capture is framed here.
+ */
+const DEMO_CITY = { center: [2.352, 48.849], zoom: 11.15 };
+
+/**
  * Each page, and what is captured on it. `region` is the element captured;
  * `before` sets the view up first. Each explorer gives its main chart (the
  * constellation is the plate a shared image is cut from, so it is already
@@ -68,7 +76,7 @@ const PAGES = [
         path: 'positions/explore',
         shots: [
             { file: 'positions-constellation', region: '.constellation-layout' },
-            { file: 'positions-map', region: 'aside .sunburst-host', before: hideMapControls },
+            { file: 'positions-map', region: 'aside .sunburst-host', before: frameDemoCity },
         ],
     },
     {
@@ -135,6 +143,7 @@ try {
             (url) => !ALLOWED_HOSTS.has(url.hostname),
             (route) => route.abort()
         );
+        await exposeMaps(context);
 
         for (const { path, viewport, shots } of pages) {
             const page = await context.newPage();
@@ -200,11 +209,49 @@ async function signal(page, name) {
     await page.waitForFunction(() => !document.querySelector('.chart .empty'));
 }
 
-/** The map's own controls are hidden; the page prints the tiles' credit itself. */
-async function hideMapControls(page) {
+/**
+ * Hand the script every map the page creates, so it can be framed.
+ *
+ * MapLibre keeps no reference to its maps, and the app has no reason to, so
+ * the served bundle is rewritten on its way to the browser, for this run only:
+ * `new X.Map({container…})` becomes the same call on a subclass that records
+ * its instances. Nothing in the app changes.
+ */
+async function exposeMaps(context) {
+    await context.addInitScript(() => {
+        window.__shotMaps = [];
+        window.__shotMap = (MapClass) =>
+            class extends MapClass {
+                constructor(...args) {
+                    super(...args);
+                    window.__shotMaps.push(this);
+                }
+            };
+    });
+    await context.route('**/_app/immutable/**/*.js', async (route) => {
+        const response = await route.fetch();
+        const body = await response.text();
+        if (!body.includes('.Map({container:')) return route.fulfill({ response, body });
+        await route.fulfill({
+            response,
+            body: body.replace(
+                /new ([\w$]+)\.Map\(\{container:/g,
+                'new (window.__shotMap($1.Map))({container:'
+            ),
+        });
+    });
+}
+
+/**
+ * Frame the positions map on the demo's city, its controls hidden: the page
+ * prints the tiles' credit itself.
+ */
+async function frameDemoCity(page) {
     await page.addStyleTag({
         content: '.trail-toggle, .maplibregl-ctrl-attrib { visibility: hidden !important; }',
     });
+    await page.waitForFunction(() => window.__shotMaps.length > 0, null, { timeout: 30_000 });
+    await page.evaluate((view) => window.__shotMaps.at(-1).jumpTo(view), DEMO_CITY);
 }
 
 async function toWebp(png) {

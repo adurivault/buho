@@ -25,8 +25,7 @@
     rest="day by day"
     summary="What you listened to, where you went, who you wrote to, what you looked up, how much you walked and your heart rate, on the same days."
     questions={[
-        'What did a given day look like, across all your exports?',
-        'Where were you, and who were you writing to, that day?',
+        'What happened on a given day, across all your exports?',
         'How does one year compare with the next?',
     ]}
     preview={CALENDAR_SHOTS}

@@ -119,8 +119,8 @@ describe('ModuleEmptyState', () => {
     it('lists the questions the module answers', () => {
         render(ModuleEmptyState, { props: { module: moduleById('messages') } });
 
-        expect(screen.getByText('What is your most active conversation?')).toBeInTheDocument();
-        expect(screen.getByText('Do you send or receive more messages?')).toBeInTheDocument();
+        expect(screen.getByText('Who do you write to the most?')).toBeInTheDocument();
+        expect(screen.getByText('Do you send more messages than you receive?')).toBeInTheDocument();
     });
 
     /** The screen stays a screen: no procedure, no archive specs. */
