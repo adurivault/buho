@@ -55,7 +55,7 @@ describe('the landing page on a phone', () => {
         expect(screen.getByRole('heading', { name: /Made for a big screen/i })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /Send me the link/i })).toBeInTheDocument();
         // Not the desktop door: no drop line, no screen on how it works.
-        expect(screen.queryByText(/Already have an export/i)).not.toBeInTheDocument();
+        expect(screen.queryByText('Drop your export here')).not.toBeInTheDocument();
         expect(screen.queryByRole('heading', { name: 'How it works' })).not.toBeInTheDocument();
     });
 
@@ -106,7 +106,7 @@ describe('the landing page on a phone', () => {
         expect(
             screen.queryByRole('heading', { name: /Made for a big screen/i })
         ).not.toBeInTheDocument();
-        expect(screen.getAllByText(/Already have an export/i)[0]).toBeInTheDocument();
+        expect(screen.getByText('Drop your export here')).toBeInTheDocument();
         expect(screen.getByRole('heading', { name: 'How it works' })).toBeInTheDocument();
     });
 });

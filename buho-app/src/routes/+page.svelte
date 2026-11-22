@@ -166,9 +166,8 @@
             <HandheldIntro onPick={pick} onBrowse={toPick} onExploreAnyway={desktopDoor} />
         {:else if step.kind === 'intro'}
             <!-- The door skips step one for the export that needs no deciding:
-                 straight to the WhatsApp how-to, with the picker as the other
-                 door for anyone who came for something else. -->
-            <Intro onQuickStart={() => pick(quickStartSource())} onBrowse={toPick} />
+                 straight to the WhatsApp how-to. -->
+            <Intro onQuickStart={() => pick(quickStartSource())} />
         {:else if step.kind === 'pick'}
             <FunnelShell
                 {step}

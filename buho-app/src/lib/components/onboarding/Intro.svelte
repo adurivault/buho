@@ -4,106 +4,70 @@
     import DropZone from '#lib/components/DropZone.svelte';
     import Shot from '#lib/components/Shot.svelte';
     import { DATA_MODULES } from '#lib/data/modules.ts';
-    import { sourcesFilling } from '#lib/data/sources/catalog.ts';
     import { MODULE_SHOTS } from '#lib/shots.ts';
 
     /**
      * The door: the top of the home page.
      *
-     * It has been wrong in three directions now. It opened on the picker — every
-     * service and every waiting time, a worse copy of /sources standing where an
-     * explanation should have been. It over-corrected into prose. Then it settled
-     * on one neutral **Start**, which was honest and led straight into a decision
-     * nobody arriving here is equipped to make.
+     * It has been wrong in several directions. It opened on the picker — every
+     * service and every waiting time, a worse copy of /sources standing where
+     * an explanation should have been. It over-corrected into prose. It
+     * settled on one neutral **Start**, which led straight into a decision
+     * nobody arriving here is equipped to make. Then on two cards, WhatsApp and
+     * "another service", the second of which only led back to that decision.
      *
-     * So the door makes the decision instead. One card does the thing —
-     * WhatsApp, the only export that exists in two minutes — and one says there
-     * is more than that. Naming a service up front is the point: "Start"
-     * promised nothing, and the visitor had to spend the next screen working out
-     * which of the services was cheap to try. Whoever already has a file drops
-     * it on the line under them, without a detour through the funnel.
+     * So the drop zone is the action, the same one every page that asks for a
+     * file shows, and for anyone with no file yet a single line makes the
+     * decision for them: WhatsApp, the only export that exists in two minutes.
+     * Every other service is one footer link away.
      *
-     * Under them, the six modules, each as a whole explorer page drawn from
-     * the demo, naming the exports that fill it and opening its own page. They
-     * answer "what does it make of my file" by showing it; they are not a menu
-     * of services to choose from, which is the picker's job. Big enough to
-     * read as pages, three to a row: the first row is in the first screen and
-     * the second shows under its fold, so the page plainly goes on.
+     * Beside them, the six modules, each as a whole explorer page drawn from
+     * the demo, opening its own page. They answer "what does it make of my
+     * file" by showing it. Two to a row and three rows, sized by the window's
+     * height so all six fit the first screen.
      */
     interface Props {
         /** Straight to the WhatsApp how-to, skipping the picker entirely. */
         onQuickStart: () => void;
-        /** The picker, for anyone who came for something else. */
-        onBrowse: () => void;
     }
 
-    let { onQuickStart, onBrowse }: Props = $props();
-
-    const tiles = DATA_MODULES.map((module) => ({
-        module,
-        shot: MODULE_SHOTS[module.id].page,
-        feeds: sourcesFilling(module.id)
-            .map((source) => source.label)
-            .join(' · '),
-    }));
+    let { onQuickStart }: Props = $props();
 </script>
 
 <div class="intro">
-    <div class="hero">
-        <div class="pitch">
-            <h1>Spotify Wrapped on steroids.</h1>
-            <!-- One line each: the break is placed rather than left to the wrap. -->
-            <p class="tagline">
-                <span class="line">For Spotify, but also Google, WhatsApp, Strava, Garmin…</span>
-                <span class="line">Dive deeper into your personal data exports.</span>
-            </p>
-        </div>
+    <div class="pitch">
+        <h1>Spotify Wrapped on steroids.</h1>
+        <!-- One line each: the break is placed rather than left to the wrap. -->
+        <p class="tagline">
+            <span class="line">For Spotify, but also Google, WhatsApp, Strava, Garmin…</span>
+            <span class="line">Dive deeper into your personal data exports.</span>
+        </p>
 
-        <div class="actions">
-            <div class="doors">
-                <button class="door" data-module="messages" onclick={() => onQuickStart()}>
-                    <span class="door-title">
-                        <Icon name="message" size={16} />
-                        Start with WhatsApp
-                        <span class="arrow" aria-hidden="true">→</span>
-                    </span>
-                    <span class="door-hint">About two minutes, from the phone app.</span>
-                </button>
-                <button class="door" onclick={() => onBrowse()}>
-                    <span class="door-title">
-                        Another service
-                        <span class="arrow" aria-hidden="true">→</span>
-                    </span>
-                    <span class="door-hint">Spotify, Google, Garmin, Strava…</span>
-                </button>
-            </div>
-
-            <div class="drop">
-                <DropZone
-                    surface="onboarding"
-                    compact
-                    title="Already have an export?"
-                    pickTitle="Already have an export?"
-                    hint="Drop it here, or anywhere on the page."
-                />
-            </div>
-            <p class="safe">Read in your browser, never uploaded.</p>
+        <div class="drop">
+            <DropZone
+                surface="onboarding"
+                hint="A .zip, a folder or loose files, from any service Buho reads."
+            />
         </div>
+        <p class="safe">Read in your browser, never uploaded.</p>
+        <p class="quick">
+            No export yet?
+            <button type="button" data-module="messages" onclick={() => onQuickStart()}>
+                Start with WhatsApp
+            </button>, about two minutes from the phone app.
+        </p>
     </div>
 
     <ul class="tiles">
-        {#each tiles as { module, shot, feeds } (module.id)}
+        {#each DATA_MODULES as module (module.id)}
             <li>
                 <a class="tile" data-module={module.id} href={resolve(module.href)}>
                     <span class="picture">
-                        <Shot {shot} />
+                        <Shot shot={MODULE_SHOTS[module.id].page} />
                     </span>
-                    <span class="caption">
-                        <span class="name">
-                            <Icon name={module.icon} size={15} />
-                            {module.label}
-                        </span>
-                        <span class="feeds">{feeds}</span>
+                    <span class="name">
+                        <Icon name={module.icon} size={15} />
+                        {module.label}
                     </span>
                 </a>
             </li>
@@ -112,19 +76,22 @@
 </div>
 
 <style>
+    /* The headline and the drop zone on the left, the modules on the right.
+       Three rows of tiles fit the window's height: the window less the page's
+       padding, its brand line and the two gaps between rows, shared by three
+       tiles, each a caption under a picture of the page's own proportions. */
     .intro {
-        display: flex;
-        flex-direction: column;
-        gap: var(--gap-y, 2rem);
-    }
-
-    /* The headline on the left, what to do on the right: one row, so the
-       modules start within the first screen. */
-    .hero {
+        --tile-height: calc((100dvh - 3 * var(--gap-y, 2rem) - 1.75rem - 2.5rem) / 3);
+        --tile-width: calc((var(--tile-height) - var(--caption)) * 1224 / 800);
+        --caption: 2.5rem;
         display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(0, 30rem);
+        grid-template-columns: minmax(20rem, 1fr) minmax(0, calc(2 * var(--tile-width) + 1.25rem));
         align-items: center;
         gap: clamp(2rem, 4vw, 3.5rem);
+    }
+
+    .pitch {
+        max-width: 30rem;
     }
 
     h1 {
@@ -146,78 +113,36 @@
         text-wrap: balance;
     }
 
-    .doors {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 0.65rem;
-    }
-
-    .door {
-        display: flex;
-        flex-direction: column;
-        gap: 0.2rem;
-        padding: 0.8rem 0.95rem 0.85rem;
-        border: 1px solid hsl(var(--border));
-        border-radius: var(--radius-lg);
-        background: hsl(var(--card));
-        text-align: left;
-        cursor: pointer;
-        transition: border-color 0.15s;
-    }
-
-    .door:hover {
-        border-color: hsl(var(--foreground) / 0.45);
-    }
-
-    /* The fast path wears the colour of the module it fills. */
-    .door[data-module] {
-        border-color: var(--module-fill);
-        background: var(--module-soft);
-    }
-
-    .door[data-module]:hover {
-        border-color: var(--module-peak);
-    }
-
-    .door-title {
-        display: flex;
-        align-items: center;
-        gap: 0.45rem;
-        font-size: var(--text-body);
-        font-weight: 600;
-        color: hsl(var(--heading));
-    }
-
-    .door-title :global(svg) {
-        flex: none;
-        color: var(--module-accent);
-    }
-
-    .arrow {
-        margin-left: auto;
-        font-weight: 400;
-        color: hsl(var(--muted-foreground));
-    }
-
-    .door-hint {
-        font-size: var(--text-small);
-        line-height: 1.4;
-        color: hsl(var(--muted-foreground));
-    }
-
     .drop {
-        margin-top: 0.75rem;
+        margin-top: clamp(1.25rem, 4vh, 2rem);
     }
 
-    .safe {
+    .safe,
+    .quick {
         margin: 0.65rem 0 0;
         font-size: var(--text-small);
         color: hsl(var(--muted-foreground));
     }
 
+    /* The fast path, underlined in the colour of the module it fills. */
+    .quick button {
+        font-weight: 600;
+        color: hsl(var(--foreground));
+        text-decoration: underline;
+        text-decoration-color: var(--module-fill);
+        text-decoration-thickness: 2px;
+        text-underline-offset: 3px;
+        cursor: pointer;
+        transition: text-decoration-color 0.15s;
+    }
+
+    .quick button:hover {
+        text-decoration-color: var(--module-peak);
+    }
+
     .tiles {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 1.25rem;
         margin: 0;
         padding: 0;
@@ -227,7 +152,6 @@
     .tile {
         display: flex;
         flex-direction: column;
-        height: 100%;
         overflow: hidden;
         border: 1px solid hsl(var(--border));
         border-radius: var(--radius-lg);
@@ -249,17 +173,12 @@
         border-bottom: 1px solid hsl(var(--border));
     }
 
-    .caption {
-        display: flex;
-        flex-direction: column;
-        gap: 0.1rem;
-        padding: 0.65rem 0.9rem 0.75rem;
-    }
-
     .name {
-        display: inline-flex;
+        display: flex;
         align-items: center;
         gap: 0.4rem;
+        height: var(--caption);
+        padding: 0 0.9rem;
         font-size: var(--text-body);
         font-weight: 600;
         color: hsl(var(--heading));
@@ -269,20 +188,10 @@
         color: var(--module-accent);
     }
 
-    .feeds {
-        font-size: var(--text-label);
-        line-height: 1.4;
-        color: hsl(var(--muted-foreground));
-    }
-
-    /* Too narrow for the headline and the doors side by side. */
+    /* Too narrow for the two side by side: the modules under the drop zone. */
     @media (max-width: 959px) {
-        .hero {
-            grid-template-columns: minmax(0, 34rem);
-        }
-
-        .tiles {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+        .intro {
+            grid-template-columns: minmax(0, 1fr);
         }
     }
 

@@ -52,43 +52,35 @@ describe('the intro', () => {
 
     /**
      * A neutral "Start" led straight into a decision a first-time visitor is
-     * not equipped to make. The door makes it instead: one card that does the
-     * thing, one that says there is more than that, and a drop line for whoever
-     * already has the file.
+     * not equipped to make, and so did an "another service" door. The drop
+     * zone is the action, and one line makes the decision for whoever has no
+     * file yet.
      */
-    test('offers the fast path, the long way and a drop line, and nothing else', () => {
+    test('offers the drop zone and the fast path, and nothing else', () => {
         render(LandingPage);
 
         expect(
             screen
                 .getAllByRole('button')
                 .map((button) => button.getAttribute('aria-label') ?? button.textContent?.trim())
-        ).toEqual([
-            expect.stringMatching(/^Start with WhatsApp/),
-            expect.stringMatching(/^Another service/),
-            'Choose files',
-            'Choose a folder',
-        ]);
+        ).toEqual(['Choose files', 'Choose a folder', 'Start with WhatsApp']);
+        expect(screen.getByText('Drop your export here')).toBeInTheDocument();
         expect(screen.getByText(/about two minutes/i)).toBeInTheDocument();
-        expect(screen.getAllByText('Already have an export?')[0]).toBeInTheDocument();
     });
 
     /**
      * The list of every service Buho reads used to sit under the button, so a
      * Spotify user would not read the funnel as "not supported". It was still a
-     * menu at the one moment nobody wants one. The services appear only as
-     * what fills each module, under its picture; choosing one is the second
-     * door's job.
+     * menu at the one moment nobody wants one; the footer link carries that job
+     * now.
      */
-    test('names the exports as what fills each module, never as a choice', () => {
+    test('does not lay out the whole catalog', () => {
         render(LandingPage);
 
         expect(screen.queryByText(/^Reads exports from/)).not.toBeInTheDocument();
-        const controls = [...screen.getAllByRole('button'), ...screen.getAllByRole('link')];
         for (const source of CATALOG_SOURCES) {
             if (source.id === 'whatsapp') continue;
-            const name = funnelLabel(source);
-            expect(controls.some((control) => control.textContent?.trim() === name)).toBe(false);
+            expect(screen.queryByText(funnelLabel(source))).not.toBeInTheDocument();
         }
     });
 
@@ -97,12 +89,11 @@ describe('the intro', () => {
         render(LandingPage);
 
         for (const module of DATA_MODULES) {
-            const link = screen.getByRole('link', { name: new RegExp(`^${module.label}`) });
+            const link = screen.getByRole('link', { name: module.label });
             expect(link.getAttribute('href')).toBe(`/${module.href}`);
             const file = MODULE_SHOTS[module.id].page.file;
             expect(link.querySelector(`img[src$="shots/${file}-light.webp"]`)).not.toBeNull();
         }
-        expect(screen.getByRole('link', { name: /^Steps\s*Garmin Connect$/ })).toBeInTheDocument();
     });
 
     test('keeps how it works for further down', () => {
@@ -117,14 +108,6 @@ describe('the intro', () => {
         await fireEvent.click(screen.getByRole('button', { name: /Start with WhatsApp/i }));
 
         expect(nav.goto).toHaveBeenCalledWith('/?source=whatsapp', expect.anything());
-    });
-
-    test('the other door is the picker', async () => {
-        render(LandingPage);
-
-        await fireEvent.click(screen.getByRole('button', { name: /Another service/i }));
-
-        expect(nav.goto).toHaveBeenCalledWith('/?step=pick', expect.anything());
     });
 
     test('takes a file dropped on the door, without a detour through the funnel', async () => {
