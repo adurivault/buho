@@ -59,14 +59,14 @@ export const FAQ_GROUPS: FaqGroup[] = [
                 answer: ['Why not?'],
             },
             {
-                id: 'who-makes-this',
-                question: 'Who makes this?',
-                answer: ["Just me, in my free time. There's no company behind it and no ads."],
-            },
-            {
                 id: 'account-and-price',
                 question: 'Do I need an account? Is it free?',
-                answer: ["No account, and it's free."],
+                answer: ["No account, and it's free. No ads."],
+            },
+            {
+                id: 'who-makes-this',
+                question: 'Who makes this?',
+                answer: ["Just me, in my free time."],
             },
             {
                 id: 'written-by-ai',
@@ -232,7 +232,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
                 id: 'try-without-data',
                 question: 'Can I try it without my own data?',
                 answer: [
-                    "Yes, Listening and Messages have a sample with made-up data. One click and you're in.",
+                    "Yes, I generated synthetic data to get a feel of what you'll have with your data. Just click \"Load Demo Data\"",
                 ],
             },
             {
@@ -240,13 +240,6 @@ export const FAQ_GROUPS: FaqGroup[] = [
                 question: 'Guide or Explore?',
                 answer: [
                     'The guide walks you through your data, one chart at a time. Explore gives you everything at once, with filters that update all the charts together. Listening, Positions and Messages have a guide. Start there.',
-                ],
-            },
-            {
-                id: 'saving-a-chart',
-                question: 'Can I save a chart?',
-                answer: [
-                    "Yes, as an image, a video or a GIF. The file is made on your computer too. Once you share it, it's out there, so check what's in the picture first.",
                 ],
             },
             {
