@@ -30,7 +30,12 @@ describe('Shot', () => {
     it('prints the credit a picture has to carry', () => {
         render(Shot, { props: { shot: MODULE_SHOTS.positions.side } });
 
-        expect(screen.getByText(/OpenStreetMap contributors/)).toBeInTheDocument();
+        // Short on the picture, the whole notice on hover.
+        const credit = screen.getByText('© OpenStreetMap');
+        expect(credit).toHaveAttribute(
+            'title',
+            expect.stringMatching(/OpenStreetMap contributors/)
+        );
     });
 
     it('says nothing when it repeats what is written beside it', () => {

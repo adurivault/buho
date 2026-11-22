@@ -36,8 +36,12 @@ export interface Shot {
     file: ShotFile;
     /** Where the picture stays anchored when its card crops it (`object-position`). */
     focus: string;
-    /** A credit the picture has to carry: the map tiles' licence. */
-    credit?: string;
+    /**
+     * A credit the picture has to carry: the map tiles' licence. `label` is
+     * what fits on the picture; `full` is the whole notice, on hover, as
+     * MapLibre itself compacts it on a small map.
+     */
+    credit?: { label: string; full: string };
 }
 
 /** A welcome's pair: the explorer's main chart, and a second one of another kind. */
@@ -46,7 +50,10 @@ export interface Preview {
     side: Shot;
 }
 
-const MAP_CREDIT = 'OpenFreeMap © OpenMapTiles, data © OpenStreetMap contributors';
+const MAP_CREDIT = {
+    label: '© OpenStreetMap',
+    full: 'OpenFreeMap © OpenMapTiles, data © OpenStreetMap contributors',
+};
 
 const constellation = (module: Charted): Shot => ({
     file: `${module}-constellation`,

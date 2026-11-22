@@ -38,7 +38,9 @@
     <!-- The licence notice belongs to the picture; a link around it is
          named by its own caption. -->
     {#if shot.credit}
-        <small class="credit" aria-hidden="true">{shot.credit}</small>
+        <small class="credit" aria-hidden="true" title={shot.credit.full}>
+            {shot.credit.label}
+        </small>
     {/if}
 </span>
 
@@ -68,13 +70,12 @@
         position: absolute;
         right: 0;
         bottom: 0;
-        max-width: 100%;
-        padding: 0.1rem 0.4rem;
+        padding: 0.05rem 0.35rem;
+        white-space: nowrap;
         border-top-left-radius: var(--radius-sm);
         background: hsl(var(--card) / 0.85);
         font-size: var(--text-label);
         line-height: 1.35;
-        text-align: right;
         color: hsl(var(--muted-foreground));
     }
 </style>

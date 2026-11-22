@@ -36,6 +36,6 @@ describe('the explorer captures', () => {
         const shot = MODULE_SHOTS.positions.side;
         expect(shotSrc(shot, 'light')).toMatch(/shots\/positions-map-light\.webp$/);
         expect(shotSrc(shot, 'dark')).toMatch(/shots\/positions-map-dark\.webp$/);
-        expect(shot.credit).toMatch(/OpenStreetMap/);
+        expect(shot.credit?.full).toMatch(/OpenFreeMap © OpenMapTiles.*OpenStreetMap contributors/);
     });
 });
