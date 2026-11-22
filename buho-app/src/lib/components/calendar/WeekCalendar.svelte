@@ -1,3 +1,10 @@
+<script lang="ts" module>
+    export interface WeekCells {
+        top: number;
+        height: number;
+    }
+</script>
+
 <script lang="ts">
     import { moduleById, type ModuleId } from '#lib/data/modules.ts';
     import type { YearDays } from '#lib/calendar/days.ts';
@@ -12,11 +19,13 @@
     } from '#lib/calendar/dates.ts';
 
     /**
-     * The open year week by week, Monday on top, each day coloured by the
+     * The open year week by week, Monday on top, each day in the fill of the
      * module it stood out in — the one whose bar stands tallest in the lanes
-     * that day — and the stronger the taller that bar. While the pointer is on
-     * a module elsewhere on the page, or on its name in the legend, each day
-     * in that module's colour alone, as strong as its own bar.
+     * that day. One flat colour per module: that bar is nearly always near the
+     * top of its lane, so a ramp on its height would only darken the year.
+     * While the pointer is on a module elsewhere on the page, or on its name
+     * in the legend, each day in that module's colour alone, the stronger the
+     * taller its own bar.
      *
      * Drawn on the lanes' axis of days: given the lanes' track width, a week's
      * cells span its seven days' bars above them, so a day reads straight down
@@ -35,10 +44,25 @@
         module: ModuleId | null;
         /** The module whose name in the legend the pointer is on; null once it is off the names. */
         onModule: (module: ModuleId | null) => void;
+        /**
+         * Where the cells sit, for a chart beside this one to line up with:
+         * how far below the top they start and how tall the seven rows stand.
+         */
+        cells?: WeekCells | null;
     }
 
-    let { days, loaded, selected, hovered, context, onPick, onHover, module, onModule }: Props =
-        $props();
+    let {
+        days,
+        loaded,
+        selected,
+        hovered,
+        context,
+        onPick,
+        onHover,
+        module,
+        onModule,
+        cells: cellBox = $bindable(null),
+    }: Props = $props();
 
     /** Space between two cells, in pixels. */
     const GAP = 2;
@@ -58,6 +82,11 @@
     /** As tall as a week is wide, so the cells come out square. */
     const row = $derived(Math.max(ROW_MIN, Math.min(ROW_MAX, (7 * width) / count)));
     const height = $derived(TOP + 7 * row - GAP);
+
+    $effect(() => {
+        cellBox = { top: TOP, height: 7 * row - GAP };
+    });
+
     /** Left of the first week, which may start a few days before the 1st of January. */
     const labelX = $derived(Math.min(0, weekSpan(0, offset, count, width)[0]) - 6);
 
@@ -98,11 +127,14 @@
         })
     );
 
-    /** The module a day is painted in, and its height in that module's lane; null for a blank day. */
-    function paintOf(i: number): { module: ModuleId; fill: number } | null {
-        if (!module) return days.standout[i] ?? null;
+    /** A day's colour; null for a blank day. */
+    function paintOf(i: number): string | null {
+        if (!module) {
+            const standout = days.standout[i]?.module;
+            return standout ? `var(--fill-${standout})` : null;
+        }
         const fill = days.fills[module]?.[i];
-        return fill != null && fill > 0 ? { module, fill } : null;
+        return fill != null && fill > 0 ? ramp(module, fill) : null;
     }
 
     function describe(day: string, i: number): string {
@@ -115,7 +147,7 @@
     }
 
     /** Stronger the taller the day's bar: a low day is a tint, a full bar is solid. */
-    function fill(module: ModuleId, height: number): string {
+    function ramp(module: ModuleId, height: number): string {
         const strength = Math.round(14 + 86 * Math.max(0, Math.min(1, height)));
         return `color-mix(in srgb, var(--peak-${module}) ${strength}%, transparent)`;
     }
@@ -166,7 +198,7 @@
                     width={cell.width}
                     height={row - GAP}
                     rx="2"
-                    style:fill={fill(cell.paint.module, cell.paint.fill)}
+                    style:fill={cell.paint}
                     role="button"
                     tabindex="-1"
                     aria-label={cell.tip}

@@ -137,10 +137,11 @@ describe('calendar page', () => {
                 cell.getAttribute('style')
             );
 
-        // 2025's two days with anything on them: listening's on 1 June, messages' on 30 May.
+        // 2025's two days with anything on them: listening's on 1 June, messages' on 30 May,
+        // each flat in its module's fill.
         expect(days()).toEqual([
-            expect.stringContaining('--peak-messages'),
-            expect.stringContaining('--peak-listening'),
+            expect.stringContaining('--fill-messages'),
+            expect.stringContaining('--fill-listening'),
         ]);
 
         // The messages lane is the second: the pointer lands inside it.

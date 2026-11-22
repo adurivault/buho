@@ -3,8 +3,9 @@
     import { moduleById, type ModuleId } from '#lib/data/modules.ts';
     import type { YearDays } from '#lib/calendar/days.ts';
     import { CALENDAR_ORDER, axisTopText, type FigureContext } from '#lib/calendar/figures.ts';
-    import { hexToRgb, peakColor, themeHsl } from '#lib/visualizations/themeColors.ts';
+    import { fillColor, hexToRgb, peakColor, themeHsl } from '#lib/visualizations/themeColors.ts';
     import { themeStore } from '#lib/stores/themeStore.svelte.ts';
+    import type { WeekCells } from './WeekCalendar.svelte';
 
     /**
      * Every day of the open year as one line across six axes, coloured by the
@@ -17,6 +18,9 @@
      * While the pointer is on a module elsewhere on the page, that module's
      * axis lights up in its colour. Each axis is named by its module's icon
      * alone; its name is the icon's tooltip.
+     *
+     * Beside the week calendar, the plot stands where its cells do and the
+     * axis names on the line of its legend.
      */
     interface Props {
         days: YearDays;
@@ -31,12 +35,28 @@
         module: ModuleId | null;
         /** The module whose axis name the pointer is on; null once it is off the names. */
         onModule: (module: ModuleId | null) => void;
+        /** The week calendar's cells, to line the plot up with; its own size without them. */
+        align?: WeekCells | null;
     }
 
-    let { days, loaded, selected, hovered, context, onPick, onHover, module, onModule }: Props =
-        $props();
+    let {
+        days,
+        loaded,
+        selected,
+        hovered,
+        context,
+        onPick,
+        onHover,
+        module,
+        onModule,
+        align = null,
+    }: Props = $props();
 
-    const HEIGHT = 96;
+    /** Room above the plot for each axis's top figure. */
+    const head = $derived(align?.top ?? 18);
+    const height = $derived(align?.height ?? 96);
+    /** Room kept above the top of the axes and below their foot, for the lines' halos. */
+    const INSET = 4;
     /** How near a line the pointer has to be to pick it, in pixels. */
     const REACH = 6;
 
@@ -62,7 +82,7 @@
     );
 
     /** Height on the plot of a day's height in its lane, 0–1. */
-    const y = (fill: number) => ((192 - fill * 184) / 200) * HEIGHT;
+    const y = (fill: number) => INSET + (1 - fill) * (height - 2 * INSET);
 
     /** Each day's line, as points across the axes it has a figure on. */
     const lines = $derived(
@@ -93,7 +113,7 @@
                 {
                     id: axis.id,
                     left: axis.share * 100,
-                    top: (y(fill) / HEIGHT) * 100,
+                    top: (y(fill) / height) * 100,
                 },
             ];
         });
@@ -102,8 +122,8 @@
     const dots = $derived(crossings(selectedIndex));
     const hoverDots = $derived(hoveredIndex === selectedIndex ? [] : crossings(hoveredIndex));
 
-    function rgba(module: ModuleId, alpha: number): string {
-        const [r, g, b] = hexToRgb(peakColor(module));
+    function rgba(colour: string, alpha: number): string {
+        const [r, g, b] = hexToRgb(colour);
         return `rgba(${r}, ${g}, ${b}, ${alpha})`;
     }
 
@@ -117,13 +137,13 @@
         if (!canvas || width <= 0) return;
         const dpr = window.devicePixelRatio || 1;
         canvas.width = Math.round(width * dpr);
-        canvas.height = Math.round(HEIGHT * dpr);
+        canvas.height = Math.round(height * dpr);
         canvas.style.width = `${width}px`;
-        canvas.style.height = `${HEIGHT}px`;
+        canvas.style.height = `${height}px`;
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        ctx.clearRect(0, 0, width, HEIGHT);
+        ctx.clearRect(0, 0, width, height);
         ctx.lineJoin = 'round';
 
         ctx.strokeStyle = themeHsl('--border-strong', '#8a8a8a');
@@ -138,13 +158,15 @@
         }
         ctx.setLineDash([]);
 
-        // While a day is hovered the rest of the year steps back further, so
-        // the one line under the pointer reads out of the mass.
+        // The year's lines in the modules' fills: hundreds of them overlap,
+        // and however many pile up they never get past the pastel. While a
+        // day is hovered the rest of the year steps back further, so the one
+        // line under the pointer reads out of the mass.
         const hovering = hoveredIndex >= 0 && hoveredIndex !== selectedIndex;
         lines.forEach((line, i) => {
             if (!line.module || line.points.length < 2) return;
             if (i === selectedIndex || i === hoveredIndex) return;
-            ctx.strokeStyle = rgba(line.module, hovering ? 0.1 : 0.22);
+            ctx.strokeStyle = rgba(fillColor(line.module), hovering ? 0.1 : 0.22);
             ctx.lineWidth = 1;
             trace(ctx, line.points);
         });
@@ -171,7 +193,7 @@
             ctx.strokeStyle = halo;
             ctx.lineWidth = lineWidth + 3;
             trace(ctx, line.points);
-            ctx.strokeStyle = rgba(line.module, 1);
+            ctx.strokeStyle = peakColor(line.module);
             ctx.lineWidth = lineWidth;
             trace(ctx, line.points);
         };
@@ -238,7 +260,7 @@
 </script>
 
 <div class="parallel">
-    <div class="tops">
+    <div class="tops" style:height="{head}px">
         {#each axes as axis (axis.id)}
             {#if axis.top}
                 <span class="top" style:left="{axis.share * 100}%">{axis.top}</span>
@@ -246,7 +268,7 @@
         {/each}
     </div>
 
-    <div class="plot" bind:clientWidth={width} style:height="{HEIGHT}px">
+    <div class="plot" bind:clientWidth={width} style:height="{height}px">
         <canvas
             bind:this={canvas}
             class:picking={pointer !== null}
@@ -296,17 +318,16 @@
         min-width: 0;
         display: flex;
         flex-direction: column;
-        gap: 8px;
     }
 
     .tops {
         position: relative;
-        height: 12px;
-        margin-bottom: -6px;
     }
 
+    /* On the baseline of the week calendar's month names. */
     .top {
         position: absolute;
+        bottom: 3px;
         transform: translateX(-50%);
         font-family: var(--font-mono);
         font-size: 0.62rem;
@@ -343,9 +364,11 @@
         pointer-events: none;
     }
 
+    /* As far below the plot, and as tall, as the week calendar's legend. */
     .axes {
         position: relative;
-        height: 18px;
+        height: 14px;
+        margin-top: 8px;
     }
 
     .axis {
@@ -355,7 +378,7 @@
         align-items: center;
         gap: 5px;
         font-size: var(--text-label);
-        line-height: 18px;
+        line-height: 14px;
         white-space: nowrap;
         color: hsl(var(--muted-foreground));
     }

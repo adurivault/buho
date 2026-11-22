@@ -14,7 +14,7 @@
     import { calendarStore } from '#lib/stores/calendarStore.svelte.ts';
     import { trackEvent } from '#lib/analytics.ts';
     import YearLanes from '#lib/components/calendar/YearLanes.svelte';
-    import WeekCalendar from '#lib/components/calendar/WeekCalendar.svelte';
+    import WeekCalendar, { type WeekCells } from '#lib/components/calendar/WeekCalendar.svelte';
     import YearRadViz from '#lib/components/calendar/YearRadViz.svelte';
     import ParallelDays from '#lib/components/calendar/ParallelDays.svelte';
     import DayTracks from '#lib/components/calendar/DayTracks.svelte';
@@ -92,6 +92,8 @@
     const CLOCK_MIN = 320;
 
     let gridWidth = $state(0);
+    /** Where the week calendar's cells sit: the parallel coordinates beside it line up with them. */
+    let weekCells = $state<WeekCells | null>(null);
     const lanesHeight = $derived(LANE_HEAD + (laneLayout?.height ?? 0));
 
     /**
@@ -348,6 +350,7 @@
                                 onHover={(next) => (hovered = next)}
                                 module={pointedModule}
                                 onModule={(next) => (pointedModule = next)}
+                                bind:cells={weekCells}
                             />
                         </div>
                         <ParallelDays
@@ -360,6 +363,7 @@
                             onHover={(next) => (hovered = next)}
                             module={pointedModule}
                             onModule={(next) => (pointedModule = next)}
+                            align={yearLayout.mode === 'side' ? weekCells : null}
                         />
                     </div>
                 {/if}
