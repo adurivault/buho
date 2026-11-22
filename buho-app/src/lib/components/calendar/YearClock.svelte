@@ -12,6 +12,7 @@
         type DialGeometry,
         type QuarterCell,
     } from '#lib/calendar/clock.ts';
+    import { QUARTERS_PER_DAY } from '#lib/calendar/timeline.ts';
     import { sequentialRamp } from '#lib/visualizations/d3/chart.ts';
     import { colorAt } from '#lib/visualizations/healthRamp.ts';
     import type { ColorStop } from '#lib/visualizations/signalGrid.ts';
@@ -29,8 +30,8 @@
      * heart rate on the health explorer's ramp. Either way the nights close
      * round the hole, the habits of the day run round the year as rings, and
      * whatever moves them, a summer's later evenings or a fortnight away,
-     * bends the rings. Hours and months part the dial into tiles, so a reading
-     * has a place: July, around six.
+     * bends the rings. Every quarter-hour of every day is a tile of its own,
+     * outlined in a hairline.
      *
      * Drawn in SVG, so it stays sharp however far the page is zoomed into. The
      * dial is one path per module, or per shade of the one shown alone, and
@@ -158,9 +159,6 @@
     const radius = (hour: number) =>
         geometry.inner + ((geometry.outer - geometry.inner) * hour) / 24;
 
-    /** Every hour between the two midnights, as a ring parting the tiles. */
-    const rings = $derived(Array.from({ length: 23 }, (_, k) => radius(k + 1)));
-
     /** The hours named up the gap, midnight just inside the hole and the next one just past the rim. */
     const hours = $derived(
         [0, 6, 12, 18, 24].map((hour) => {
@@ -168,6 +166,21 @@
             return { hour, y: geometry.cy - radius(hour) - nudge };
         })
     );
+
+    /** Every quarter-hour of every day outlined: its rings between the two midnights, its spokes between days. */
+    const tiles = $derived.by(() => {
+        const g = geometry;
+        const rings = Array.from({ length: QUARTERS_PER_DAY + 1 }, (_, q) => {
+            const t = q / QUARTERS_PER_DAY;
+            const r = g.inner + (g.outer - g.inner) * t;
+            return `M${xy(dialPoint(g, 0, t))}A${r},${r} 0 1 1 ${xy(dialPoint(g, g.days, t))}`;
+        });
+        const spokes = Array.from(
+            { length: g.days + 1 },
+            (_, day) => `M${xy(dialPoint(g, day, 0))}L${xy(dialPoint(g, day, 1))}`
+        );
+        return rings.join('') + spokes.join('');
+    });
 
     /** Where each month begins, as a day index, and its name round the rim. */
     const months = $derived.by(() => {
@@ -180,13 +193,7 @@
         return starts.map((start, k) => {
             const end = starts[k + 1]?.day ?? days.length;
             const [x, y] = dialPoint(geometry, (start.day + end) / 2, label);
-            return {
-                name: monthName(start.month),
-                x,
-                y,
-                from: dialPoint(geometry, start.day, 0),
-                to: dialPoint(geometry, start.day, 1),
-            };
+            return { name: monthName(start.month), x, y };
         });
     });
 
@@ -229,15 +236,7 @@
                     {/if}
                 {/each}
             {/if}
-            <!-- The tiles' outlines, cut in the page's colour. -->
-            <g class="grid">
-                {#each rings as r (r)}
-                    <circle cx={geometry.cx} cy={geometry.cy} {r} />
-                {/each}
-                {#each months.slice(1) as month (month.name)}
-                    <line x1={month.from[0]} y1={month.from[1]} x2={month.to[0]} y2={month.to[1]} />
-                {/each}
-            </g>
+            <path class="tiles" d={tiles} />
         </svg>
         {#if shown}
             {@const info = moduleById(shown)}
@@ -313,10 +312,10 @@
         opacity: 0.47;
     }
 
-    .grid {
+    .tiles {
         fill: none;
         stroke: hsl(var(--background));
-        stroke-width: 0.75;
+        stroke-width: 0.3;
     }
 
     .shown {

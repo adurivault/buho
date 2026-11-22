@@ -118,12 +118,6 @@ export function quarterGrid(cells: QuarterCell[], days: string[], cuts: number[]
 }
 
 /**
- * How far each day's wedges run on over the next day, in days, so that two
- * days side by side close up without a hairline between them.
- */
-const OVERLAP = 0.2;
-
-/**
  * A grid as SVG path data, one path per step: each run of quarter-hours on
  * the same step is one wedge of its day's spoke, to be filled in that step's
  * shade. A path of many wedges per step, rather than an element per
@@ -137,7 +131,7 @@ export function dialPaths(grid: Uint8Array, g: DialGeometry, steps: number): str
     };
     for (let day = 0; day < g.days; day++) {
         const row = day * QUARTERS_PER_DAY;
-        const next = Math.min(g.days, day + 1 + OVERLAP);
+        const next = day + 1;
         let quarter = 0;
         while (quarter < QUARTERS_PER_DAY) {
             const step = grid[row + quarter];

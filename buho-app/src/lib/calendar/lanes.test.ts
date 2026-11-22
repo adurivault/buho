@@ -30,17 +30,22 @@ describe('layoutLanes', () => {
         expect(height).toBe(402);
     });
 
-    it('thins a module that is not imported and drops the ribbon with positions', () => {
-        const { lanes } = layoutLanes({ ...all, positions: false, steps: false }, () => true);
+    it('keeps a module that is not imported at full height and drops the ribbon with positions', () => {
+        const { lanes, height } = layoutLanes(
+            { ...all, positions: false, steps: false },
+            () => true
+        );
 
         expect(lanes.map((l) => [l.key, l.state, l.height])).toEqual([
-            ['positions-bars', 'missing', 16],
+            ['positions-bars', 'missing', 44],
             ['listening-bars', 'data', 56],
             ['messages-bars', 'data', 56],
             ['activity-bars', 'data', 44],
-            ['steps-bars', 'missing', 16],
+            ['steps-bars', 'missing', 56],
             ['health-zones', 'data', 44],
         ]);
+        // As tall as with every module, the ribbon aside.
+        expect(height).toBe(390);
     });
 
     it('leaves out the city ribbon when no day has a city', () => {

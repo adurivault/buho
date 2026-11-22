@@ -47,9 +47,6 @@ export const LANE_SPECS: LaneSpec[] = [
     { module: 'health', kind: 'zones', height: 44, gap: 18 },
 ];
 
-/** A module that is not imported keeps a thin row, so the page says what it is missing. */
-export const MISSING_LANE = { height: 16, gap: 12 };
-
 export type LaneState = 'data' | 'empty' | 'missing';
 
 export interface Lane extends LaneSpec {
@@ -60,7 +57,9 @@ export interface Lane extends LaneSpec {
 }
 
 /**
- * Where each lane goes for the open year.
+ * Where each lane goes for the open year. A module that is not imported keeps
+ * its lane at full height, saying what is missing, so the lanes stand as tall
+ * whichever modules are loaded and the clock beside them keeps its size.
  *
  * @param hasData whether a loaded module's lane holds anything this year.
  */
@@ -76,18 +75,16 @@ export function layoutLanes(
         // positions, or before any place has been named, it would be an empty
         // strip under the lane.
         if (spec.kind === 'city' && (missing || !hasData(spec))) continue;
-        const height = missing ? MISSING_LANE.height : spec.height;
-        const gap = lanes.length === 0 ? 0 : missing ? MISSING_LANE.gap : spec.gap;
+        const gap = lanes.length === 0 ? 0 : spec.gap;
         top += gap;
         lanes.push({
             ...spec,
-            height,
             gap,
             key: `${spec.module}-${spec.kind}`,
             top,
             state: missing ? 'missing' : hasData(spec) ? 'data' : 'empty',
         });
-        top += height;
+        top += spec.height;
     }
     return { lanes, height: top };
 }
