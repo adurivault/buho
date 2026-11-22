@@ -108,6 +108,14 @@ describe('ModuleEmptyState', () => {
         expect(document.querySelectorAll('.feeds li')).toHaveLength(0);
     });
 
+    /** Beside the text, what the export becomes: the explorer, drawn from the demo. */
+    it('shows the module explorer as the demo draws it', () => {
+        render(ModuleEmptyState, { props: { module: moduleById('positions') } });
+
+        expect(screen.getAllByAltText('Positions explorer, drawn from demo data')).toHaveLength(2);
+        expect(screen.getByText('Demo data')).toBeInTheDocument();
+    });
+
     /** The screen stays a screen: no procedure, no archive specs. */
     it('stops short of the export procedure itself', () => {
         render(ModuleEmptyState, { props: { module: moduleById('steps') } });

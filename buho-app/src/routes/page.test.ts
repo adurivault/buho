@@ -3,6 +3,7 @@ import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import LandingPage from './+page.svelte';
 import { CATALOG_SOURCES } from '#lib/data/sources/catalog.ts';
+import { DATA_MODULES } from '#lib/data/modules.ts';
 import { funnelLabel } from '#lib/onboarding/funnel.ts';
 import { dataStore } from '#lib/stores/dataStore.svelte.ts';
 
@@ -50,42 +51,73 @@ describe('the intro', () => {
 
     /**
      * A neutral "Start" led straight into a decision a first-time visitor is
-     * not equipped to make. The door makes it instead: one button that does the
-     * thing, one that says there is more than that, and a line explaining why
-     * one service is singled out.
+     * not equipped to make. The door makes it instead: one card that does the
+     * thing, one that says there is more than that, and a drop line for whoever
+     * already has the file.
      */
-    test('offers the fast path and the long way, and nothing else', () => {
+    test('offers the fast path, the long way and a drop line, and nothing else', () => {
         render(LandingPage);
 
-        // The two doors and the skip link. Three buttons, no menu.
-        expect(screen.getAllByRole('button')).toHaveLength(3);
         expect(
-            screen.getByRole('button', { name: /Quick start with WhatsApp/i })
-        ).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /Explore other services/i })).toBeInTheDocument();
+            screen
+                .getAllByRole('button')
+                .map((button) => button.getAttribute('aria-label') ?? button.textContent?.trim())
+        ).toEqual([
+            expect.stringMatching(/^Start with WhatsApp/),
+            expect.stringMatching(/^Another service/),
+            'Choose files',
+            'Choose a folder',
+        ]);
         expect(screen.getByText(/about two minutes/i)).toBeInTheDocument();
+        expect(screen.getAllByText('Already have an export?')[0]).toBeInTheDocument();
     });
 
     /**
      * The list of every service Buho reads used to sit under the button, so a
      * Spotify user would not read the funnel as "not supported". It was still a
-     * menu at the one moment nobody wants one; the second door and the footer
-     * link carry that job now.
+     * menu at the one moment nobody wants one. The services appear only as
+     * what fills each module, under its picture; choosing one is the second
+     * door's job.
      */
-    test('does not lay out the whole catalog', () => {
+    test('names the exports as what fills each module, never as a choice', () => {
         render(LandingPage);
 
         expect(screen.queryByText(/^Reads exports from/)).not.toBeInTheDocument();
+        const controls = [...screen.getAllByRole('button'), ...screen.getAllByRole('link')];
         for (const source of CATALOG_SOURCES) {
             if (source.id === 'whatsapp') continue;
-            expect(screen.queryByText(funnelLabel(source))).not.toBeInTheDocument();
+            const name = funnelLabel(source);
+            expect(controls.some((control) => control.textContent?.trim() === name)).toBe(false);
         }
+    });
+
+    /** What an export becomes, before there is one: each module, as the demo draws it. */
+    test('shows the six modules, each opening its own page', () => {
+        render(LandingPage);
+
+        for (const module of DATA_MODULES) {
+            const link = screen.getByRole('link', { name: new RegExp(`^${module.label}`) });
+            expect(link.getAttribute('href')).toBe(`/${module.href}`);
+            expect(link.querySelector(`img[src$="shots/${module.id}-light.webp"]`)).not.toBeNull();
+        }
+        expect(screen.getByText('Charts drawn from demo data.')).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: /^Steps\s*Garmin Connect$/ })).toBeInTheDocument();
+    });
+
+    test('keeps how it works for the screen below, with a cue to it', () => {
+        render(LandingPage);
+
+        expect(screen.getByRole('heading', { name: 'How it works' })).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: 'How it works ↓' })).toHaveAttribute(
+            'href',
+            '#how-it-works'
+        );
     });
 
     test('the fast path skips the picker entirely', async () => {
         render(LandingPage);
 
-        await fireEvent.click(screen.getByRole('button', { name: /Quick start with WhatsApp/i }));
+        await fireEvent.click(screen.getByRole('button', { name: /Start with WhatsApp/i }));
 
         expect(nav.goto).toHaveBeenCalledWith('/?source=whatsapp', expect.anything());
     });
@@ -93,17 +125,28 @@ describe('the intro', () => {
     test('the other door is the picker', async () => {
         render(LandingPage);
 
-        await fireEvent.click(screen.getByRole('button', { name: /Explore other services/i }));
+        await fireEvent.click(screen.getByRole('button', { name: /Another service/i }));
 
         expect(nav.goto).toHaveBeenCalledWith('/?step=pick', expect.anything());
     });
 
-    test('lets anyone who already has a file skip the whole thing', async () => {
-        render(LandingPage);
+    test('takes a file dropped on the door, without a detour through the funnel', async () => {
+        const handleImport = vi.spyOn(dataStore, 'handleImport').mockResolvedValue(undefined);
+        const { container } = render(LandingPage);
 
-        await fireEvent.click(screen.getByRole('button', { name: /I already have an export/i }));
+        const file = new File(['{}'], 'export.zip');
+        const zone = container.querySelector('.zone') as HTMLElement;
+        await fireEvent.drop(zone, {
+            dataTransfer: { items: [{ kind: 'file', getAsFile: () => file }], files: [file] },
+        });
 
-        expect(nav.goto).toHaveBeenCalledWith('/?step=drop', expect.anything());
+        expect(handleImport).toHaveBeenCalledWith(expect.any(Function), {
+            pick: 'drop',
+            surface: 'onboarding',
+            expected: undefined,
+        });
+        expect(nav.goto).not.toHaveBeenCalled();
+        handleImport.mockRestore();
     });
 });
 
@@ -214,9 +257,7 @@ describe('step two — getting the export', () => {
         nav.url = new URL('http://localhost/?source=myspace');
         render(LandingPage);
 
-        expect(
-            screen.getByRole('button', { name: /Quick start with WhatsApp/i })
-        ).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Start with WhatsApp/i })).toBeInTheDocument();
     });
 });
 
@@ -281,7 +322,7 @@ describe('once something is imported', () => {
 
         expect(screen.getByRole('heading', { name: /Your data is in/i })).toBeInTheDocument();
         expect(
-            screen.queryByRole('button', { name: /Quick start with WhatsApp/i })
+            screen.queryByRole('button', { name: /Start with WhatsApp/i })
         ).not.toBeInTheDocument();
 
         const link = screen.getByRole('link', { name: /Messages/ });
@@ -294,8 +335,6 @@ describe('once something is imported', () => {
         dataStore.loadDemoData('listening');
         render(LandingPage);
 
-        expect(
-            screen.getByRole('button', { name: /Quick start with WhatsApp/i })
-        ).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Start with WhatsApp/i })).toBeInTheDocument();
     });
 });

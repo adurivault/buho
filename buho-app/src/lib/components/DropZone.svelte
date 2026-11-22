@@ -38,6 +38,11 @@
         pickTitle?: string;
         /** What can be dropped, under the leading line. */
         hint?: string;
+        /**
+         * One line of a page rather than its main action: a smaller glyph, and
+         * the pickers beside the text instead of under it.
+         */
+        compact?: boolean;
     }
 
     let {
@@ -46,6 +51,7 @@
         title = 'Drop your export here',
         pickTitle = 'Pick your export',
         hint = 'The .zip as it arrived, the unzipped folder, or loose files. Buho works out which export it is, so you never have to say — and reads it locally, in your browser, without uploading any of it.',
+        compact = false,
     }: Props = $props();
 
     let dragging = $state(false);
@@ -121,6 +127,7 @@
 <div
     class="zone"
     class:dragging
+    class:compact
     onclick={onZoneClick}
     onpointerenter={warmUpDuckDB}
     onfocusin={warmUpDuckDB}
@@ -242,6 +249,45 @@
 
     .pick:hover {
         text-decoration-color: var(--module-peak);
+    }
+
+    .compact {
+        align-items: center;
+        gap: 0.9rem;
+        padding: 0.8rem 1.1rem;
+        border-radius: var(--radius-lg);
+    }
+
+    .compact .glyph {
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: var(--radius-md);
+    }
+
+    .compact .text {
+        display: grid;
+        flex: 1;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        column-gap: 1rem;
+    }
+
+    .compact .lead {
+        grid-column: 1;
+        grid-row: 1;
+        font-size: var(--text-body);
+    }
+
+    .compact .hint {
+        grid-column: 1;
+        grid-row: 2;
+        margin: 0;
+    }
+
+    .compact .pickers {
+        grid-column: 2;
+        grid-row: 1 / span 2;
+        margin: 0;
     }
 
     /* A phone has no drag gesture to offer, so the dashed target stops being a

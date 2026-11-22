@@ -54,8 +54,9 @@ describe('the landing page on a phone', () => {
 
         expect(screen.getByRole('heading', { name: /Made for a big screen/i })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /Send me the link/i })).toBeInTheDocument();
-        // Not the desktop door: no drop-first shortcut.
-        expect(screen.queryByText(/I already have an export/i)).not.toBeInTheDocument();
+        // Not the desktop door: no drop line, no screen on how it works.
+        expect(screen.queryByText(/Already have an export/i)).not.toBeInTheDocument();
+        expect(screen.queryByRole('heading', { name: 'How it works' })).not.toBeInTheDocument();
     });
 
     // The exports a phone can make itself come first: they are the ones a
@@ -105,6 +106,7 @@ describe('the landing page on a phone', () => {
         expect(
             screen.queryByRole('heading', { name: /Made for a big screen/i })
         ).not.toBeInTheDocument();
-        expect(screen.getByText(/I already have an export/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/Already have an export/i)[0]).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'How it works' })).toBeInTheDocument();
     });
 });

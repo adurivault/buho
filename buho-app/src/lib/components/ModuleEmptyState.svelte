@@ -4,6 +4,7 @@
     import Icon from '#lib/components/Icon.svelte';
     import NetworkIcon from '#lib/components/NetworkIcon.svelte';
     import DropZone from '#lib/components/DropZone.svelte';
+    import ModulePreview from '#lib/components/ModulePreview.svelte';
     import { sourcesFilling } from '#lib/data/sources/catalog.ts';
     import type { DataModule } from '#lib/data/modules.ts';
 
@@ -23,6 +24,10 @@
      * here was tried and was worse: arriving at a page of instructions, before
      * you know what the module even is, is more to read than anyone has a
      * reason to. Each export's chip links to its how-to instead.
+     *
+     * Beside it, the module's explorer as the demo draws it, so the page also
+     * shows what the export becomes. On a short window that picture is what
+     * gives way, and on a narrow one it goes.
      */
     interface Props {
         module: DataModule;
@@ -123,25 +128,49 @@
             </button>
         {/if}
     </div>
+
+    <div class="aside">
+        <ModulePreview {module} />
+    </div>
 </div>
 
 <style>
-    /* The column sits in the middle of whatever height the page leaves it, and
-       is short enough to fit a 720px-tall window without a scrollbar. */
+    /* Two columns in the middle of whatever height the page leaves them, short
+       enough to fit a 720px-tall window without a scrollbar. The text keeps its
+       measure; the preview takes what is left of the width. */
     .welcome {
-        display: flex;
+        display: grid;
         flex: 1;
-        align-items: center;
+        grid-template-columns: minmax(22rem, 30rem) minmax(0, 38rem);
         justify-content: center;
+        align-items: center;
+        gap: clamp(2.5rem, 5vw, 4.5rem);
         min-height: 0;
-        padding: 2rem 1.5rem;
+        padding: 2rem 2.5rem;
     }
 
     .column {
         display: flex;
         flex-direction: column;
-        width: 100%;
-        max-width: 34rem;
+        min-width: 0;
+    }
+
+    /* The window less the module header and this page's padding, with room
+       for the glow. */
+    .aside {
+        --preview-max-height: calc(100dvh - 9rem);
+    }
+
+    /* Too narrow for the two side by side: the text alone. */
+    @media (max-width: 959px) {
+        .welcome {
+            grid-template-columns: minmax(0, 34rem);
+            padding-inline: 1.5rem;
+        }
+
+        .aside {
+            display: none;
+        }
     }
 
     h2 {
