@@ -56,7 +56,7 @@ const ALLOWED_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', 'tiles.openfre
  * trips included, which is a country; that stays the app's behaviour, and
  * only the capture is framed here.
  */
-const DEMO_CITY = { center: [2.352, 48.849], zoom: 11.15 };
+const DEMO_CITY = { center: [2.352, 48.849], zoom: 10.15 };
 
 /**
  * Each page, and what is captured on it. `region` is the element captured;
