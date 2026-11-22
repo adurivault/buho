@@ -2,12 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { DATA_MODULES } from '#lib/data/modules.ts';
-import { CALENDAR_SHOTS, MODULE_SHOTS, shotSrc, tileShot, type Shot } from './shots';
+import { CALENDAR_SHOTS, MODULE_SHOTS, shotSrc, type Shot } from './shots';
 
 const STATIC = join(__dirname, '../../static');
 
 const every: Shot[] = [
-    ...Object.values(MODULE_SHOTS).flatMap(({ main, side }) => [main, side]),
+    ...Object.values(MODULE_SHOTS).flatMap(({ page, main, side }) => [page, main, side]),
     CALENDAR_SHOTS.main,
     CALENDAR_SHOTS.side,
 ];
@@ -28,7 +28,6 @@ describe('the explorer captures', () => {
         for (const module of DATA_MODULES) {
             const { main, side } = MODULE_SHOTS[module.id];
             expect(main.file).not.toBe(side.file);
-            expect([main, side]).toContain(tileShot(module.id));
         }
     });
 

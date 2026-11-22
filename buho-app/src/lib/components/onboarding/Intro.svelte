@@ -5,10 +5,10 @@
     import Shot from '#lib/components/Shot.svelte';
     import { DATA_MODULES } from '#lib/data/modules.ts';
     import { sourcesFilling } from '#lib/data/sources/catalog.ts';
-    import { tileShot } from '#lib/shots.ts';
+    import { MODULE_SHOTS } from '#lib/shots.ts';
 
     /**
-     * The door: the first screen of the home page.
+     * The door: the top of the home page.
      *
      * It has been wrong in three directions now. It opened on the picker — every
      * service and every waiting time, a worse copy of /sources standing where an
@@ -23,11 +23,12 @@
      * which of the services was cheap to try. Whoever already has a file drops
      * it on the line under them, without a detour through the funnel.
      *
-     * Beside them, the six modules as the demo draws them, each naming the
-     * exports that fill it and opening its own page. They answer "what does it
-     * make of my file" by showing it; they are not a menu of services to choose
-     * from, which is the picker's job. How Buho works, the diagram, is the next
-     * screen down.
+     * Under them, the six modules, each as a whole explorer page drawn from
+     * the demo, naming the exports that fill it and opening its own page. They
+     * answer "what does it make of my file" by showing it; they are not a menu
+     * of services to choose from, which is the picker's job. Big enough to
+     * read as pages, three to a row: the first row is in the first screen and
+     * the second shows under its fold, so the page plainly goes on.
      */
     interface Props {
         /** Straight to the WhatsApp how-to, skipping the picker entirely. */
@@ -40,7 +41,7 @@
 
     const tiles = DATA_MODULES.map((module) => ({
         module,
-        shot: tileShot(module.id),
+        shot: MODULE_SHOTS[module.id].page,
         feeds: sourcesFilling(module.id)
             .map((source) => source.label)
             .join(' · '),
@@ -56,7 +57,9 @@
                 <span class="line">For Spotify, but also Google, WhatsApp, Strava, Garmin…</span>
                 <span class="line">Dive deeper into your personal data exports.</span>
             </p>
+        </div>
 
+        <div class="actions">
             <div class="doors">
                 <button class="door" data-module="messages" onclick={() => onQuickStart()}>
                     <span class="door-title">
@@ -86,43 +89,40 @@
             </div>
             <p class="safe">Read in your browser, never uploaded.</p>
         </div>
-
-        <ul class="tiles">
-            {#each tiles as { module, shot, feeds } (module.id)}
-                <li>
-                    <a class="tile" data-module={module.id} href={resolve(module.href)}>
-                        <span class="picture">
-                            <Shot {shot} />
-                        </span>
-                        <span class="caption">
-                            <span class="name">
-                                <Icon name={module.icon} size={15} />
-                                {module.label}
-                            </span>
-                            <span class="feeds">{feeds}</span>
-                        </span>
-                    </a>
-                </li>
-            {/each}
-        </ul>
     </div>
 
-    <a class="cue" href="#how-it-works">How it works ↓</a>
+    <ul class="tiles">
+        {#each tiles as { module, shot, feeds } (module.id)}
+            <li>
+                <a class="tile" data-module={module.id} href={resolve(module.href)}>
+                    <span class="picture">
+                        <Shot {shot} />
+                    </span>
+                    <span class="caption">
+                        <span class="name">
+                            <Icon name={module.icon} size={15} />
+                            {module.label}
+                        </span>
+                        <span class="feeds">{feeds}</span>
+                    </span>
+                </a>
+            </li>
+        {/each}
+    </ul>
 </div>
 
 <style>
-    /* Fills the first screen the page gives it: the hero in the middle of the
-       height, the cue to the next screen at its foot. */
     .intro {
         display: flex;
-        flex: 1;
         flex-direction: column;
+        gap: var(--gap-y, 2rem);
     }
 
+    /* The headline on the left, what to do on the right: one row, so the
+       modules start within the first screen. */
     .hero {
         display: grid;
-        flex: 1;
-        grid-template-columns: minmax(0, 27rem) minmax(0, 1fr);
+        grid-template-columns: minmax(0, 1fr) minmax(0, 30rem);
         align-items: center;
         gap: clamp(2rem, 4vw, 3.5rem);
     }
@@ -150,7 +150,6 @@
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 0.65rem;
-        margin-top: clamp(1.25rem, 4vh, 1.75rem);
     }
 
     .door {
@@ -207,7 +206,7 @@
     }
 
     .drop {
-        margin-top: clamp(1rem, 3vh, 1.5rem);
+        margin-top: 0.75rem;
     }
 
     .safe {
@@ -219,7 +218,7 @@
     .tiles {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 0.85rem;
+        gap: 1.25rem;
         margin: 0;
         padding: 0;
         list-style: none;
@@ -242,10 +241,11 @@
         border-color: var(--module-fill);
     }
 
-    /* The picture gives way first when the window is short. */
+    /* The page as captured, uncropped: an explorer is as wide as the window
+       it was captured in, 1224 by 800. */
     .picture {
         display: block;
-        height: clamp(4.5rem, 14vh, 7.25rem);
+        aspect-ratio: 1224 / 800;
         border-bottom: 1px solid hsl(var(--border));
     }
 
@@ -253,7 +253,7 @@
         display: flex;
         flex-direction: column;
         gap: 0.1rem;
-        padding: 0.55rem 0.75rem 0.65rem;
+        padding: 0.65rem 0.9rem 0.75rem;
     }
 
     .name {
@@ -275,35 +275,20 @@
         color: hsl(var(--muted-foreground));
     }
 
-    .cue {
-        align-self: center;
-        margin-top: var(--gap-y, 1.5rem);
-        font-size: var(--text-small);
-        font-weight: 550;
-        color: hsl(var(--foreground));
-        text-decoration: none;
-    }
-
-    .cue:hover {
-        text-decoration: underline;
-        text-underline-offset: 4px;
-    }
-
-    /* Too narrow for the two side by side: the door first, the modules under
-       it. */
+    /* Too narrow for the headline and the doors side by side. */
     @media (max-width: 959px) {
         .hero {
-            grid-template-columns: minmax(0, 1fr);
+            grid-template-columns: minmax(0, 34rem);
         }
 
-        .pitch {
-            max-width: 34rem;
+        .tiles {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
         }
     }
 
     @media (max-width: 599px) {
         .tiles {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-template-columns: minmax(0, 1fr);
         }
     }
 </style>

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import LandingPage from './+page.svelte';
 import { CATALOG_SOURCES } from '#lib/data/sources/catalog.ts';
 import { DATA_MODULES } from '#lib/data/modules.ts';
-import { tileShot } from '#lib/shots.ts';
+import { MODULE_SHOTS } from '#lib/shots.ts';
 import { funnelLabel } from '#lib/onboarding/funnel.ts';
 import { dataStore } from '#lib/stores/dataStore.svelte.ts';
 
@@ -99,20 +99,16 @@ describe('the intro', () => {
         for (const module of DATA_MODULES) {
             const link = screen.getByRole('link', { name: new RegExp(`^${module.label}`) });
             expect(link.getAttribute('href')).toBe(`/${module.href}`);
-            const file = tileShot(module.id).file;
+            const file = MODULE_SHOTS[module.id].page.file;
             expect(link.querySelector(`img[src$="shots/${file}-light.webp"]`)).not.toBeNull();
         }
         expect(screen.getByRole('link', { name: /^Steps\s*Garmin Connect$/ })).toBeInTheDocument();
     });
 
-    test('keeps how it works for the screen below, with a cue to it', () => {
+    test('keeps how it works for further down', () => {
         render(LandingPage);
 
         expect(screen.getByRole('heading', { name: 'How it works' })).toBeInTheDocument();
-        expect(screen.getByRole('link', { name: 'How it works ↓' })).toHaveAttribute(
-            'href',
-            '#how-it-works'
-        );
     });
 
     test('the fast path skips the picker entirely', async () => {

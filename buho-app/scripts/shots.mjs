@@ -48,6 +48,12 @@ const SCALE = 1.5;
 const MAX_WIDTH = 1200;
 const QUALITY = 0.7;
 
+/**
+ * A whole explorer page is only ever shown as a home tile, under 400 CSS
+ * pixels wide: twice that is all it needs.
+ */
+const PAGE_WIDTH = 800;
+
 const ALLOWED_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', 'tiles.openfreemap.org']);
 
 /**
@@ -60,14 +66,30 @@ const DEMO_CITY = { center: [2.352, 48.849], zoom: 10.15 };
 
 /**
  * Each page, and what is captured on it. `region` is the element captured;
- * `before` sets the view up first. Each explorer gives its main chart (the
- * constellation is the plate a shared image is cut from, so it is already
- * framed as a picture) and a second one of another kind.
+ * `before` sets the view up first, `viewport` resizes the window for it, and
+ * `maxWidth` caps the file's width. Each explorer gives the whole page, for
+ * the home's tiles, then its main chart (the constellation is the plate a
+ * shared image is cut from, so it is already framed as a picture) and a
+ * second one of another kind, for its welcome.
  */
+const wholePage = (module) => ({
+    file: `${module}-page`,
+    region: 'main.main-content',
+    maxWidth: PAGE_WIDTH,
+    before: hideHeaderPill,
+});
+
+/**
+ * The health raster takes the window's width; a narrower window gives it the
+ * proportions of the other charts instead of a long strip.
+ */
+const NARROW = { width: 960, height: 800 };
+
 const PAGES = [
     {
         path: 'listening/explore',
         shots: [
+            wholePage('listening'),
             { file: 'listening-constellation', region: '.constellation-layout' },
             { file: 'listening-artists', region: '.chart-placeholder.sunburst' },
         ],
@@ -75,6 +97,7 @@ const PAGES = [
     {
         path: 'positions/explore',
         shots: [
+            wholePage('positions'),
             { file: 'positions-constellation', region: '.constellation-layout' },
             { file: 'positions-map', region: 'aside .sunburst-host', before: frameDemoCity },
         ],
@@ -82,6 +105,7 @@ const PAGES = [
     {
         path: 'messages/explore',
         shots: [
+            wholePage('messages'),
             { file: 'messages-constellation', region: '.constellation-layout' },
             { file: 'messages-conversations', region: '.chart-placeholder.ranking' },
         ],
@@ -89,6 +113,7 @@ const PAGES = [
     {
         path: 'activity/explore',
         shots: [
+            wholePage('activity'),
             { file: 'activity-constellation', region: '.constellation-layout' },
             { file: 'activity-services', region: '.chart-placeholder.ranking' },
         ],
@@ -96,18 +121,22 @@ const PAGES = [
     {
         path: 'steps/explore',
         shots: [
+            wholePage('steps'),
             { file: 'steps-constellation', region: '.constellation-layout' },
             { file: 'steps-cadence', region: '.chart-placeholder.ranking' },
         ],
     },
     {
-        // The raster takes the window's width; a narrower window gives it
-        // the proportions of the other charts instead of a long strip.
         path: 'health/explore',
-        viewport: { width: 960, height: 800 },
         shots: [
-            { file: 'health-heart-rate', region: '.chart' },
-            { file: 'health-stress', region: '.chart', before: (page) => signal(page, 'Stress') },
+            wholePage('health'),
+            { file: 'health-heart-rate', region: '.chart', viewport: NARROW },
+            {
+                file: 'health-stress',
+                region: '.chart',
+                viewport: NARROW,
+                before: (tab) => signal(tab, 'Stress'),
+            },
         ],
     },
     {
@@ -145,23 +174,23 @@ try {
         );
         await exposeMaps(context);
 
-        for (const { path, viewport, shots } of pages) {
-            const page = await context.newPage();
-            if (viewport) await page.setViewportSize(viewport);
-            await loadDemo(page, `${origin}${path}`, shots[0].region);
+        for (const { path, shots } of pages) {
+            const tab = await context.newPage();
+            await loadDemo(tab, `${origin}${path}`, shots[0].region);
 
-            for (const { file, region, before } of shots) {
-                if (before) await before(page, region);
-                await settle(page);
-                const png = await page
+            for (const { file, region, before, viewport, maxWidth = MAX_WIDTH } of shots) {
+                if (viewport) await tab.setViewportSize(viewport);
+                if (before) await before(tab, region);
+                await settle(tab);
+                const png = await tab
                     .locator(region)
                     .first()
                     .screenshot({ animations: 'disabled' });
-                const webp = await toWebp(png);
+                const webp = await toWebp(png, maxWidth);
                 await writeFile(new URL(`${file}-${theme}.webp`, OUT), webp);
                 console.log(`${file}-${theme}.webp  ${Math.round(webp.length / 1024)} KB`);
             }
-            await page.close();
+            await tab.close();
         }
         await context.close();
     }
@@ -181,6 +210,8 @@ async function loadDemo(page, url, region) {
         () => {
             const text = document.body.innerText;
             return (
+                // The page's welcome gives way once a sample is in.
+                !document.querySelector('.welcome') &&
                 !document.querySelector('.loading-wrapper') &&
                 !text.includes('Building the sample') &&
                 !text.includes('Locating points') &&
@@ -195,8 +226,18 @@ async function loadDemo(page, url, region) {
     await page.addStyleTag({ content: '.plot-toolbar { visibility: hidden !important; }' });
 }
 
+/** The header's import pill: it speaks to a visitor, not about the page. */
+async function hideHeaderPill(tab) {
+    await tab.addStyleTag({ content: 'header .pill { visibility: hidden !important; }' });
+}
+
 /** The last redraws after the queries land: brush layers, the WebGL points, map tiles. */
 async function settle(page) {
+    // Places are matched after the positions land, under a progress bar of
+    // their own; an import shows one too.
+    await page.waitForFunction(() => !document.querySelector('[role="progressbar"]'), null, {
+        timeout: 300_000,
+    });
     await page.waitForLoadState('networkidle');
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(2000);
@@ -254,7 +295,7 @@ async function frameDemoCity(page) {
     await page.evaluate((view) => window.__shotMaps.at(-1).jumpTo(view), DEMO_CITY);
 }
 
-async function toWebp(png) {
+async function toWebp(png, maxWidth) {
     const base64 = await encoder.evaluate(
         async ({ data, quality, maxWidth }) => {
             const blob = await (await fetch(`data:image/png;base64,${data}`)).blob();
@@ -272,7 +313,7 @@ async function toWebp(png) {
             for (const byte of bytes) binary += String.fromCharCode(byte);
             return btoa(binary);
         },
-        { data: png.toString('base64'), quality: QUALITY, maxWidth: MAX_WIDTH }
+        { data: png.toString('base64'), quality: QUALITY, maxWidth }
     );
     return Buffer.from(base64, 'base64');
 }

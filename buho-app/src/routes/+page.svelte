@@ -63,8 +63,8 @@
     const hasOwnData = $derived(dataStore.inventory.length > 0);
 
     /**
-     * The desktop door: a first screen of its own, with how Buho works on the
-     * screen under it. The other steps are one short screen each.
+     * The desktop door: the doors, the six modules under them, and how Buho
+     * works under those. The other steps are one short screen each.
      */
     const door = $derived(!hasOwnData && step.kind === 'intro' && !deviceStore.showcase);
 
@@ -153,59 +153,57 @@
     <ImportStatus />
 
     <div class="column" class:wide={door}>
-        <div class="screen" class:first={door}>
-            <header class="brand">
-                <OwlLogo size={26} />
-                <span>Buho</span>
-            </header>
+        <header class="brand">
+            <OwlLogo size={26} />
+            <span>Buho</span>
+        </header>
 
-            {#if hasOwnData}
-                <ImportedHub onAddMore={() => toDrop()} />
-            {:else if step.kind === 'intro' && deviceStore.showcase}
-                <!-- On a phone the door shows what Buho draws, gets an export
-                     started, and hands the visit over to a computer. -->
-                <HandheldIntro onPick={pick} onBrowse={toPick} onExploreAnyway={desktopDoor} />
-            {:else if step.kind === 'intro'}
-                <!-- The door skips step one for the export that needs no deciding:
-                     straight to the WhatsApp how-to, with the picker as the other
-                     door for anyone who came for something else. -->
-                <Intro onQuickStart={() => pick(quickStartSource())} onBrowse={toPick} />
-            {:else if step.kind === 'pick'}
-                <FunnelShell
-                    {step}
-                    onStep={onRail}
-                    title="Pick where to start"
-                    subtitle="Each of these hands you a file holding your own history. What separates them is how long it takes to arrive, and whether you have to ask for it."
-                >
-                    <SourceChoice onPick={pick} onSkip={() => toDrop()} />
-                </FunnelShell>
-            {:else if step.kind === 'export'}
-                <FunnelShell
-                    {step}
-                    onStep={onRail}
-                    title="Get your {step.source.label} export"
-                    subtitle={step.source.request}
-                >
-                    <ExportStep
-                        source={step.source}
-                        onNext={() => toDrop(step.kind === 'export' ? step.source : undefined)}
-                        onBack={toPick}
-                    />
-                </FunnelShell>
-            {:else}
-                <FunnelShell
-                    {step}
-                    onStep={onRail}
-                    title={step.kind === 'drop' && step.source
-                        ? `Drop your ${step.source.label} export in`
-                        : 'Hand it over'}
-                    subtitle="Whatever you have: one file, a folder, a zip you never
-                        unpacked. Buho reads it here and works out the rest."
-                >
-                    <DropStep expected={step.kind === 'drop' ? step.source?.id : undefined} />
-                </FunnelShell>
-            {/if}
-        </div>
+        {#if hasOwnData}
+            <ImportedHub onAddMore={() => toDrop()} />
+        {:else if step.kind === 'intro' && deviceStore.showcase}
+            <!-- On a phone the door shows what Buho draws, gets an export
+                 started, and hands the visit over to a computer. -->
+            <HandheldIntro onPick={pick} onBrowse={toPick} onExploreAnyway={desktopDoor} />
+        {:else if step.kind === 'intro'}
+            <!-- The door skips step one for the export that needs no deciding:
+                 straight to the WhatsApp how-to, with the picker as the other
+                 door for anyone who came for something else. -->
+            <Intro onQuickStart={() => pick(quickStartSource())} onBrowse={toPick} />
+        {:else if step.kind === 'pick'}
+            <FunnelShell
+                {step}
+                onStep={onRail}
+                title="Pick where to start"
+                subtitle="Each of these hands you a file holding your own history. What separates them is how long it takes to arrive, and whether you have to ask for it."
+            >
+                <SourceChoice onPick={pick} onSkip={() => toDrop()} />
+            </FunnelShell>
+        {:else if step.kind === 'export'}
+            <FunnelShell
+                {step}
+                onStep={onRail}
+                title="Get your {step.source.label} export"
+                subtitle={step.source.request}
+            >
+                <ExportStep
+                    source={step.source}
+                    onNext={() => toDrop(step.kind === 'export' ? step.source : undefined)}
+                    onBack={toPick}
+                />
+            </FunnelShell>
+        {:else}
+            <FunnelShell
+                {step}
+                onStep={onRail}
+                title={step.kind === 'drop' && step.source
+                    ? `Drop your ${step.source.label} export in`
+                    : 'Hand it over'}
+                subtitle="Whatever you have: one file, a folder, a zip you never
+                    unpacked. Buho reads it here and works out the rest."
+            >
+                <DropStep expected={step.kind === 'drop' ? step.source?.id : undefined} />
+            </FunnelShell>
+        {/if}
 
         {#if door}
             <section id="how-it-works" class="how-it-works" aria-labelledby="how-it-works-title">
@@ -253,18 +251,6 @@
     /* The door is wider than a funnel step: the modules sit beside it. */
     .wide {
         max-width: 72rem;
-    }
-
-    .screen {
-        display: flex;
-        flex-direction: column;
-    }
-
-    /* Exactly one window tall, the column's top padding included, so the cue
-       at its foot is the last thing above the fold. */
-    .first {
-        min-height: calc(100dvh - var(--gap-y));
-        padding-bottom: clamp(0.75rem, 2.5vh, 1.5rem);
     }
 
     .how-it-works {

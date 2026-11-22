@@ -20,6 +20,7 @@ export type Theme = 'light' | 'dark';
  */
 type Charted = Exclude<ModuleId, 'health'>;
 export type ShotFile =
+    | `${ModuleId}-page`
     | `${Charted}-constellation`
     | 'listening-artists'
     | 'positions-map'
@@ -60,38 +61,40 @@ const constellation = (module: Charted): Shot => ({
     focus: 'left top',
 });
 
-/** Per module: the welcome's pair, and which of the two its home tile shows. */
-export const MODULE_SHOTS: Record<ModuleId, Preview & { tile: keyof Preview }> = {
+/** The whole explorer page, as a module's home tile shows it. */
+const page = (module: ModuleId): Shot => ({ file: `${module}-page`, focus: 'left top' });
+
+/** Per module: its welcome's pair, and its whole explorer page for the home. */
+export const MODULE_SHOTS: Record<ModuleId, Preview & { page: Shot }> = {
     listening: {
+        page: page('listening'),
         main: constellation('listening'),
         side: { file: 'listening-artists', focus: 'center' },
-        tile: 'side',
     },
     positions: {
+        page: page('positions'),
         main: constellation('positions'),
         side: { file: 'positions-map', focus: 'center', credit: MAP_CREDIT },
-        tile: 'side',
     },
     messages: {
+        page: page('messages'),
         main: constellation('messages'),
         side: { file: 'messages-conversations', focus: 'center top' },
-        tile: 'side',
     },
     activity: {
+        page: page('activity'),
         main: constellation('activity'),
         side: { file: 'activity-services', focus: 'center' },
-        tile: 'side',
     },
     steps: {
+        page: page('steps'),
         main: constellation('steps'),
         side: { file: 'steps-cadence', focus: 'center 70%' },
-        // The cadence is two spikes on a white field: too little at tile size.
-        tile: 'main',
     },
     health: {
+        page: page('health'),
         main: { file: 'health-heart-rate', focus: 'left top' },
         side: { file: 'health-stress', focus: 'left center' },
-        tile: 'main',
     },
 };
 
@@ -100,12 +103,6 @@ export const CALENDAR_SHOTS: Preview = {
     main: { file: 'calendar-year', focus: 'left top' },
     side: { file: 'calendar-clock', focus: 'center' },
 };
-
-/** The capture a module's home tile shows. */
-export function tileShot(module: ModuleId): Shot {
-    const shots = MODULE_SHOTS[module];
-    return shots[shots.tile];
-}
 
 /** Where one theme's capture is served. */
 export function shotSrc(shot: Shot, theme: Theme): string {
