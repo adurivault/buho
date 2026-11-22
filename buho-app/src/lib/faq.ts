@@ -66,7 +66,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
             {
                 id: 'who-makes-this',
                 question: 'Who makes this?',
-                answer: ["Just me, in my free time."],
+                answer: ['Just me, in my free time.'],
             },
             {
                 id: 'written-by-ai',
@@ -232,7 +232,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
                 id: 'try-without-data',
                 question: 'Can I try it without my own data?',
                 answer: [
-                    "Yes, I generated synthetic data to get a feel of what you'll have with your data. Just click \"Load Demo Data\"",
+                    'Yes, I generated synthetic data to get a feel of what you\'ll have with your data. Just click "Load Demo Data"',
                 ],
             },
             {
