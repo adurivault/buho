@@ -113,7 +113,14 @@ describe('ModuleEmptyState', () => {
         render(ModuleEmptyState, { props: { module: moduleById('positions') } });
 
         expect(screen.getAllByAltText('Positions explorer, drawn from demo data')).toHaveLength(2);
-        expect(screen.getByText('Demo data')).toBeInTheDocument();
+    });
+
+    /** What loading it is for, asked the way a visitor would ask it. */
+    it('lists the questions the module answers', () => {
+        render(ModuleEmptyState, { props: { module: moduleById('messages') } });
+
+        expect(screen.getByText('What is your most active conversation?')).toBeInTheDocument();
+        expect(screen.getByText('Do you send or receive more messages?')).toBeInTheDocument();
     });
 
     /** The screen stays a screen: no procedure, no archive specs. */

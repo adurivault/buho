@@ -9,7 +9,7 @@ import { Random } from './random';
  * in what was searched beforehand.
  *
  * The life is deliberately uneven, because an even one draws a flat chart. It
- * runs three years in Paris and turns halfway: a first flat in the 11th and a
+ * runs four years in Paris and turns halfway: a first flat in the 11th and a
  * job by Saint-Lazare, then a move to the 13th, a few weeks between jobs, a new
  * one at Station F with two days a week at home, and a running habit that ends
  * in a half marathon. On top of that come seasons, nights out, museum
@@ -77,7 +77,7 @@ export interface LifeDay {
     untracked: boolean;
 }
 
-export const LIFE_YEARS = 3;
+export const LIFE_YEARS = 4;
 
 const DESTINATIONS: Record<City, { name: string; lat: number; lon: number; mode: TripMode }> = {
     marseille: { name: 'Marseille', lat: 43.2958, lon: 5.3752, mode: 'train' },
@@ -122,9 +122,8 @@ export function lifeDays(options: LifeOptions = {}): LifeDay[] {
     const first = addDays(last, -Math.round(LIFE_YEARS * 365.25));
     const ago = (days: number) => addDays(last, -days);
 
-    // The turn: a move about sixteen months before the end, the new job three
-    // weeks later.
-    const movedOn = ago(random.int(470, 500));
+    // The turn: a move a little before halfway, the new job three weeks later.
+    const movedOn = ago(random.int(620, 670));
     const moved = localDate(movedOn);
     const hired = localDate(addDays(movedOn, random.int(18, 24)));
     const runningFrom = localDate(ago(random.int(290, 320)));

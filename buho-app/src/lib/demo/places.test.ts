@@ -23,10 +23,10 @@ const km = (a: { lat: number; lon: number }, b: { lat: number; lon: number }) =>
     haversineMeters(a, b) / 1000;
 
 describe('the location sample goes through the Timeline parser', () => {
-    it('yields stays and moves, nearly every day of three years', () => {
+    it('yields stays and moves, nearly every day of four years', () => {
         expect(stays.length).toBeGreaterThan(5_000);
         expect(moving.length).toBeGreaterThan(30_000);
-        expect(new Set(segments.map((s) => s.date)).size).toBeGreaterThan(1_050);
+        expect(new Set(segments.map((s) => s.date)).size).toBeGreaterThan(1_400);
     });
 
     it('never has two stays at once', () => {

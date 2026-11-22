@@ -34,7 +34,7 @@ export type { ImportReport, ModuleImportCount } from '#lib/data/import/runImport
  */
 export type ImportPick = 'drop' | 'file' | 'folder';
 export type ImportSurface =
-    'window' | 'dialog' | 'onboarding' | 'source-page' | 'module' | 'unknown';
+    'window' | 'dialog' | 'onboarding' | 'source-page' | 'module' | 'calendar' | 'unknown';
 
 export interface ImportOrigin {
     pick?: ImportPick;

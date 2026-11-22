@@ -2,9 +2,10 @@
     import { resolve } from '$app/paths';
     import Icon from '#lib/components/Icon.svelte';
     import DropZone from '#lib/components/DropZone.svelte';
-    import ModulePreview from '#lib/components/ModulePreview.svelte';
+    import Shot from '#lib/components/Shot.svelte';
     import { DATA_MODULES } from '#lib/data/modules.ts';
     import { sourcesFilling } from '#lib/data/sources/catalog.ts';
+    import { tileShot } from '#lib/shots.ts';
 
     /**
      * The door: the first screen of the home page.
@@ -39,6 +40,7 @@
 
     const tiles = DATA_MODULES.map((module) => ({
         module,
+        shot: tileShot(module.id),
         feeds: sourcesFilling(module.id)
             .map((source) => source.label)
             .join(' · '),
@@ -85,27 +87,24 @@
             <p class="safe">Read in your browser, never uploaded.</p>
         </div>
 
-        <div class="modules">
-            <ul class="tiles">
-                {#each tiles as { module, feeds } (module.id)}
-                    <li>
-                        <a class="tile" data-module={module.id} href={resolve(module.href)}>
-                            <span class="picture">
-                                <ModulePreview {module} variant="tile" />
+        <ul class="tiles">
+            {#each tiles as { module, shot, feeds } (module.id)}
+                <li>
+                    <a class="tile" data-module={module.id} href={resolve(module.href)}>
+                        <span class="picture">
+                            <Shot {shot} />
+                        </span>
+                        <span class="caption">
+                            <span class="name">
+                                <Icon name={module.icon} size={15} />
+                                {module.label}
                             </span>
-                            <span class="caption">
-                                <span class="name">
-                                    <Icon name={module.icon} size={15} />
-                                    {module.label}
-                                </span>
-                                <span class="feeds">{feeds}</span>
-                            </span>
-                        </a>
-                    </li>
-                {/each}
-            </ul>
-            <p class="demo-note">Charts drawn from demo data.</p>
-        </div>
+                            <span class="feeds">{feeds}</span>
+                        </span>
+                    </a>
+                </li>
+            {/each}
+        </ul>
     </div>
 
     <a class="cue" href="#how-it-works">How it works ↓</a>
@@ -274,13 +273,6 @@
         font-size: var(--text-label);
         line-height: 1.4;
         color: hsl(var(--muted-foreground));
-    }
-
-    .demo-note {
-        margin: 0.6rem 0 0;
-        font-size: var(--text-label);
-        color: hsl(var(--muted-foreground));
-        text-align: right;
     }
 
     .cue {

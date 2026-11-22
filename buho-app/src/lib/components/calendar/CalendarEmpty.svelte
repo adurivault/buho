@@ -1,119 +1,64 @@
 <script lang="ts">
-    import Icon from '#lib/components/Icon.svelte';
-    import { DATA_MODULES } from '#lib/data/modules.ts';
+    import { resolve } from '$app/paths';
+    import DropZone from '#lib/components/DropZone.svelte';
+    import Welcome from '#lib/components/Welcome.svelte';
+    import { CALENDAR_SHOTS } from '#lib/shots.ts';
 
     /**
-     * The calendar before anything is loaded: what it is, in one sentence, and
-     * the two ways to fill it — your own exports, or the samples.
+     * The calendar before anything is loaded: what it lays out, the questions
+     * that needs every export at once to answer, a drop zone that takes any of
+     * them, and the samples, which are one person and so line up day by day.
+     *
+     * The layout is the module welcomes' ({@link Welcome}), without a module's
+     * colour: the calendar holds no data of its own.
      */
     interface Props {
-        onImport: () => void;
         onDemo: () => void;
         building: boolean;
     }
 
-    let { onImport, onDemo, building }: Props = $props();
-
-    const withDemo = DATA_MODULES.filter((module) => module.hasDemo);
+    let { onDemo, building }: Props = $props();
 </script>
 
-<div class="empty">
-    <span class="icon"><Icon name="calendar" size={28} /></span>
-    <h1>Every module, day by day</h1>
-    <p>
-        The calendar lays everything you import on the same days: what you listened to, where you
-        went, who you wrote to, what you looked up, how much you walked, your heart rate. Pick a
-        year, then a day.
-    </p>
-    <div class="actions">
-        <button class="btn primary" type="button" onclick={onImport}>Import my data</button>
-        {#if withDemo.length > 0}
-            <button class="btn" type="button" onclick={onDemo} disabled={building}>
-                {building ? 'Building the sample…' : 'Load demo data'}
-            </button>
-        {/if}
-    </div>
-    {#if withDemo.length > 0}
-        <p class="note">
-            The demo fills {withDemo.map((module) => module.label.toLowerCase()).join(' and ')} with an
-            invented history.
+<Welcome
+    subject="Every module,"
+    rest="day by day"
+    summary="What you listened to, where you went, who you wrote to, what you looked up, how much you walked and your heart rate, on the same days."
+    questions={[
+        'What did a given day look like, across all your exports?',
+        'Where were you, and who were you writing to, that day?',
+        'How does one year compare with the next?',
+    ]}
+    preview={CALENDAR_SHOTS}
+    previewName="Calendar"
+    demo={{ onLoad: onDemo, building }}
+>
+    {#snippet zone()}
+        <DropZone
+            surface="calendar"
+            title="Drop any export here"
+            pickTitle="Pick an export"
+            hint="A .zip, a folder or loose files, from any service Buho reads."
+        />
+    {/snippet}
+
+    {#snippet feeds()}
+        <p>
+            Every export Buho reads has its lane here.
+            <a href={resolve('sources')}>See them all</a>
         </p>
-    {/if}
-</div>
+    {/snippet}
+</Welcome>
 
 <style>
-    .empty {
-        max-width: 34rem;
-        margin: 12vh auto 0;
-        padding: 0 1.5rem;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 0.75rem;
-        text-align: center;
-    }
-
-    .icon {
-        color: hsl(var(--muted-foreground));
-    }
-
-    h1 {
-        margin: 0;
-        font-family: var(--font-display);
-        font-size: var(--text-heading);
-        font-weight: 600;
-        letter-spacing: -0.01em;
-        color: hsl(var(--heading));
-    }
-
     p {
         margin: 0;
-        font-size: var(--text-body);
-        line-height: 1.55;
-        color: hsl(var(--muted-foreground));
     }
 
-    .note {
-        font-size: var(--text-small);
-    }
-
-    .actions {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 0.5rem;
-        margin-top: 0.5rem;
-    }
-
-    .btn {
-        border: 1px solid hsl(var(--border));
-        border-radius: var(--radius-pill);
-        padding: 0.4rem 1rem;
-        font: inherit;
-        font-size: var(--text-body);
-        cursor: pointer;
+    a {
         color: hsl(var(--foreground));
-        background: transparent;
-    }
-
-    .btn:hover:not(:disabled) {
-        background: hsl(var(--accent));
-    }
-
-    .btn:disabled {
-        cursor: default;
-        opacity: 0.6;
-    }
-
-    .btn.primary {
-        border-color: transparent;
         font-weight: 600;
-        color: hsl(var(--primary-foreground));
-        background: hsl(var(--primary));
-    }
-
-    .btn.primary:hover {
-        opacity: 0.9;
-        background: hsl(var(--primary));
+        text-decoration: underline;
+        text-underline-offset: 3px;
     }
 </style>

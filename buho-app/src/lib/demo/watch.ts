@@ -1,7 +1,7 @@
 import { FIT_MONITORING, type DecodedFit, type FitMesg } from '#lib/data/formats/fit/decode.ts';
 import { fitSeconds } from '#lib/data/formats/fit/units.ts';
 import { buildAgenda, type Activity, type Agenda } from './agenda';
-import { atMinute, type LifeDay, type LifeOptions } from './life';
+import { atMinute, LIFE_YEARS, type LifeDay, type LifeOptions } from './life';
 import { Random } from './random';
 
 /**
@@ -21,7 +21,7 @@ import { Random } from './random';
  */
 
 export interface WatchOptions extends LifeOptions {
-    /** How many months back the watch was bought. */
+    /** How many months back the watch was bought. Left out, it was there all along. */
     months?: number;
     /** An agenda already built, so several samples can share one. */
     agenda?: Agenda;
@@ -113,7 +113,7 @@ function add(counters: Counters, steps: number, stride: number, perStep: number)
 
 /** The monitoring files of every day the watch was worn, oldest first. */
 export function generateWatchFiles(options: WatchOptions = {}): DecodedFit[] {
-    const { months = 18, agenda = buildAgenda(options) } = options;
+    const { months = LIFE_YEARS * 12, agenda = buildAgenda(options) } = options;
     const random = new Random((options.seed ?? 20261122) + 1);
     const { days } = agenda;
 

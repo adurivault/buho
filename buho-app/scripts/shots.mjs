@@ -3,20 +3,26 @@ import { chromium } from 'playwright';
 import { preview } from 'vite';
 
 /**
- * Capture one explorer chart per module, from the demo data, for the module
- * welcomes and the home tiles.
+ * Capture the explorer charts the welcomes and the home tiles show, from the
+ * demo data, in both themes.
  *
- *   npm run shots    # builds, then writes static/shots/<module>-<theme>.webp
+ *   npm run shots                          # builds, then writes static/shots/<file>-<theme>.webp
+ *   node scripts/shots.mjs positions health  # only those pages, from the last build
  *
- * Re-run it when a captured chart changes, and commit the files.
+ * Re-run it when a captured chart changes, and commit the files. What the
+ * pages show of them is `src/lib/shots.ts`; its test fails if a file it names
+ * is missing. A new capture goes here first and into `shots.ts` once its file
+ * exists: the build follows every image a page links, and fails on one that
+ * is not there.
  *
  * A capture is a file sent to every visitor, so it only ever shows the demo:
- * each page goes through the module's own "Load demo data" button, the road a
- * visitor takes, and the browser is refused every host but the local server.
+ * each page goes through its own "Load demo data" button, the road a visitor
+ * takes. The browser is refused every host but the local server and the map
+ * tiles, which only ever receive the map's view, as in the app.
  *
  * The build is served rather than the dev server so the capture is what ships.
- * Playwright only writes PNG, so each capture is scaled and re-encoded to WebP by
- * the same Chromium, in a blank page, which spares an image library.
+ * Playwright only writes PNG, so each capture is scaled and re-encoded to WebP
+ * by the same Chromium, in a blank page, which spares an image library.
  */
 
 const OUT = new URL('../static/shots/', import.meta.url);
@@ -26,7 +32,7 @@ const THEMES = ['light', 'dark'];
 
 /**
  * A laptop window, where the explorers lay out as designed, at 1.5× pixel
- * density. The welcome card shows a chart at about three quarters of its size,
+ * density. A welcome card shows a chart at about three quarters of its size,
  * so that is twice the pixels it is shown at: sharp on a high-DPI screen. At
  * 2× the constellation draws its points one CSS pixel wide, and shrunk into
  * the card they all but disappear.
@@ -42,24 +48,71 @@ const SCALE = 1.5;
 const MAX_WIDTH = 1200;
 const QUALITY = 0.7;
 
-/**
- * The region captured on each module's explorer: its main chart, without the
- * toolbar above it. `.constellation-layout` is the plate a shared image is cut
- * from, so it is already framed as a picture.
- *
- * The health raster takes the window's width; a narrower window gives it the
- * proportions of the others instead of a long strip.
- */
-const MODULES = {
-    listening: { region: '.constellation-layout' },
-    positions: { region: '.constellation-layout' },
-    messages: { region: '.constellation-layout' },
-    activity: { region: '.constellation-layout' },
-    steps: { region: '.constellation-layout' },
-    health: { region: '.chart', viewport: { width: 960, height: 800 } },
-};
+const ALLOWED_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', 'tiles.openfreemap.org']);
 
-const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+/**
+ * Each page, and what is captured on it. `region` is the element captured;
+ * `before` sets the view up first. Each explorer gives its main chart (the
+ * constellation is the plate a shared image is cut from, so it is already
+ * framed as a picture) and a second one of another kind.
+ */
+const PAGES = [
+    {
+        path: 'listening/explore',
+        shots: [
+            { file: 'listening-constellation', region: '.constellation-layout' },
+            { file: 'listening-artists', region: '.chart-placeholder.sunburst' },
+        ],
+    },
+    {
+        path: 'positions/explore',
+        shots: [
+            { file: 'positions-constellation', region: '.constellation-layout' },
+            { file: 'positions-map', region: 'aside .sunburst-host', before: hideMapControls },
+        ],
+    },
+    {
+        path: 'messages/explore',
+        shots: [
+            { file: 'messages-constellation', region: '.constellation-layout' },
+            { file: 'messages-conversations', region: '.chart-placeholder.ranking' },
+        ],
+    },
+    {
+        path: 'activity/explore',
+        shots: [
+            { file: 'activity-constellation', region: '.constellation-layout' },
+            { file: 'activity-services', region: '.chart-placeholder.ranking' },
+        ],
+    },
+    {
+        path: 'steps/explore',
+        shots: [
+            { file: 'steps-constellation', region: '.constellation-layout' },
+            { file: 'steps-cadence', region: '.chart-placeholder.ranking' },
+        ],
+    },
+    {
+        // The raster takes the window's width; a narrower window gives it
+        // the proportions of the other charts instead of a long strip.
+        path: 'health/explore',
+        viewport: { width: 960, height: 800 },
+        shots: [
+            { file: 'health-heart-rate', region: '.chart' },
+            { file: 'health-stress', region: '.chart', before: (page) => signal(page, 'Stress') },
+        ],
+    },
+    {
+        path: 'calendar',
+        shots: [
+            { file: 'calendar-year', region: '.lanes' },
+            { file: 'calendar-clock', region: 'figure.year-clock' },
+        ],
+    },
+];
+
+const only = process.argv.slice(2);
+const pages = only.length ? PAGES.filter(({ path }) => only.includes(path.split('/')[0])) : PAGES;
 
 const server = await preview({ preview: { port: 4183, open: false }, logLevel: 'warn' });
 const origin = server.resolvedUrls?.local[0];
@@ -79,18 +132,26 @@ try {
             serviceWorkers: 'block',
         });
         await context.route(
-            (url) => !LOCAL_HOSTS.has(url.hostname),
+            (url) => !ALLOWED_HOSTS.has(url.hostname),
             (route) => route.abort()
         );
 
-        for (const [module, { region, viewport }] of Object.entries(MODULES)) {
+        for (const { path, viewport, shots } of pages) {
             const page = await context.newPage();
             if (viewport) await page.setViewportSize(viewport);
-            const png = await capture(page, `${origin}${module}/explore`, region);
-            const webp = await toWebp(png);
-            const file = new URL(`${module}-${theme}.webp`, OUT);
-            await writeFile(file, webp);
-            console.log(`${module}-${theme}.webp  ${Math.round(webp.length / 1024)} KB`);
+            await loadDemo(page, `${origin}${path}`, shots[0].region);
+
+            for (const { file, region, before } of shots) {
+                if (before) await before(page, region);
+                await settle(page);
+                const png = await page
+                    .locator(region)
+                    .first()
+                    .screenshot({ animations: 'disabled' });
+                const webp = await toWebp(png);
+                await writeFile(new URL(`${file}-${theme}.webp`, OUT), webp);
+                console.log(`${file}-${theme}.webp  ${Math.round(webp.length / 1024)} KB`);
+            }
             await page.close();
         }
         await context.close();
@@ -100,24 +161,50 @@ try {
     await server.close();
 }
 
-/** Load the module's demo on its explorer, wait for the chart, capture it. */
-async function capture(page, url, region) {
+/** Open the page, press its demo button, and wait until every sample is in. */
+async function loadDemo(page, url, region) {
     await page.goto(url);
     await page.getByRole('button', { name: 'Load demo data' }).click();
-    // Off the chart, so no point is hovered and no tooltip is drawn.
+    // Off the charts, so no point is hovered and no tooltip is drawn.
     await page.mouse.move(0, 0);
+    await page.locator(region).first().waitFor({ state: 'visible', timeout: 300_000 });
+    await page.waitForFunction(
+        () => {
+            const text = document.body.innerText;
+            return (
+                !document.querySelector('.loading-wrapper') &&
+                !text.includes('Building the sample') &&
+                !text.includes('Locating points') &&
+                // The calendar loads the samples one after the other.
+                !text.includes('Not imported')
+            );
+        },
+        null,
+        { timeout: 300_000 }
+    );
+    // The views' own controls float over the charts.
+    await page.addStyleTag({ content: '.plot-toolbar { visibility: hidden !important; }' });
+}
 
-    const chart = page.locator(region).first();
-    await chart.waitFor({ state: 'visible', timeout: 120_000 });
-    await page.waitForFunction(() => !document.querySelector('.loading-wrapper'));
+/** The last redraws after the queries land: brush layers, the WebGL points, map tiles. */
+async function settle(page) {
     await page.waitForLoadState('networkidle');
     await page.evaluate(() => document.fonts.ready);
-    // The view's own controls float over the plate.
-    await page.addStyleTag({ content: '.plot-toolbar { visibility: hidden !important; }' });
-    // The last redraws after the queries land: brush layers, the WebGL points.
     await page.waitForTimeout(2000);
+}
 
-    return chart.screenshot({ animations: 'disabled' });
+/** The health raster, switched to another signal. */
+async function signal(page, name) {
+    await page.getByRole('button', { name }).click();
+    await page.waitForTimeout(300);
+    await page.waitForFunction(() => !document.querySelector('.chart .empty'));
+}
+
+/** The map's own controls are hidden; the page prints the tiles' credit itself. */
+async function hideMapControls(page) {
+    await page.addStyleTag({
+        content: '.trail-toggle, .maplibregl-ctrl-attrib { visibility: hidden !important; }',
+    });
 }
 
 async function toWebp(png) {

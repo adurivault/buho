@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import LandingPage from './+page.svelte';
 import { CATALOG_SOURCES } from '#lib/data/sources/catalog.ts';
 import { DATA_MODULES } from '#lib/data/modules.ts';
+import { tileShot } from '#lib/shots.ts';
 import { funnelLabel } from '#lib/onboarding/funnel.ts';
 import { dataStore } from '#lib/stores/dataStore.svelte.ts';
 
@@ -98,9 +99,9 @@ describe('the intro', () => {
         for (const module of DATA_MODULES) {
             const link = screen.getByRole('link', { name: new RegExp(`^${module.label}`) });
             expect(link.getAttribute('href')).toBe(`/${module.href}`);
-            expect(link.querySelector(`img[src$="shots/${module.id}-light.webp"]`)).not.toBeNull();
+            const file = tileShot(module.id).file;
+            expect(link.querySelector(`img[src$="shots/${file}-light.webp"]`)).not.toBeNull();
         }
-        expect(screen.getByText('Charts drawn from demo data.')).toBeInTheDocument();
         expect(screen.getByRole('link', { name: /^Steps\s*Garmin Connect$/ })).toBeInTheDocument();
     });
 

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import * as d3 from 'd3';
 import type { ConnectablePoint } from '#lib/data/queries/behaviorQueries.ts';
 import {
     barPop,
@@ -11,6 +12,7 @@ import {
     nearestMatched,
     pointPasses,
     resolveTimeDomain,
+    timeAxisTicks,
     type BarWeighting,
     type ScaledPoint,
 } from './constellation';
@@ -192,5 +194,43 @@ describe('barPop', () => {
         expect(barPop(0.6, 0.5, 0.2)).toBeCloseTo(1);
         expect(barPop(0.4, 0.5, 0.2)).toBe(0);
         expect(barPop(0.8, 0.5, 0.2)).toBe(0);
+    });
+});
+
+describe('timeAxisTicks', () => {
+    /** Six pixels a character: close enough to the axis font for spacing. */
+    const measure = (label: string) => label.length * 6;
+    const scaleOver = (from: number, to: number, width: number) =>
+        d3
+            .scaleTime<number, number>()
+            .domain([new Date(from), new Date(to)])
+            .range([40, 40 + width]);
+
+    it('never lets two labels touch, however narrow the plot', () => {
+        for (const width of [180, 320, 600, 900]) {
+            const scale = scaleOver(at(2024, 0, 1), at(2026, 10, 22), width);
+            const ticks = timeAxisTicks(scale, measure);
+            expect(ticks.length).toBeGreaterThan(0);
+            for (let i = 1; i < ticks.length; i++) {
+                const gap =
+                    scale(ticks[i].value) -
+                    measure(ticks[i].label) / 2 -
+                    (scale(ticks[i - 1].value) + measure(ticks[i - 1].label) / 2);
+                expect(gap).toBeGreaterThanOrEqual(16);
+            }
+        }
+    });
+
+    it('writes only the year when every tick is a New Year', () => {
+        const scale = scaleOver(at(2016, 5, 1), at(2026, 10, 22), 600);
+        const labels = timeAxisTicks(scale, measure).map((tick) => tick.label);
+        expect(labels.length).toBeGreaterThan(2);
+        for (const label of labels) expect(label).toMatch(/^\d{4}$/);
+    });
+
+    it('names the month when the ticks fall within the year', () => {
+        const scale = scaleOver(at(2026, 0, 1), at(2026, 10, 22), 600);
+        const labels = timeAxisTicks(scale, measure).map((tick) => tick.label);
+        expect(labels.some((label) => /^[A-Z][a-z]{2} 2026$/.test(label))).toBe(true);
     });
 });

@@ -86,6 +86,51 @@ export interface BarWeighting {
     segments: { count: number; of: (point: ConnectablePoint) => number } | null;
 }
 
+/** A label on the time axis, and the instant it marks. */
+export interface TimeTick {
+    value: Date;
+    label: string;
+}
+
+/**
+ * The time axis's ticks: as many as fit side by side without touching.
+ *
+ * A fixed count does not survive a narrow plot. d3 rounds the count it is
+ * asked for to the nearest calendar interval, so eight over three years in
+ * six hundred pixels came out as a label every quarter, run together. The
+ * count follows the room instead, and any label that would still touch the
+ * one before it is skipped. When every tick falls on New Year, the month says
+ * nothing and only the year is written.
+ *
+ * `measure` is the label's width in the axis's font — the canvas's own
+ * `measureText` in the chart.
+ */
+export function timeAxisTicks(
+    scale: d3.ScaleTime<number, number>,
+    measure: (label: string) => number,
+    gap = 16
+): TimeTick[] {
+    const [left, right] = scale.range();
+    const room = Math.abs(right - left);
+    const widest = measure('Sep 2026');
+    const count = Math.max(2, Math.min(8, Math.floor(room / (widest + gap))));
+    const ticks = scale.ticks(count);
+    const yearly = ticks.every((tick) => tick.getMonth() === 0 && tick.getDate() === 1);
+    const format = d3.timeFormat(yearly ? '%Y' : '%b %Y');
+
+    const kept: TimeTick[] = [];
+    let previousEnd = -Infinity;
+    for (const value of ticks) {
+        const label = format(value);
+        const half = measure(label) / 2;
+        const x = scale(value);
+        if (x - half < previousEnd + gap) continue;
+        kept.push({ value, label });
+        previousEnd = x + half;
+    }
+    return kept;
+}
+
 export interface MonthBar {
     monthStartMs: number;
     count: number;

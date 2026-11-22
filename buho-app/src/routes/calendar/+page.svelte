@@ -272,15 +272,19 @@
             </div>
         {/if}
 
-        <div class="header-end">
-            <CalendarPill onAdd={() => openImport()} />
-        </div>
+        <!-- Nothing to report before anything is loaded: the page's drop zone
+             is the way in. -->
+        {#if anyLoaded || dataStore.loading}
+            <div class="header-end">
+                <CalendarPill onAdd={() => openImport()} />
+            </div>
+        {/if}
     </header>
 
     <ImportStatus />
 
     {#if !anyLoaded}
-        <CalendarEmpty onImport={() => openImport()} onDemo={loadDemoData} {building} />
+        <CalendarEmpty onDemo={loadDemoData} {building} />
     {:else}
         <main class="calendar-main">
             <section id="year" class="year" aria-label="Year">

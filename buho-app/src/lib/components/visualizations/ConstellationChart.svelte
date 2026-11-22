@@ -24,6 +24,7 @@
         nearestMatched,
         pointPasses as buildPointPasses,
         resolveTimeDomain,
+        timeAxisTicks,
         type BarWeighting,
         type PointPass,
         type ScaledPoint,
@@ -544,17 +545,16 @@
             ctx.fillText(`${tick}h`, x0 - 6, y);
         }
 
-        const xTicks = xScale.ticks(8);
-        const formatTick = d3.timeFormat('%b %Y');
+        const xTicks = timeAxisTicks(xScale, (label) => ctx.measureText(label).width);
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
         for (const tick of xTicks) {
-            const x = xScale(tick);
+            const x = xScale(tick.value);
             ctx.beginPath();
             ctx.moveTo(x, y0);
             ctx.lineTo(x, y1);
             ctx.stroke();
-            ctx.fillText(formatTick(tick), x, y1 + 6);
+            ctx.fillText(tick.label, x, y1 + 6);
         }
     }
 

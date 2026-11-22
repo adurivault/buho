@@ -39,6 +39,12 @@ export interface DataModule {
      * Descriptive on purpose — it names the data, it does not sell it.
      */
     heading: { subject: string; rest?: string };
+    /**
+     * What the module's explorer answers, as a visitor would ask it. Listed on
+     * the welcome, so an empty module says what loading it is for. Each one is
+     * answered by a view the explorer has, or it does not belong here.
+     */
+    questions: string[];
     /** The DuckDB table it is stored in. */
     table: string;
     /**
@@ -87,6 +93,11 @@ export const DATA_MODULES: DataModule[] = [
         label: 'Listening',
         blurb: 'Plays by artist, track, hour and day.',
         heading: { subject: 'Listening', rest: 'history' },
+        questions: [
+            'Which artists have you played the most?',
+            'At what time of day do you listen?',
+            'How has your taste changed over the years?',
+        ],
         table: 'plays',
         icon: 'music-note',
         href: 'listening/explore',
@@ -99,6 +110,11 @@ export const DATA_MODULES: DataModule[] = [
         label: 'Positions',
         blurb: 'Places, trips and routes.',
         heading: { subject: 'Location', rest: 'history' },
+        questions: [
+            'Which parts of the city did you visit the most?',
+            'How long did you spend in each city?',
+            'When do you usually leave home in the morning?',
+        ],
         table: 'location_segments',
         icon: 'map-pin',
         href: 'positions/explore',
@@ -111,6 +127,11 @@ export const DATA_MODULES: DataModule[] = [
         label: 'Messages',
         blurb: 'Messages by conversation, person and hour.',
         heading: { subject: 'Conversations' },
+        questions: [
+            'What is your most active conversation?',
+            'Do you send or receive more messages?',
+            'At what time of day do you write?',
+        ],
         table: 'messages',
         icon: 'message',
         href: 'messages/explore',
@@ -123,6 +144,11 @@ export const DATA_MODULES: DataModule[] = [
         label: 'Google activity',
         blurb: 'YouTube, Search and Maps history.',
         heading: { subject: 'Google activity' },
+        questions: [
+            'Do you watch more than you search?',
+            'At what time of day are you on YouTube?',
+            'Which months were you online the most?',
+        ],
         table: 'google_activity',
         icon: 'google-activity',
         href: 'activity/explore',
@@ -134,6 +160,11 @@ export const DATA_MODULES: DataModule[] = [
         label: 'Steps',
         blurb: 'Steps per day and per hour.',
         heading: { subject: 'Step', rest: 'counts' },
+        questions: [
+            'At what time of day do you walk the most?',
+            'Do you walk more in summer or in winter?',
+            'How much of it is running?',
+        ],
         table: 'step_packets',
         icon: 'footprints',
         href: 'steps/explore',
@@ -145,6 +176,11 @@ export const DATA_MODULES: DataModule[] = [
         label: 'Health',
         blurb: 'Heart rate, stress and breathing.',
         heading: { subject: 'Heart rate', rest: 'and stress' },
+        questions: [
+            'How does your heart rate move through the day?',
+            'When in the day are you most stressed?',
+            'How regular are your nights?',
+        ],
         table: 'health_readings',
         icon: 'heartbeat',
         href: 'health/explore',

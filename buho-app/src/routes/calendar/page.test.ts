@@ -76,15 +76,17 @@ describe('calendar page', () => {
         calendarStore.reset();
     });
 
-    test('offers the import and the demo when nothing is loaded', () => {
+    test('welcomes with a drop zone and the demo when nothing is loaded', () => {
         render(CalendarPage);
 
         expect(
             screen.getByRole('heading', { name: 'Every module, day by day' })
         ).toBeInTheDocument();
-        // In the header's pill and in the page itself, as on the module pages.
-        expect(screen.getAllByRole('button', { name: 'Import my data' })).toHaveLength(2);
+        expect(screen.getByText('Drop any export here')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Load demo data' })).toBeInTheDocument();
+        expect(screen.getAllByAltText('Calendar, drawn from demo data')).toHaveLength(2);
+        // The drop zone is the way in: no header pill to repeat it.
+        expect(screen.queryByRole('button', { name: /Import/ })).toBeNull();
     });
 
     test('opens on the latest day, with the year’s totals and ghosts for the rest', async () => {

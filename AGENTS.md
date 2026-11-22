@@ -58,6 +58,7 @@ npm run check    # svelte-check (types)
 npm run lint     # ESLint
 npm run format   # Prettier (CI runs format:check)
 npm run build    # static build
+npm run shots    # re-capture the explorer previews from the demo (Playwright)
 ```
 
 ## Conventions

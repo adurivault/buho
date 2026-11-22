@@ -1,18 +1,19 @@
 <script lang="ts">
     import { resolve } from '$app/paths';
-    import CirclePlay from '@lucide/svelte/icons/circle-play';
     import Icon from '#lib/components/Icon.svelte';
     import NetworkIcon from '#lib/components/NetworkIcon.svelte';
     import DropZone from '#lib/components/DropZone.svelte';
-    import ModulePreview from '#lib/components/ModulePreview.svelte';
+    import Welcome from '#lib/components/Welcome.svelte';
     import { sourcesFilling } from '#lib/data/sources/catalog.ts';
     import type { DataModule } from '#lib/data/modules.ts';
+    import { MODULE_SHOTS } from '#lib/shots.ts';
 
     /**
      * What a module shows before it holds anything: its welcome.
      *
-     * It says what the module holds, takes the file where the visitor is
-     * looking, and names the exports that would fill it. The heading names the
+     * It says what the module holds and the questions it answers, takes the
+     * file where the visitor is looking, and names the exports that would fill
+     * it. The heading names the
      * data rather than the absence of it: "No health loaded" described the
      * table, and every empty module read the same.
      *
@@ -26,8 +27,8 @@
      * reason to. Each export's chip links to its how-to instead.
      *
      * Beside it, the module's explorer as the demo draws it, so the page also
-     * shows what the export becomes. On a short window that picture is what
-     * gives way, and on a narrow one it goes.
+     * shows what the export becomes. The layout is {@link Welcome}'s, shared
+     * with the calendar.
      */
     interface Props {
         module: DataModule;
@@ -38,7 +39,7 @@
     let building = $state(false);
 
     /** The exports that fill this module, soonest first. */
-    const feeds = $derived(sourcesFilling(module.id));
+    const sources = $derived(sourcesFilling(module.id));
 
     /**
      * The one export to go and ask for, when there is only one.
@@ -47,7 +48,7 @@
      * how long it takes. With several there is a choice to make, and the chips
      * make it better than a sentence listing three services.
      */
-    const only = $derived(feeds.length === 1 ? feeds[0] : null);
+    const only = $derived(sources.length === 1 ? sources[0] : null);
 
     const dropTitle = $derived(
         only ? `Drop your ${only.label} export here` : 'Drop your export here'
@@ -74,166 +75,64 @@
     }
 </script>
 
-<div class="welcome">
-    <div class="column">
-        <h2>
-            <span class="subject">{module.heading.subject}</span>
-            {module.heading.rest ?? ''}
-        </h2>
-        <p class="summary">{module.blurb}</p>
+<Welcome
+    subject={module.heading.subject}
+    rest={module.heading.rest}
+    summary={module.blurb}
+    questions={module.questions}
+    preview={MODULE_SHOTS[module.id]}
+    previewName="{module.label} explorer"
+    demo={module.hasDemo ? { onLoad: loadSample, building } : undefined}
+>
+    {#snippet zone()}
+        <DropZone surface="module" expected={only?.id} title={dropTitle} {pickTitle} {hint} />
+    {/snippet}
 
-        <div class="zone">
-            <DropZone surface="module" expected={only?.id} title={dropTitle} {pickTitle} {hint} />
-        </div>
-
-        <!-- The promise, where the file goes, and the page that explains it. -->
-        <p class="safe">
-            Read in your browser, never uploaded.
-            <a href="{resolve('faq')}#privacy">More in the FAQ</a>
-        </p>
-
-        <div class="feeds">
-            {#if only}
-                <p>
-                    Request the export from
-                    <a href={resolve('/sources/[source]', { source: only.id })}>{only.label}</a>. It
-                    takes {only.delay.toLowerCase()}.
-                </p>
-            {:else}
-                <p>Request the export from:</p>
-                <ul>
-                    {#each feeds as source (source.id)}
-                        <li>
-                            <a href={resolve('/sources/[source]', { source: source.id })}>
-                                {#if source.network}
-                                    <NetworkIcon network={source.network} size={14} />
-                                {:else}
-                                    <Icon name={source.icon} size={14} />
-                                {/if}
-                                <span>{source.label}</span>
-                                <span class="wait">{source.delay.toLowerCase()}</span>
-                            </a>
-                        </li>
-                    {/each}
-                </ul>
-            {/if}
-        </div>
-
-        {#if module.hasDemo}
-            <button class="demo" type="button" onclick={loadSample} disabled={building}>
-                <span class="play" aria-hidden="true">
-                    <CirclePlay size={18} strokeWidth={1.75} />
-                </span>
-                {building ? 'Building the sample…' : 'Load demo data'}
-            </button>
+    {#snippet feeds()}
+        {#if only}
+            <p>
+                Request the export from
+                <a href={resolve('/sources/[source]', { source: only.id })}>{only.label}</a>. It
+                takes {only.delay.toLowerCase()}.
+            </p>
+        {:else}
+            <p>Request the export from:</p>
+            <ul>
+                {#each sources as source (source.id)}
+                    <li>
+                        <a href={resolve('/sources/[source]', { source: source.id })}>
+                            {#if source.network}
+                                <NetworkIcon network={source.network} size={14} />
+                            {:else}
+                                <Icon name={source.icon} size={14} />
+                            {/if}
+                            <span>{source.label}</span>
+                            <span class="wait">{source.delay.toLowerCase()}</span>
+                        </a>
+                    </li>
+                {/each}
+            </ul>
         {/if}
-    </div>
-
-    <div class="aside">
-        <ModulePreview {module} />
-    </div>
-</div>
+    {/snippet}
+</Welcome>
 
 <style>
-    /* Two columns in the middle of whatever height the page leaves them, short
-       enough to fit a 720px-tall window without a scrollbar. The text keeps its
-       measure; the preview takes what is left of the width. */
-    .welcome {
-        display: grid;
-        flex: 1;
-        grid-template-columns: minmax(22rem, 30rem) minmax(0, 38rem);
-        justify-content: center;
-        align-items: center;
-        gap: clamp(2.5rem, 5vw, 4.5rem);
-        min-height: 0;
-        padding: 2rem 2.5rem;
-    }
-
-    .column {
-        display: flex;
-        flex-direction: column;
-        min-width: 0;
-    }
-
-    /* The window less the module header and this page's padding, with room
-       for the glow. */
-    .aside {
-        --preview-max-height: calc(100dvh - 9rem);
-    }
-
-    /* Too narrow for the two side by side: the text alone. */
-    @media (max-width: 959px) {
-        .welcome {
-            grid-template-columns: minmax(0, 34rem);
-            padding-inline: 1.5rem;
-        }
-
-        .aside {
-            display: none;
-        }
-    }
-
-    h2 {
-        margin: 0;
-        font-family: var(--font-display);
-        font-size: var(--text-title);
-        font-weight: 650;
-        line-height: 1.15;
-        letter-spacing: -0.02em;
-        color: hsl(var(--heading));
-        text-wrap: balance;
-    }
-
-    .subject {
-        color: var(--module-accent);
-    }
-
-    .summary {
-        margin: 0.5rem 0 0;
-        font-size: var(--text-lede);
-        line-height: 1.55;
-        color: hsl(var(--muted-foreground));
-    }
-
-    .zone {
-        margin-top: 1.75rem;
-    }
-
-    .safe {
-        margin: 0.75rem 0 0;
-        font-size: var(--text-small);
-        color: hsl(var(--muted-foreground));
-    }
-
-    .safe a {
-        color: hsl(var(--foreground));
-        text-decoration: underline;
-        text-underline-offset: 3px;
-    }
-
-    .feeds {
-        margin-top: 1.5rem;
-        font-size: var(--text-body);
-        line-height: 1.6;
-        color: hsl(var(--muted-foreground));
-    }
-
-    .feeds p {
+    p {
         margin: 0;
     }
 
-    .feeds p a {
+    p a {
         color: hsl(var(--foreground));
         font-weight: 600;
         text-decoration: underline;
         text-underline-offset: 3px;
     }
 
-    .feeds p a:hover {
+    p a:hover {
         text-decoration-thickness: 2px;
     }
 
-    .feeds ul {
+    ul {
         display: flex;
         flex-wrap: wrap;
         gap: 0.4rem;
@@ -242,7 +141,7 @@
         list-style: none;
     }
 
-    .feeds li a {
+    li a {
         display: inline-flex;
         align-items: center;
         gap: 0.4rem;
@@ -256,43 +155,12 @@
         transition: border-color 0.15s;
     }
 
-    .feeds li a:hover {
+    li a:hover {
         border-color: hsl(var(--foreground) / 0.45);
     }
 
     .wait {
         color: hsl(var(--muted-foreground));
         font-size: var(--text-label);
-    }
-
-    .demo {
-        align-self: flex-start;
-        margin-top: 1.5rem;
-        display: inline-flex;
-        align-items: center;
-        gap: 0.55rem;
-        padding: 0.5rem 1rem 0.5rem 0.65rem;
-        border: 1px solid hsl(var(--border));
-        border-radius: var(--radius-pill);
-        background: hsl(var(--card));
-        font-size: var(--text-body);
-        font-weight: 550;
-        color: hsl(var(--foreground));
-        cursor: pointer;
-        transition: border-color 0.15s;
-    }
-
-    .demo:hover:not(:disabled) {
-        border-color: hsl(var(--foreground) / 0.45);
-    }
-
-    .demo:disabled {
-        opacity: 0.6;
-        cursor: default;
-    }
-
-    .play {
-        display: flex;
-        color: var(--module-accent);
     }
 </style>
