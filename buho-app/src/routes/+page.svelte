@@ -16,6 +16,7 @@
     import { dataStore } from '#lib/stores/dataStore.svelte.ts';
     import { deviceStore, exploreAnyway } from '#lib/stores/deviceStore.svelte.ts';
     import { FEEDBACK_EMAIL, FEEDBACK_HREF } from '#lib/feedback.ts';
+    import { SOURCE_HREF } from '#lib/repo.ts';
     import { CATALOG_SOURCES, type CatalogSource } from '#lib/data/sources/catalog.ts';
     import {
         queryForStep,
@@ -204,6 +205,7 @@
         <footer>
             <a href={resolve('sources')}>Every export Buho reads, and what it takes from each →</a>
             <a href={resolve('faq')}>Is my data uploaded? And other questions →</a>
+            <a href={SOURCE_HREF}>Open source: read the code on GitHub →</a>
             <a href={FEEDBACK_HREF}>Something to say? {FEEDBACK_EMAIL}</a>
         </footer>
     </div>

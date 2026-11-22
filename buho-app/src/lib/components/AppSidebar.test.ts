@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { render, screen } from '@testing-library/svelte';
 import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import AppSidebar from './AppSidebar.svelte';
@@ -49,9 +49,9 @@ describe('AppSidebar', () => {
         render(AppSidebar);
 
         // The rail is a fixed 56px: it never folds away, so there is no control
-        // for it. The buttons are the theme toggle and the feedback dialog.
+        // for it. The one button is the theme toggle.
         expect(screen.getByLabelText('Toggle color theme')).toBeInTheDocument();
-        expect(screen.getAllByRole('button')).toHaveLength(2);
+        expect(screen.getAllByRole('button')).toHaveLength(1);
         expect(screen.queryByLabelText(/collapse/i)).not.toBeInTheDocument();
     });
 
@@ -163,21 +163,13 @@ describe('AppSidebar', () => {
             );
         });
 
-        test('feedback asks before it opens a mail client', async () => {
+        test('links to the source code in a new tab', () => {
             render(AppSidebar);
 
-            // Nothing until asked: a click that dropped straight into a
-            // half-configured mail client would read as the page breaking.
-            expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-
-            await fireEvent.click(screen.getByText('Send feedback').closest('button')!);
-
-            const dialog = screen.getByRole('dialog', { name: 'Send feedback' });
-            expect(dialog).toBeInTheDocument();
-            expect(screen.getByText('feedback.buho@gmail.com')).toHaveAttribute(
-                'href',
-                expect.stringContaining('mailto:feedback.buho@gmail.com')
-            );
+            const source = screen.getByText('Source code on GitHub').closest('a');
+            expect(source).toHaveAttribute('href', 'https://github.com/adurivault/buho');
+            expect(source).toHaveAttribute('target', '_blank');
+            expect(source).toHaveAttribute('rel', expect.stringContaining('noopener'));
         });
 
         test('the active source is also marked loaded once it holds data', () => {

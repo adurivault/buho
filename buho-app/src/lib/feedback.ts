@@ -5,7 +5,7 @@
  * has none — that is the whole point of it. The reader's own mail client is the
  * only channel that doesn't quietly break the promise on the front page.
  *
- * Spelled once, because it appears both in the app's sidebar and on the way in.
+ * Spelled once, because it appears on the landing page, the FAQ and the error dialog.
  */
 export const FEEDBACK_EMAIL = 'feedback.buho@gmail.com';
 
