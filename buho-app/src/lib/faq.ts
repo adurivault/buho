@@ -91,6 +91,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
                 answer: [
                     "Your data stays on your computer. When you pick a file, the code running in your browser opens it and draws the charts on your screen. It never needs to send the file anywhere, so it doesn't.",
                     "Nothing of yours is saved either. Close the tab and it's all gone. Buho only keeps a copy of its own code, so it can work offline.",
+                    'Buho is <a href="https://github.com/adurivault/buho">open source</a>, so anyone can read the code and check, or run it themselves.',
                 ],
             },
             {
@@ -105,6 +106,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
                 question: "I'm still not sure.",
                 answer: [
                     'Fair enough. Open Buho, wait a few seconds, turn off your wifi, then pick your file. It works just the same, except for the map backgrounds.',
+                    'Or <a href="https://github.com/adurivault/buho">run it yourself</a>, from the source.',
                 ],
             },
             {
