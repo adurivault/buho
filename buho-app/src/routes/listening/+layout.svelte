@@ -6,6 +6,7 @@
     import ImportStatus from '#lib/components/ImportStatus.svelte';
     import ImportPill from '#lib/components/ImportPill.svelte';
     import HandheldGate from '#lib/components/handheld/HandheldGate.svelte';
+    import { dataStore } from '#lib/stores/dataStore.svelte.ts';
 
     /* Named after the data, not the service that recorded it — the same
 	   name the /sources matrix uses for this column. */
@@ -29,20 +30,24 @@
      * everything on it a lie — the visitor had no way of knowing, and for a
      * study participant that is data contamination, not a nice default.
      *
-     * The sample is still one click away, from the pill and from the guide's
-     * empty state. See `lib/demo/load.ts`.
+     * The sample is still one click away, from the module's welcome. See
+     * `lib/demo/load.ts`.
      */
 </script>
 
 <div class="listening-shell" data-module={module.id}>
-    <header class="listening-header">
+    <header class="listening-header" class:bare={!dataStore.loaded[module.id]}>
         <div class="header-left">
             <span class="source-title">
                 <Icon name={module.icon} size={18} />{title}
             </span>
         </div>
+        <!-- The views only differ once there is something to view: until then
+             each of them shows the same welcome. -->
         <div class="header-center">
-            <SourceNav {tabs} ariaLabel="{title} views" />
+            {#if dataStore.loaded[module.id]}
+                <SourceNav {tabs} ariaLabel="{title} views" />
+            {/if}
         </div>
         <div class="header-right">
             <ImportPill {module} />
@@ -128,8 +133,12 @@
             gap: 0.5rem;
             padding-inline: 0.6rem;
         }
-        /* Holds nothing but the title, which the switcher below already names. */
-        .header-left {
+        /* Holds nothing but the title, which the switcher already names; an
+           empty module has no switcher, so it keeps the title instead. */
+        .listening-header:not(.bare) .header-left {
+            display: none;
+        }
+        .bare .header-center {
             display: none;
         }
         .header-center {

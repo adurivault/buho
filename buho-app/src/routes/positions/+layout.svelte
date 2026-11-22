@@ -6,6 +6,7 @@
     import ImportStatus from '#lib/components/ImportStatus.svelte';
     import ImportPill from '#lib/components/ImportPill.svelte';
     import HandheldGate from '#lib/components/handheld/HandheldGate.svelte';
+    import { dataStore } from '#lib/stores/dataStore.svelte.ts';
 
     /* Named after the data, not the service that recorded it — the same
 	   name the /sources matrix uses for this column. */
@@ -21,15 +22,19 @@
 </script>
 
 <div class="positions-shell" data-module={module.id}>
-    <header class="positions-header">
+    <header class="positions-header" class:bare={!dataStore.loaded[module.id]}>
         <div class="header-left">
             <span class="source-title">
                 <Icon name={module.icon} size={18} />{title}
             </span>
         </div>
 
+        <!-- The views only differ once there is something to view: until then
+             each of them shows the same welcome. -->
         <div class="header-center">
-            <SourceNav {tabs} ariaLabel="Google Maps views" />
+            {#if dataStore.loaded[module.id]}
+                <SourceNav {tabs} ariaLabel="Google Maps views" />
+            {/if}
         </div>
 
         <div class="header-right">
@@ -113,8 +118,12 @@
             gap: 0.5rem;
             padding-inline: 0.6rem;
         }
-        /* Holds nothing but the title, which the switcher below already names. */
-        .header-left {
+        /* Holds nothing but the title, which the switcher already names; an
+           empty module has no switcher, so it keeps the title instead. */
+        .positions-header:not(.bare) .header-left {
+            display: none;
+        }
+        .bare .header-center {
             display: none;
         }
         .header-center {

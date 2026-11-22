@@ -3,6 +3,7 @@
     import type { DataModule } from '#lib/data/modules.ts';
     import ImportDialog from '#lib/components/ImportDialog.svelte';
     import { trackEvent } from '#lib/analytics.ts';
+    import { deviceStore } from '#lib/stores/deviceStore.svelte.ts';
 
     /**
      * The header's data status, and the way into the import dialog.
@@ -76,7 +77,11 @@
         <span class="dot ok" title="Viewing your own data"></span>
         <span class="ok-text" title={summary}>{summary || 'Your data'}</span>
         <button class="btn" type="button" onclick={openDialog}>Add more</button>
-    {:else}
+    {:else if deviceStore.showcase}
+        <!-- Only on a phone. On a computer an empty module's page is its
+             welcome, which holds the drop zone and the sample, so the header
+             would say the same thing twice; a phone gets the explorer's poster
+             instead, which has no import of its own. -->
         <button class="btn primary" type="button" onclick={openDialog}>
             Import <span class="long">my {module.label.toLowerCase()}</span>
         </button>

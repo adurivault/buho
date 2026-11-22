@@ -99,7 +99,7 @@
     const HINT =
         'Finds words where they start, ignoring case and accents: "restau" finds "Restaurant", "ca" finds "Ça". ' +
         'Put a word in quotes for that word only. Separate terms with commas to compare them — each gets its own color. ' +
-        'Press / to jump here. The search runs in this tab and is never sent anywhere.';
+        'Press / to jump here. The search runs in your browser and is never sent anywhere.';
 </script>
 
 <svelte:window onkeydown={onWindowKeydown} />

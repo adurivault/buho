@@ -138,7 +138,7 @@
 
 <Seo
     title="Buho — visualize your Spotify, Google, WhatsApp and Garmin exports"
-    description="Drop an export from a service you already use and explore your listening, locations, messages, activity and steps. Everything is read and charted in this tab: nothing is uploaded, and nothing is stored."
+    description="Drop an export from a service you already use and explore your listening, locations, messages, activity and steps. Everything is read and charted in your browser: nothing is uploaded, and nothing is stored."
     jsonLd={landingLd}
 />
 
@@ -202,6 +202,10 @@
             </FunnelShell>
         {/if}
 
+        <!-- Takes the height the step leaves, so the footer sits at the foot of
+             a short page, and never less than the gap above it. -->
+        <div class="spacer" aria-hidden="true"></div>
+
         <footer>
             <a href={resolve('sources')}>Every export Buho reads, and what it takes from each →</a>
             <a href={resolve('faq')}>Is my data uploaded? And other questions →</a>
@@ -212,23 +216,38 @@
 </div>
 
 <style>
+    /* One screen when the content allows it: the column fills the height, the
+       footer sits at its foot, and the vertical spacing follows the window, so
+       a step that nearly fits does fit instead of scrolling by a few pixels. */
     .page {
+        --gap-y: clamp(1.25rem, 4vh, 3rem);
+        display: flex;
+        flex-direction: column;
         min-height: 100%;
         background: hsl(var(--background));
         color: hsl(var(--foreground));
     }
 
     .column {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        width: 100%;
         max-width: 60rem;
         margin: 0 auto;
-        padding: 3rem 1.5rem 4rem;
+        padding: var(--gap-y) 1.5rem clamp(1rem, 3vh, 2rem);
+    }
+
+    .spacer {
+        flex: 1;
+        min-height: var(--gap-y);
     }
 
     .brand {
         display: flex;
         align-items: center;
         gap: 0.5rem;
-        margin-bottom: 3rem;
+        margin-bottom: var(--gap-y);
         font-family: var(--font-display);
         font-size: var(--text-subheading);
         font-weight: 600;
@@ -240,8 +259,7 @@
         flex-wrap: wrap;
         justify-content: space-between;
         gap: 1rem;
-        margin-top: 4rem;
-        padding-top: 1.5rem;
+        padding-top: 1.25rem;
         border-top: 1px solid hsl(var(--border));
         font-size: var(--text-small);
     }
