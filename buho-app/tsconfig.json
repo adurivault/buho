@@ -1,0 +1,11 @@
+{
+    "extends": "$app/tsconfig",
+    "compilerOptions": {
+        "sourceMap": true,
+        "strict": true
+    },
+    "include": ["src", "vite.config.ts"],
+    // The service worker is its own project (src/service-worker/tsconfig.json),
+    // typed against WebWorker rather than DOM.
+    "exclude": ["src/service-worker"]
+}

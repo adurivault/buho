@@ -1,0 +1,24 @@
+{
+    "participants": ["Alex Example", "Sam Sample"],
+    "threadName": "Sam Sample_0",
+    "messages": [
+        {
+            "senderName": "Alex Example",
+            "text": "Hello",
+            "timestamp": 1709301600000,
+            "type": "text",
+            "media": [],
+            "reactions": [],
+            "isUnsent": false
+        },
+        {
+            "senderName": "Sam Sample",
+            "text": "Hi! Ready?",
+            "timestamp": 1709301660000,
+            "type": "text",
+            "media": [],
+            "reactions": [],
+            "isUnsent": false
+        }
+    ]
+}

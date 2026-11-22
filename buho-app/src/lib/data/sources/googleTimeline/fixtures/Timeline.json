@@ -1,0 +1,54 @@
+[
+    {
+        "startTime": "2024-03-01T00:00:00.000+01:00",
+        "endTime": "2024-03-01T08:30:00.000+01:00",
+        "visit": {
+            "topCandidate": {
+                "placeLocation": "geo:48.856600,2.352200",
+                "placeID": "place-home",
+                "semanticType": "Home"
+            }
+        }
+    },
+    {
+        "startTime": "2024-03-01T08:30:00.000+01:00",
+        "endTime": "2024-03-01T09:00:00.000+01:00",
+        "activity": {
+            "start": "geo:48.856600,2.352200",
+            "end": "geo:48.869800,2.307900",
+            "distanceMeters": "3600",
+            "topCandidate": {
+                "type": "cycling"
+            }
+        }
+    },
+    {
+        "startTime": "2024-03-01T08:30:00.000+01:00",
+        "endTime": "2024-03-01T09:00:00.000+01:00",
+        "timelinePath": [
+            {
+                "point": "geo:48.856600,2.352200",
+                "durationMinutesOffsetFromStartTime": "0"
+            },
+            {
+                "point": "geo:48.862000,2.330000",
+                "durationMinutesOffsetFromStartTime": "15"
+            },
+            {
+                "point": "geo:48.869800,2.307900",
+                "durationMinutesOffsetFromStartTime": "30"
+            }
+        ]
+    },
+    {
+        "startTime": "2024-03-01T09:00:00.000+01:00",
+        "endTime": "2024-03-01T17:30:00.000+01:00",
+        "visit": {
+            "topCandidate": {
+                "placeLocation": "geo:48.869800,2.307900",
+                "placeID": "place-work",
+                "semanticType": "Work"
+            }
+        }
+    }
+]

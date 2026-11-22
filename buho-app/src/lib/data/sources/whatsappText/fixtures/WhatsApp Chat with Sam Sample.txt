@@ -1,0 +1,5 @@
+‎[01/03/2024, 14:32:01] Messages and calls are end-to-end encrypted.
+[01/03/2024, 14:32:05] Sam Sample: Salut !
+[01/03/2024, 14:33:00] Alex Example: Salut, ça va ?
+On se voit demain ?
+[02/03/2024, 09:00:00] Sam Sample: Oui, à demain

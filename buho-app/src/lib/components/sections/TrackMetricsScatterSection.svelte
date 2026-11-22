@@ -1,0 +1,165 @@
+<script lang="ts">
+    import { getTrackAnalysis, type TrackAnalysisData } from '#lib/data/queries/trackQueries.ts';
+    import type { DateRange } from '#lib/data/queries/common.ts';
+    import ChartFrame from '#lib/components/ChartFrame.svelte';
+    import { trackAnalysisScatterChart } from '#lib/visualizations/d3/metricScatter.ts';
+    import { dataStore } from '#lib/stores/dataStore.svelte.ts';
+    import { listeningFilterStore } from '#lib/stores/listeningFilterStore.svelte.ts';
+    import { onMount } from 'svelte';
+    import { trackControl } from '#lib/analytics.ts';
+
+    type TrackMetricKey =
+        | 'playCount'
+        | 'totalMinutes'
+        | 'intentionalityRate'
+        | 'skipRate'
+        | 'recencyDays'
+        | 'maxSameDayPlays'
+        | 'artistPrevalenceRate'
+        | 'activeDays';
+
+    const METRIC_OPTIONS: Array<{ value: TrackMetricKey; label: string }> = [
+        { value: 'playCount', label: 'Plays' },
+        { value: 'totalMinutes', label: 'Listening time (minutes)' },
+        { value: 'intentionalityRate', label: 'Intentionality rate (%)' },
+        { value: 'skipRate', label: 'Skip rate (%)' },
+        { value: 'recencyDays', label: 'Recency (days)' },
+        { value: 'maxSameDayPlays', label: 'Max plays in a single day' },
+        {
+            value: 'artistPrevalenceRate',
+            label: 'Prevalence within the artist (%)',
+        },
+        { value: 'activeDays', label: 'Active days' },
+    ];
+
+    const METRIC_LABELS = Object.fromEntries(
+        METRIC_OPTIONS.map((option) => [option.value, option.label])
+    ) as Record<TrackMetricKey, string>;
+
+    let data = $state<TrackAnalysisData[]>([]);
+    let xMetric = $state<TrackMetricKey>('playCount');
+    let yMetric = $state<TrackMetricKey>('totalMinutes');
+    let element: HTMLElement;
+    let chartHost: HTMLElement;
+    let chartWidth = $state(1400);
+    let isVisible = $state(false);
+
+    function currentDateRange(): DateRange {
+        return {
+            startDate: listeningFilterStore.startDate,
+            endDate: listeningFilterStore.endDate,
+        };
+    }
+
+    $effect(() => {
+        const _mode = dataStore.isDemo;
+        const _range = listeningFilterStore.rangeKey;
+        if (isVisible && !dataStore.isLoading && dataStore.loaded.listening) {
+            fetchData();
+        }
+    });
+
+    async function fetchData() {
+        try {
+            data = await getTrackAnalysis(6000, currentDateRange());
+        } catch (e) {
+            console.error('Failed to load track analysis:', e);
+            data = [];
+        }
+    }
+
+    onMount(() => {
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0].isIntersecting) {
+                    isVisible = true;
+                    observer.disconnect();
+                }
+            },
+            { threshold: 0.1 }
+        );
+
+        if (element) observer.observe(element);
+
+        const resizeObserver = new ResizeObserver(() => {
+            if (chartHost) chartWidth = Math.max(900, Math.floor(chartHost.clientWidth));
+        });
+
+        if (chartHost) {
+            chartWidth = Math.max(900, Math.floor(chartHost.clientWidth));
+            resizeObserver.observe(chartHost);
+        }
+
+        return () => {
+            observer.disconnect();
+            resizeObserver.disconnect();
+        };
+    });
+
+    const plotOptions = $derived({
+        data,
+        xMetric,
+        yMetric,
+        xLabel: METRIC_LABELS[xMetric],
+        yLabel: METRIC_LABELS[yMetric],
+        width: chartWidth,
+        height: Math.max(680, Math.floor(chartWidth * 0.55)),
+    });
+</script>
+
+<section bind:this={element} class="guide-section py-8">
+    <div class="text-content mb-6">
+        <h2 class="text-2xl font-bold mb-2">Tracks: scatter plot</h2>
+        <p class="opacity-80 max-w-3xl">
+            One point = one track (track + artist). Pick the axes from the available metrics.
+        </p>
+    </div>
+
+    <div class="mb-4 grid gap-4 md:grid-cols-2">
+        <label class="text-sm">
+            <span class="mb-2 block opacity-80">X axis</span>
+            <select
+                class="w-full rounded-sm border border-surface-700 bg-surface-950 px-3 py-2"
+                bind:value={xMetric}
+                onchange={() => trackControl('track-scatter', 'x-axis', xMetric)}
+            >
+                {#each METRIC_OPTIONS as option (option.value)}
+                    <option value={option.value}>{option.label}</option>
+                {/each}
+            </select>
+        </label>
+        <label class="text-sm">
+            <span class="mb-2 block opacity-80">Y axis</span>
+            <select
+                class="w-full rounded-sm border border-surface-700 bg-surface-950 px-3 py-2"
+                bind:value={yMetric}
+                onchange={() => trackControl('track-scatter', 'y-axis', yMetric)}
+            >
+                {#each METRIC_OPTIONS as option (option.value)}
+                    <option value={option.value}>{option.label}</option>
+                {/each}
+            </select>
+        </label>
+    </div>
+
+    <div
+        bind:this={chartHost}
+        class="chart-container bg-surface-900 rounded-md p-6 border border-surface-700 overflow-x-auto"
+    >
+        {#if data.length > 0}
+            <ChartFrame
+                chartFn={trackAnalysisScatterChart}
+                data={plotOptions}
+                share={{ name: 'track-metrics' }}
+            />
+        {:else if isVisible}
+            <div class="w-full h-[680px] flex items-center justify-center opacity-50">
+                Loading track scatter...
+            </div>
+        {:else}
+            <div class="w-full h-[680px] flex items-center justify-center opacity-50">
+                Scroll to view
+            </div>
+        {/if}
+    </div>
+</section>

@@ -1,0 +1,39 @@
+{
+    "participants": [
+        {
+            "name": "Alex Example"
+        },
+        {
+            "name": "Sam Sample"
+        }
+    ],
+    "messages": [
+        {
+            "sender_name": "Sam Sample",
+            "timestamp_ms": 1709301600000,
+            "content": "On se voit ce soir ?"
+        },
+        {
+            "sender_name": "Alex Example",
+            "timestamp_ms": 1709302500000,
+            "content": "Oui, 20h !",
+            "reactions": [
+                {
+                    "reaction": "â¤",
+                    "actor": "Sam Sample"
+                }
+            ]
+        },
+        {
+            "sender_name": "Alex Example",
+            "timestamp_ms": 1709302560000,
+            "photos": [
+                {
+                    "uri": "messages/inbox/alex_1001/photos/1_n.jpg"
+                }
+            ]
+        }
+    ],
+    "title": "Sam Sample",
+    "thread_path": "inbox/alex_1001"
+}

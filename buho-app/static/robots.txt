@@ -1,0 +1,7 @@
+# Allow crawling everything by default — including the crawlers behind the
+# assistants people ask for tools like this one. Nothing here is private: the
+# site is ten pages of prose and an application that holds no data of its own.
+User-agent: *
+Disallow:
+
+Sitemap: https://buho-app.com/sitemap.xml

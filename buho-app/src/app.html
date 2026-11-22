@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+        <link rel="icon" href="%sveltekit.assets%/favicon.svg" type="image/svg+xml" />
+
+        <!--
+	     Whatever the current page has to say about itself, first.
+
+	     Everything below is the site-wide fallback, and it has to stay: the
+	     dataset routes render no head at all without JavaScript, so a link to one
+	     shared into a chat app would come back as a bare URL. But a page that
+	     *does* declare its own title and description must win, and duplicated
+	     head tags are resolved by document order — the first one keeps. Hence the
+	     head slot above the defaults rather than below them.
+	-->
+        %sveltekit.head%
+
+        <!-- The theme, applied before the first paint (it follows the system
+	     preference; nothing is persisted, in line with the privacy promise).
+
+	     It sits *below* the head slot because that is where the content-security
+	     policy comes from, and a `<meta>` policy only governs what the parser
+	     meets after it. Above the slot this script ran outside the policy
+	     altogether; here it is covered by the hash the build computes for it.
+	     Being lower in `<head>` costs nothing — it is still synchronous, so it
+	     still runs before anything is painted. -->
+        <script>
+            try {
+                if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                    document.documentElement.classList.add('dark');
+                }
+            } catch (e) {}
+        </script>
+
+        <title>Buho - Personal Data Visualization</title>
+        <meta
+            name="description"
+            content="Explore your listening, locations, messages, activity and steps from your Spotify, Google, WhatsApp and Garmin exports. Privacy-first analysis running entirely in your browser."
+        />
+        <meta property="og:title" content="Buho - Personal Data Visualization" />
+        <meta
+            property="og:description"
+            content="Drop a Spotify, Google, WhatsApp or Garmin export and explore your listening, locations, messages, activity and steps. Everything runs in your browser — your data never leaves your device."
+        />
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="Buho" />
+        <!-- Absolute: social scrapers don't resolve relative URLs. -->
+        <meta property="og:url" content="https://buho-app.com/" />
+        <!--
+	     PNG, not the SVG this was pointing at: no social platform renders SVG
+	     previews — not WhatsApp, X, Facebook, iMessage, LinkedIn or Slack — so
+	     every shared link came out as a bare URL with no card at all. The SVG
+	     stays in static/ as the source the PNG is regenerated from.
+
+	     The dimensions are stated because several scrapers lay out the card
+	     before they have finished fetching the image, and one that has to guess
+	     falls back to the small square layout.
+	-->
+        <meta property="og:image" content="https://buho-app.com/og-image.png" />
+        <meta property="og:image:type" content="image/png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta
+            property="og:image:alt"
+            content="Buho — your Spotify, Google, WhatsApp and Garmin exports, mapped in your own browser."
+        />
+
+        <!-- X reads its own namespace and ignores og:image's aspect ratio without
+	     this, showing the wide card cropped to a thumbnail. -->
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Buho - Personal Data Visualization" />
+        <meta
+            name="twitter:description"
+            content="Drop a Spotify, Google, WhatsApp or Garmin export and explore your listening, locations, messages, activity and steps. Everything runs in your browser — your data never leaves your device."
+        />
+        <meta name="twitter:image" content="https://buho-app.com/og-image.png" />
+
+        <!-- data-domains keeps localhost and preview builds out of the dashboard:
+	     the tracker only reports on the production host. -->
+        <script
+            defer
+            src="https://cloud.umami.is/script.js"
+            data-website-id="a4eb803f-ed09-4064-830e-c846f578884d"
+            data-domains="buho-app.com"
+        ></script>
+    </head>
+
+    <body data-sveltekit-preload-data="hover">
+        <div style="display: contents">%sveltekit.body%</div>
+    </body>
+</html>

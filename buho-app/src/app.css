@@ -1,0 +1,459 @@
+@import 'tailwindcss';
+
+/* The two faces, served from our own origin: Inter for text and headings,
+   JetBrains Mono for what comes out of a file. Self-hosted, `style-src` and
+   `font-src` stay on our own origin, and the policy stays short enough to audit
+   at a glance. Weight is the only axis, with no italic. Each file is subset by
+   `unicode-range`, so a reader downloads latin only. */
+@import '@fontsource-variable/inter/wght.css';
+@import '@fontsource-variable/jetbrains-mono/wght.css';
+
+/* Don't scan static assets for class names: the multi-MB geo data files
+   (static/geo/*.topojson, cities5000.json) otherwise make Tailwind v4's content
+   scanner peg the CPU and freeze the dev server. No utility classes live in
+   static/ anyway. */
+@source not "../static";
+
+@theme {
+    --color-border: hsl(var(--border));
+    --color-input: hsl(var(--input));
+    --color-ring: hsl(var(--ring));
+    --color-background: hsl(var(--background));
+    --color-foreground: hsl(var(--foreground));
+
+    --color-primary: hsl(var(--primary));
+    --color-primary-foreground: hsl(var(--primary-foreground));
+
+    --color-secondary: hsl(var(--secondary));
+    --color-secondary-foreground: hsl(var(--secondary-foreground));
+
+    --color-destructive: hsl(var(--destructive));
+    --color-destructive-foreground: hsl(var(--destructive-foreground));
+
+    /* Shadcn "muted" maps remarkably well to "muted" utilities if we want to preserve semantics */
+    --color-muted: hsl(var(--muted));
+    --color-muted-foreground: hsl(var(--muted-foreground));
+
+    --color-accent: hsl(var(--accent));
+    --color-accent-foreground: hsl(var(--accent-foreground));
+
+    --color-popover: hsl(var(--popover));
+    --color-popover-foreground: hsl(var(--popover-foreground));
+
+    --color-card: hsl(var(--card));
+    --color-card-foreground: hsl(var(--card-foreground));
+
+    /* Five radii, by role. A control you press is a pill; one you set (a
+     field, a toggle, a rail item) is a soft rectangle; panels and the modal
+     sheet are rounder; small parts (key hints, tooltips) tighter. Tailwind's
+     rounded-sm/md/lg/xl read these. */
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+    --radius-pill: 999px;
+
+    /* Fontsource names a variable face "<Family> Variable"; the static name is
+     kept behind it for anyone who has the family installed locally. */
+    --font-sans: 'Inter Variable', 'Inter', system-ui, sans-serif;
+    /* Headings take the text face, heavier and tighter, rather than a face of
+     their own. */
+    --font-display: 'Inter Variable', 'Inter', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;
+}
+
+@layer base {
+    :root {
+        /* Light theme: achromatic greys, neither warm nor cool, so every hue on
+       the page comes from the data. White cards on a page a step darker; the
+       dark "ink" theme below keeps its warmth. Toggled via `.dark` on <html>. */
+        --background: 0 0% 97%;
+        --foreground: 0 0% 14%;
+
+        --card: 0 0% 100%;
+        --card-foreground: 0 0% 14%;
+
+        --popover: 0 0% 100%;
+        --popover-foreground: 0 0% 14%;
+
+        --primary: 0 0% 12%;
+        --primary-foreground: 0 0% 97%;
+
+        --secondary: 0 0% 91.4%;
+        --secondary-foreground: 0 0% 20%;
+
+        --muted: 0 0% 91.4%;
+        /* It has to hold 4.5:1 on the muted fill too, where pills, chips and
+       tracks put it, not only on the page. */
+        --muted-foreground: 0 0% 38.8%;
+
+        --accent: 0 0% 89%;
+        --accent-foreground: 0 0% 16%;
+
+        --destructive: 4 62% 47%;
+        --destructive-foreground: 0 0% 97%;
+
+        --border: 0 0% 86.3%;
+        --input: 0 0% 86.3%;
+        /* A hairline is decoration; the edge that shows where a control is (a
+       field, a toggle, an outlined button) has to reach 3:1 on the page. */
+        --border-strong: 0 0% 54.1%;
+        --ring: 0 0% 50%;
+
+        --radius: 0.5rem;
+
+        /* The type scale. Every size in the app is one of these steps; the
+       headings take title/subheading/heading, numbers take figure and stat,
+       everything else is body, small or label. */
+        --text-label: 0.72rem;
+        --text-small: 0.78rem;
+        --text-body: 0.875rem;
+        --text-lede: 1rem;
+        --text-subheading: 1.15rem;
+        --text-heading: 1.35rem;
+        --text-figure: 1.4rem;
+        --text-title: 1.75rem;
+        --text-stat: 2.25rem;
+
+        /* The nav rail's thickness: a column on the left on a wide screen, a bar
+       across the bottom on a narrow one. Declared here because the shell has to
+       reserve exactly as much room as the rail takes — see `.main-content`. */
+        --nav-rail-size: 56px;
+
+        /* Heading face color (slightly deeper than body text in light mode). */
+        --heading: 0 0% 7.8%;
+
+        /* The owl's teal, as text: "this is your own data", "nothing is uploaded".
+       The favicon's #2dd4a8 is too light to read on paper (1.9:1), so the light
+       theme takes the lightest teal that holds 3:1, the floor the module
+       accents keep too; the dark one keeps the bright one. */
+        --owl: 168 99% 31%;
+
+        /* Module accents — full color values (consumed directly as
+       var(--accent-listening), not via hsl()). Buho's own hues, named after the
+       data rather than borrowed from the services that fill it, and stepped per
+       theme. They are text and UI colours: on paper each is the lightest step
+       of its hue that holds 3:1 on the page and on its own -soft tint (what an
+       active tab, a rail item or a hovered button sits on) — the floor for
+       large or bold text and for icons, not 4.5:1, so a module's names and
+       figures read as its colour rather than as ink. Charts paint a module in
+       its fill and peak below instead. */
+        --accent-listening: #aa6edb;
+        --accent-listening-soft: #f5ecfe;
+        --accent-positions: #df6436;
+        --accent-positions-soft: #feece5;
+        --accent-messages: #228de9;
+        --accent-messages-soft: #e5f2ff;
+        --accent-activity: #bc7b04;
+        --accent-activity-soft: #fceeda;
+        --accent-steps: #469c32;
+        --accent-steps-soft: #e7f5e2;
+        --accent-health: #da5d92;
+        --accent-health-soft: #ffeaf1;
+
+        /* A module's colour as a mark, apart from its accent as text. On ink the
+       accent is a light pastel that serves both; on paper the accent is dense
+       enough for text, which, laid as a bar or an area, reads as a heavy
+       block. So paper takes a pastel for areas (`--fill-*`, about 2:1: a mark
+       that is one of many, its value said in its height and in words beside
+       it) and a denser step for the strong end of a ramp and for the marks too
+       thin to carry a pastel — lines, ticks, dots (`--peak-*`, about 4:1). */
+        --fill-listening: #c89af1;
+        --fill-positions: #f69370;
+        --fill-messages: #6fb6fe;
+        --fill-activity: #ebb353;
+        --fill-steps: #87c571;
+        --fill-health: #f28db4;
+        --peak-listening: #9658c6;
+        --peak-positions: #c94c18;
+        --peak-messages: #017dd6;
+        --peak-activity: #b87501;
+        --peak-steps: #3f9015;
+        --peak-health: #c3457e;
+
+        /* The other side of a conversation, against "you" in the messages
+       peak: a neutral, so the charts read as you against everyone
+       else. A fill at 3:1 or more on both surfaces; the split is said in
+       words beside it. */
+        --them: hsl(var(--border-strong));
+
+        /* Chart roles, aliases of the tokens above so a chart follows the theme
+       like the rest of the page: the surface behind the marks (and in the
+       gaps and rings between them), ink for values and direct labels, muted
+       for ticks and axis titles, hairline grids, and the stronger edge for
+       zero lines and reference lines. */
+        --chart-surface: hsl(var(--card));
+        --chart-ink: hsl(var(--foreground));
+        --chart-muted: hsl(var(--muted-foreground));
+        --chart-grid: hsl(var(--border));
+        --chart-axis: hsl(var(--border-strong));
+    }
+
+    .dark {
+        /* Warm "ink" dark theme — neutral warm near-black, off-white text at a
+       calmer contrast than pure white (true white reserved for headings). */
+        --background: 30 9% 7%;
+        --foreground: 40 16% 90%;
+
+        --card: 30 9% 9%;
+        --card-foreground: 40 16% 90%;
+
+        --popover: 30 10% 8%;
+        --popover-foreground: 40 16% 90%;
+
+        --primary: 40 20% 94%;
+        --primary-foreground: 30 10% 10%;
+
+        --secondary: 30 7% 15%;
+        --secondary-foreground: 40 14% 88%;
+
+        --muted: 30 7% 15%;
+        --muted-foreground: 38 10% 62%;
+
+        --accent: 30 7% 16%;
+        --accent-foreground: 40 14% 90%;
+
+        --destructive: 4 55% 40%;
+        --destructive-foreground: 40 16% 92%;
+
+        --border: 30 7% 17%;
+        --input: 30 7% 17%;
+        --border-strong: 32 7% 42%;
+        --ring: 38 14% 70%;
+
+        --heading: 40 24% 96%;
+
+        --owl: 164 66% 50%;
+
+        --accent-listening: #d7a6fc;
+        --accent-listening-soft: #2e1f39;
+        --accent-positions: #fea387;
+        --accent-positions-soft: #3b1d14;
+        --accent-messages: #89c3ff;
+        --accent-messages-soft: #12283e;
+        --accent-activity: #e4b750;
+        --accent-activity-soft: #322405;
+        --accent-steps: #a2ce72;
+        --accent-steps-soft: #1e2b0f;
+        --accent-health: #ff99c2;
+        --accent-health-soft: #391b28;
+
+        /* On ink the accent already reads as a mark, so both steps are the accent. */
+        --fill-listening: var(--accent-listening);
+        --fill-positions: var(--accent-positions);
+        --fill-messages: var(--accent-messages);
+        --fill-activity: var(--accent-activity);
+        --fill-steps: var(--accent-steps);
+        --fill-health: var(--accent-health);
+        --peak-listening: var(--accent-listening);
+        --peak-positions: var(--accent-positions);
+        --peak-messages: var(--accent-messages);
+        --peak-activity: var(--accent-activity);
+        --peak-steps: var(--accent-steps);
+        --peak-health: var(--accent-health);
+    }
+
+    /* A module's palette under role names. An element marked
+       data-module="<id>" (a module's pages, a row in a list of modules, a chart
+       about one module) hands its subtree that module's colours, and
+       components read these rather than a module's own tokens, so one
+       component serves every module. Outside any module they fall back to the
+       neutral inks. */
+    :root {
+        --module-accent: hsl(var(--foreground));
+        --module-soft: hsl(var(--accent));
+        --module-fill: hsl(var(--border-strong));
+        --module-peak: hsl(var(--foreground));
+    }
+
+    [data-module='listening'] {
+        --module-accent: var(--accent-listening);
+        --module-soft: var(--accent-listening-soft);
+        --module-fill: var(--fill-listening);
+        --module-peak: var(--peak-listening);
+    }
+
+    [data-module='positions'] {
+        --module-accent: var(--accent-positions);
+        --module-soft: var(--accent-positions-soft);
+        --module-fill: var(--fill-positions);
+        --module-peak: var(--peak-positions);
+    }
+
+    [data-module='messages'] {
+        --module-accent: var(--accent-messages);
+        --module-soft: var(--accent-messages-soft);
+        --module-fill: var(--fill-messages);
+        --module-peak: var(--peak-messages);
+    }
+
+    [data-module='activity'] {
+        --module-accent: var(--accent-activity);
+        --module-soft: var(--accent-activity-soft);
+        --module-fill: var(--fill-activity);
+        --module-peak: var(--peak-activity);
+    }
+
+    [data-module='steps'] {
+        --module-accent: var(--accent-steps);
+        --module-soft: var(--accent-steps-soft);
+        --module-fill: var(--fill-steps);
+        --module-peak: var(--peak-steps);
+    }
+
+    [data-module='health'] {
+        --module-accent: var(--accent-health);
+        --module-soft: var(--accent-health-soft);
+        --module-fill: var(--fill-health);
+        --module-peak: var(--peak-health);
+    }
+}
+
+@layer base {
+    * {
+        @apply border-border;
+    }
+
+    body {
+        @apply bg-background text-foreground;
+        font-family: var(--font-sans);
+    }
+
+    /* Headings: the display face, tightened; near-white only here. */
+    h1,
+    h2,
+    h3 {
+        font-family: var(--font-display);
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        color: hsl(var(--heading));
+    }
+}
+
+/* The pieces every chart is built from. Global rather than scoped: the D3
+   factories build their DOM outside any component. */
+@layer components {
+    .chart {
+        position: relative;
+    }
+
+    /* Ticks and axis titles take the muted ink through currentColor; marks
+       and direct labels set their own colour. */
+    .chart-svg {
+        display: block;
+        max-width: 100%;
+        height: auto;
+        overflow: visible;
+        font-family: var(--font-sans);
+        font-size: var(--text-label);
+        font-variant-numeric: tabular-nums;
+        color: var(--chart-muted);
+    }
+
+    .chart-legend {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.35rem 1rem;
+        margin-bottom: 0.6rem;
+        font-size: var(--text-label);
+        color: var(--chart-ink);
+    }
+
+    .chart-legend-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+
+    .chart-legend-swatch {
+        width: 10px;
+        height: 10px;
+        border-radius: 3px;
+    }
+
+    .chart-legend-title {
+        color: var(--chart-muted);
+    }
+
+    /* A stepped colour scale: one block per step, the thresholds under the
+       joins between them. */
+    .chart-ramp {
+        display: grid;
+        gap: 3px;
+    }
+
+    .chart-ramp-steps {
+        display: flex;
+        gap: 2px;
+    }
+
+    .chart-ramp-steps > span {
+        width: 32px;
+        height: 10px;
+        border-radius: 2px;
+    }
+
+    .chart-ramp-ticks {
+        position: relative;
+        height: 1.2em;
+        color: var(--chart-muted);
+    }
+
+    .chart-ramp-ticks > span {
+        position: absolute;
+        transform: translateX(-50%);
+        white-space: nowrap;
+    }
+
+    .chart-tooltip {
+        position: absolute;
+        z-index: 10;
+        pointer-events: none;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        max-width: 16rem;
+        padding: 0.4rem 0.55rem;
+        border: 1px solid hsl(var(--border));
+        border-radius: var(--radius-sm);
+        background: hsl(var(--popover));
+        color: hsl(var(--popover-foreground));
+        box-shadow: 0 4px 14px rgb(0 0 0 / 0.18);
+        font-size: var(--text-label);
+        line-height: 1.3;
+    }
+
+    .chart-tooltip[hidden] {
+        display: none;
+    }
+
+    .chart-tooltip strong {
+        font-weight: 600;
+        word-break: break-word;
+        color: hsl(var(--foreground));
+    }
+
+    .chart-tooltip > span {
+        color: hsl(var(--muted-foreground));
+    }
+
+    /* What a click on the mark would do. */
+    .chart-tooltip .hint {
+        margin-top: 2px;
+        color: hsl(var(--foreground));
+    }
+
+    .chart-tooltip-muted {
+        color: hsl(var(--muted-foreground));
+    }
+
+    .chart-empty {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 240px;
+        font-size: var(--text-small);
+        color: hsl(var(--muted-foreground));
+    }
+}

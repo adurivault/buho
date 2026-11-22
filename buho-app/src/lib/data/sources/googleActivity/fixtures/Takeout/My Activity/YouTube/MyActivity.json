@@ -1,0 +1,31 @@
+[
+    {
+        "header": "YouTube",
+        "title": "Watched How Tides Work",
+        "titleUrl": "https://www.youtube.com/watch?v=example01",
+        "subtitles": [
+            {
+                "name": "Ocean Notes",
+                "url": "https://www.youtube.com/channel/example"
+            }
+        ],
+        "time": "2024-03-01T20:10:00.000Z",
+        "products": ["YouTube"],
+        "activityControls": ["YouTube watch history"]
+    },
+    {
+        "header": "Search",
+        "title": "Searched for bike repair near me",
+        "titleUrl": "https://www.google.com/search?q=bike+repair+near+me",
+        "time": "2024-03-02T09:00:00.000Z",
+        "products": ["Search"],
+        "activityControls": ["Web & App Activity"]
+    },
+    {
+        "header": "Maps",
+        "title": "Searched for Parc des Buttes-Chaumont",
+        "titleUrl": "https://www.google.com/maps/search/Parc+des+Buttes-Chaumont",
+        "time": "2024-03-02T09:30:00.000Z",
+        "products": ["Maps"]
+    }
+]

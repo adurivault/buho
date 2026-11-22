@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx creator="StravaGPX" version="1.1" xmlns="http://www.topografix.com/GPX/1/1"
+     xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">
+ <metadata><time>2024-03-02T07:00:00Z</time></metadata>
+ <trk>
+  <name>Morning run</name>
+  <type>running</type>
+  <trkseg>
+   <trkpt lat="48.8566000" lon="2.3522000"><ele>35.0</ele><time>2024-03-02T07:00:00Z</time>
+    <extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>120</gpxtpx:hr><gpxtpx:cad>82</gpxtpx:cad></gpxtpx:TrackPointExtension></extensions>
+   </trkpt>
+   <trkpt lat="48.8570000" lon="2.3530000"><ele>35.4</ele><time>2024-03-02T07:00:30Z</time></trkpt>
+   <trkpt lat="48.8575000" lon="2.3539000"><ele>36.1</ele><time>2024-03-02T07:01:00Z</time></trkpt>
+  </trkseg>
+ </trk>
+</gpx>

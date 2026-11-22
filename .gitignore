@@ -1,0 +1,20 @@
+# Personal exports used for local testing — they must never be committed.
+/data/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+
+# Claude Code / Playwright MCP local files
+.claude/*
+.playwright-mcp/
+
+# Node (the app lives in buho-app/, which has its own .gitignore)
+node_modules/
+.vite/
+
+# SvelteKit output generated outside buho-app/ by mistake
+.svelte-kit/
+
+# Local-only sample conversation used by /poster in dev — never commit real exports.
+buho-app/static/dev-sample/

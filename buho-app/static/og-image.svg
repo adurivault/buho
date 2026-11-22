@@ -1,0 +1,53 @@
+<!--
+  The link preview card, 1200×630.
+
+  Source of truth for static/og-image.png, which is what the meta tags point at:
+  no social platform renders SVG, so the PNG is the artefact and this is how it
+  is regenerated:
+
+    rsvg-convert -w 1200 -h 630 -o static/og-image.png static/og-image.svg
+
+  Kept to the favicon's palette rather than the app's warm theme, so the card
+  and the tab icon beside it read as the same thing. Type is set in faces that
+  are on every machine: this is rasterised once, by a renderer with no access to
+  the web fonts.
+-->
+<svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" fill="#0a0e14"/>
+
+  <!-- A hairline of the accent along the top, so the card has an edge even
+       against a dark chat background. -->
+  <rect width="1200" height="6" fill="#2dd4a8"/>
+
+  <!-- The owl, from favicon.svg, at 3.2× and centred on the upper third. -->
+  <g transform="translate(497 96) scale(3.22)">
+    <defs>
+      <mask id="owl-cut">
+        <rect width="64" height="64" fill="#fff"/>
+        <circle cx="24" cy="28" r="8" fill="#000"/>
+        <circle cx="40" cy="28" r="8" fill="#000"/>
+        <path d="M28.5 32.5 L35.5 32.5 Q34.8 35.8 32 38.5 Q29.2 35.8 28.5 32.5 Z" fill="#000"/>
+      </mask>
+    </defs>
+    <g fill="#2dd4a8" mask="url(#owl-cut)">
+      <path d="M15 15 L21 3 L26 13 Z"/>
+      <path d="M49 15 L43 3 L38 13 Z"/>
+      <path d="M32 8 C19 8 11 18 11 30 C11 46 20 58 32 58 C44 58 53 46 53 30 C53 18 45 8 32 8 Z"/>
+    </g>
+    <circle cx="25.5" cy="31" r="3.2" fill="#2dd4a8"/>
+    <circle cx="38.5" cy="31" r="3.2" fill="#2dd4a8"/>
+    <g stroke="#2dd4a8" stroke-width="1.8" stroke-linecap="round" fill="none">
+      <path d="M27 56.5 L27 60.5 M27 60.5 L24.5 62.5 M27 60.5 L27 62.5 M27 60.5 L29.5 62.5"/>
+      <path d="M37 56.5 L37 60.5 M37 60.5 L34.5 62.5 M37 60.5 L37 62.5 M37 60.5 L39.5 62.5"/>
+    </g>
+  </g>
+
+  <text x="600" y="392" font-family="Georgia, 'Times New Roman', serif" font-size="94"
+        font-weight="700" fill="#e7e2da" text-anchor="middle" letter-spacing="-1">Buho</text>
+
+  <text x="600" y="458" font-family="Helvetica, Arial, sans-serif" font-size="33"
+        fill="#98a3b0" text-anchor="middle">Your Spotify, Google, WhatsApp and Garmin exports, mapped.</text>
+
+  <text x="600" y="540" font-family="Helvetica, Arial, sans-serif" font-size="27"
+        font-weight="600" fill="#2dd4a8" text-anchor="middle" letter-spacing="0.4">Nothing is uploaded. It all runs in your browser.</text>
+</svg>
