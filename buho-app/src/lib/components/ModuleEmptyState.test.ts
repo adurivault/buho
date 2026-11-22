@@ -22,7 +22,7 @@ describe('ModuleEmptyState', () => {
     it('says what the module holds, not that it is empty', () => {
         render(ModuleEmptyState, { props: { module: moduleById('listening') } });
 
-        expect(screen.getByRole('heading', { name: 'Your listening history' })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Listening history' })).toBeInTheDocument();
         expect(screen.queryByText(/No listening loaded/i)).toBeNull();
     });
 
@@ -51,10 +51,12 @@ describe('ModuleEmptyState', () => {
         });
     });
 
-    it('says, where the file goes, that it stays in the tab', () => {
+    it('says, where the file goes, that it stays in the tab, and links the FAQ', () => {
         render(ModuleEmptyState, { props: { module: moduleById('health') } });
 
-        expect(screen.getByText(/Nothing is uploaded, nothing is kept/)).toBeInTheDocument();
+        expect(screen.getByText(/Read in this tab, never uploaded/)).toBeInTheDocument();
+        const faq = screen.getByRole('link', { name: 'More in the FAQ' });
+        expect(faq.getAttribute('href')).toMatch(/\/faq#privacy$/);
     });
 
     it('offers the sample where there is one, and never loads it on sight', () => {

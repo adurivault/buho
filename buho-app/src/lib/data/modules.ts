@@ -35,7 +35,7 @@ export interface DataModule {
     blurb: string;
     /**
      * The heading of the module's welcome, the screen it shows while it holds
-     * nothing: "Your", then `subject` in the module's colour, then `rest`.
+     * nothing: `subject` in the module's colour, then `rest`.
      * Descriptive on purpose — it names the data, it does not sell it.
      */
     heading: { subject: string; rest?: string };
@@ -86,7 +86,7 @@ export const DATA_MODULES: DataModule[] = [
         id: 'listening',
         label: 'Listening',
         blurb: 'Plays by artist, track, hour and day.',
-        heading: { subject: 'listening', rest: 'history' },
+        heading: { subject: 'Listening', rest: 'history' },
         table: 'plays',
         icon: 'music-note',
         href: 'listening/explore',
@@ -98,7 +98,7 @@ export const DATA_MODULES: DataModule[] = [
         id: 'positions',
         label: 'Positions',
         blurb: 'Places, trips and routes.',
-        heading: { subject: 'location', rest: 'history' },
+        heading: { subject: 'Location', rest: 'history' },
         table: 'location_segments',
         icon: 'map-pin',
         href: 'positions/explore',
@@ -109,7 +109,7 @@ export const DATA_MODULES: DataModule[] = [
         id: 'messages',
         label: 'Messages',
         blurb: 'Messages by conversation, person and hour.',
-        heading: { subject: 'conversations' },
+        heading: { subject: 'Conversations' },
         table: 'messages',
         icon: 'message',
         href: 'messages/explore',
@@ -131,7 +131,7 @@ export const DATA_MODULES: DataModule[] = [
         id: 'steps',
         label: 'Steps',
         blurb: 'Steps per day and per hour.',
-        heading: { subject: 'step', rest: 'counts' },
+        heading: { subject: 'Step', rest: 'counts' },
         table: 'step_packets',
         icon: 'footprints',
         href: 'steps/explore',
@@ -141,7 +141,7 @@ export const DATA_MODULES: DataModule[] = [
         id: 'health',
         label: 'Health',
         blurb: 'Heart rate, stress and breathing.',
-        heading: { subject: 'heart rate', rest: 'and stress' },
+        heading: { subject: 'Heart rate', rest: 'and stress' },
         table: 'health_readings',
         icon: 'heartbeat',
         href: 'health/explore',

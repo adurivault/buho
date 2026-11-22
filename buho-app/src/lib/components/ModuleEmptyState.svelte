@@ -1,6 +1,5 @@
 <script lang="ts">
     import { resolve } from '$app/paths';
-    import Lock from '@lucide/svelte/icons/lock';
     import CirclePlay from '@lucide/svelte/icons/circle-play';
     import Icon from '#lib/components/Icon.svelte';
     import NetworkIcon from '#lib/components/NetworkIcon.svelte';
@@ -73,7 +72,7 @@
 <div class="welcome">
     <div class="column">
         <h2>
-            Your <span class="subject">{module.heading.subject}</span>
+            <span class="subject">{module.heading.subject}</span>
             {module.heading.rest ?? ''}
         </h2>
         <p class="summary">{module.blurb}</p>
@@ -82,21 +81,21 @@
             <DropZone surface="module" expected={only?.id} title={dropTitle} {pickTitle} {hint} />
         </div>
 
-        <!-- The promise, where the file goes. -->
+        <!-- The promise, where the file goes, and the page that explains it. -->
         <p class="safe">
-            <span class="lock" aria-hidden="true"><Lock size={14} strokeWidth={2} /></span>
-            Read in this tab. Nothing is uploaded, nothing is kept.
+            Read in this tab, never uploaded.
+            <a href="{resolve('faq')}#privacy">More in the FAQ</a>
         </p>
 
         <div class="feeds">
             {#if only}
                 <p>
-                    No file yet? Ask
-                    <a href={resolve('/sources/[source]', { source: only.id })}>{only.label}</a>
-                    for it. It takes {only.delay.toLowerCase()}.
+                    Request the export from
+                    <a href={resolve('/sources/[source]', { source: only.id })}>{only.label}</a>. It
+                    takes {only.delay.toLowerCase()}.
                 </p>
             {:else}
-                <p>No file yet? It comes from one of these:</p>
+                <p>Request the export from:</p>
                 <ul>
                     {#each feeds as source (source.id)}
                         <li>
@@ -116,15 +115,12 @@
         </div>
 
         {#if module.hasDemo}
-            <p class="demo-row">
-                <button class="demo" type="button" onclick={loadSample} disabled={building}>
-                    <span class="play" aria-hidden="true">
-                        <CirclePlay size={18} strokeWidth={1.75} />
-                    </span>
-                    {building ? 'Building the sample…' : 'Load demo data'}
-                </button>
-                <span class="aside">An invented history, cleared in one click.</span>
-            </p>
+            <button class="demo" type="button" onclick={loadSample} disabled={building}>
+                <span class="play" aria-hidden="true">
+                    <CirclePlay size={18} strokeWidth={1.75} />
+                </span>
+                {building ? 'Building the sample…' : 'Load demo data'}
+            </button>
         {/if}
     </div>
 </div>
@@ -175,17 +171,15 @@
     }
 
     .safe {
-        display: flex;
-        align-items: center;
-        gap: 0.45rem;
         margin: 0.75rem 0 0;
         font-size: var(--text-small);
         color: hsl(var(--muted-foreground));
     }
 
-    .lock {
-        display: flex;
-        color: hsl(var(--owl));
+    .safe a {
+        color: hsl(var(--foreground));
+        text-decoration: underline;
+        text-underline-offset: 3px;
     }
 
     .feeds {
@@ -242,15 +236,9 @@
         font-size: var(--text-label);
     }
 
-    .demo-row {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 0.5rem 0.75rem;
-        margin: 1.5rem 0 0;
-    }
-
     .demo {
+        align-self: flex-start;
+        margin-top: 1.5rem;
         display: inline-flex;
         align-items: center;
         gap: 0.55rem;
@@ -277,10 +265,5 @@
     .play {
         display: flex;
         color: var(--module-accent);
-    }
-
-    .aside {
-        font-size: var(--text-small);
-        color: hsl(var(--muted-foreground));
     }
 </style>
