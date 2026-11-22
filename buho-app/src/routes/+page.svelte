@@ -138,7 +138,7 @@
 
 <Seo
     title="Buho — visualize your Spotify, Google, WhatsApp and Garmin exports"
-    description="Drop an export from a service you already use and explore your listening, locations, messages, activity and steps. Everything is read and charted in this tab: nothing is uploaded, and nothing is stored."
+    description="Drop an export from a service you already use and explore your listening, locations, messages, activity and steps. Everything is read and charted in your browser: nothing is uploaded, and nothing is stored."
     jsonLd={landingLd}
 />
 

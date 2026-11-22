@@ -45,7 +45,7 @@
         expected,
         title = 'Drop your export here',
         pickTitle = 'Pick your export',
-        hint = 'The .zip as it arrived, the unzipped folder, or loose files. Buho works out which export it is, so you never have to say — and reads it here, in this tab, without uploading any of it.',
+        hint = 'The .zip as it arrived, the unzipped folder, or loose files. Buho works out which export it is, so you never have to say — and reads it locally, in your browser, without uploading any of it.',
     }: Props = $props();
 
     let dragging = $state(false);

@@ -54,7 +54,7 @@ describe('ModuleEmptyState', () => {
     it('says, where the file goes, that it stays in the tab, and links the FAQ', () => {
         render(ModuleEmptyState, { props: { module: moduleById('health') } });
 
-        expect(screen.getByText(/Read in this tab, never uploaded/)).toBeInTheDocument();
+        expect(screen.getByText(/Read in your browser, never uploaded/)).toBeInTheDocument();
         const faq = screen.getByRole('link', { name: 'More in the FAQ' });
         expect(faq.getAttribute('href')).toMatch(/\/faq#privacy$/);
     });

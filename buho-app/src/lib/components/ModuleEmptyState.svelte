@@ -83,7 +83,7 @@
 
         <!-- The promise, where the file goes, and the page that explains it. -->
         <p class="safe">
-            Read in this tab, never uploaded.
+            Read in your browser, never uploaded.
             <a href="{resolve('faq')}#privacy">More in the FAQ</a>
         </p>
 

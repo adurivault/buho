@@ -61,7 +61,7 @@
             one dataset can be fed by several exports. Here is the whole map.
         </p>
         <p class="promise">
-            All of it happens in this tab. Your files are never uploaded.
+            All of it happens in your browser. Your files are never uploaded.
             <a href="{resolve('faq')}#verify">How to check</a>
         </p>
     </header>
