@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { generateTimeline } from './places';
-import { HOME, lifeDays } from './life';
+import { buildAgenda } from './agenda';
 import { parseTimelineData } from '#lib/data/sources/googleTimeline/parse.ts';
 import { haversineMeters } from '#lib/data/geo/haversine.ts';
 import { moduleById } from '#lib/data/modules.ts';
@@ -11,19 +11,22 @@ import { moduleById } from '#lib/data/modules.ts';
  */
 
 const UNTIL = new Date('2026-06-30');
-const entries = generateTimeline({ until: UNTIL });
+const agenda = buildAgenda({ until: UNTIL });
+const entries = generateTimeline({ until: UNTIL, agenda });
 const segments = parseTimelineData(entries);
-const days = new Map(lifeDays({ until: UNTIL }).map((day) => [day.date, day]));
+const days = new Map(agenda.days.map((day) => [day.date, day]));
 
 const stays = segments.filter((s) => s.segmentType === 'stationary');
+const moving = segments.filter((s) => s.segmentType === 'moving');
+const PARIS = { lat: 48.8566, lon: 2.3522 };
 const km = (a: { lat: number; lon: number }, b: { lat: number; lon: number }) =>
     haversineMeters(a, b) / 1000;
 
 describe('the location sample goes through the Timeline parser', () => {
-    it('yields both stays and moves, every day of three years', () => {
-        expect(stays.length).toBeGreaterThan(3_000);
-        expect(segments.some((s) => s.segmentType === 'moving')).toBe(true);
-        expect(new Set(segments.map((s) => s.date)).size).toBeGreaterThan(1_090);
+    it('yields stays and moves, nearly every day of three years', () => {
+        expect(stays.length).toBeGreaterThan(5_000);
+        expect(moving.length).toBeGreaterThan(30_000);
+        expect(new Set(segments.map((s) => s.date)).size).toBeGreaterThan(1_050);
     });
 
     it('never has two stays at once', () => {
@@ -38,34 +41,80 @@ describe('the location sample goes through the Timeline parser', () => {
         }
     });
 
+    /** A night at home is one visit across midnight, not two cut at it. */
+    it('does not cut the night at midnight', () => {
+        const atMidnight = stays.filter((s) => s.timestamp.slice(11, 16) === '00:00');
+        expect(atMidnight.length).toBeLessThan(days.size * 0.05);
+    });
+
     it('declares the module it fills', () => {
         expect(moduleById('positions').hasDemo).toBe(true);
     });
 });
 
+describe('the journeys are drawn along the way', () => {
+    /** Consecutive points of a journey are close: a path, not a jump. */
+    it('samples a journey in town densely', () => {
+        const gaps: number[] = [];
+        for (let i = 1; i < moving.length; i += 1) {
+            const a = moving[i - 1];
+            const b = moving[i];
+            if (km(a, PARIS) < 8 && km(b, PARIS) < 8 && a.endTimestamp === b.timestamp) {
+                gaps.push(km(a, b) * 1000);
+            }
+        }
+        gaps.sort((x, y) => x - y);
+        expect(gaps.length).toBeGreaterThan(10_000);
+        expect(gaps[Math.floor(gaps.length / 2)]).toBeLessThan(150);
+    });
+
+    /** Trains and motorways bend; only a plane flies straight. */
+    it('never jumps across the country in one stride', () => {
+        let longest = 0;
+        for (let i = 1; i < moving.length; i += 1) {
+            const a = moving[i - 1];
+            const b = moving[i];
+            if (a.endTimestamp === b.timestamp) longest = Math.max(longest, km(a, b));
+        }
+        expect(longest).toBeLessThan(60);
+    });
+});
+
 describe('the places follow the life', () => {
-    it('spends the workday at the office and the night at home', () => {
+    it('spends office days at the office', () => {
         const work = stays.filter((s) => days.get(s.date)?.kind === 'work');
-        expect(work.some((s) => s.semanticType === 'Work')).toBe(true);
-        const nights = work.filter((s) => s.timestamp.slice(11, 13) === '00');
-        const atHome = nights.filter((s) => s.semanticType === 'Home');
-        expect(atHome.length / nights.length).toBeGreaterThan(0.9);
+        const atWork = work.filter((s) => s.semanticType === 'Work');
+        expect(atWork.length).toBeGreaterThan(days.size * 0.2);
+    });
+
+    it('sleeps at home on an ordinary night', () => {
+        const ordinary = [...days.values()].filter(
+            (d) => !d.trip && !d.late && !d.untracked && d.kind !== 'sick'
+        );
+        let home = 0;
+        let counted = 0;
+        for (const day of ordinary) {
+            const night = `${day.date} 04:00:00`;
+            const stay = stays.find((s) => s.timestamp <= night && s.endTimestamp >= night);
+            if (!stay) continue;
+            counted += 1;
+            if (stay.semanticType === 'Home') home += 1;
+        }
+        expect(counted).toBeGreaterThan(ordinary.length * 0.8);
+        expect(home / counted).toBeGreaterThan(0.95);
+    });
+
+    it('moves house halfway through', () => {
+        const homes = new Set(stays.filter((s) => s.semanticType === 'Home').map((s) => s.placeId));
+        expect(homes.size).toBe(2);
     });
 
     it('goes where the holidays go', () => {
         const away = stays.filter((s) => {
             const day = days.get(s.date);
-            return day?.kind === 'holiday' && day.trip && day.date !== day.trip.from;
+            return day?.trip && day.date !== day.trip.from && day.date !== day.trip.to;
         });
-        const near = away.filter((s) => {
-            const trip = days.get(s.date)!.trip!;
-            return km(s, trip) < 10;
-        });
-        expect(near.length / away.length).toBeGreaterThan(0.8);
-    });
-
-    it('stays in town otherwise', () => {
-        const ordinary = stays.filter((s) => days.get(s.date)?.kind === 'work');
-        expect(ordinary.every((s) => km(s, HOME) < 15)).toBe(true);
+        const there = away.filter((s) => km(s, days.get(s.date)!.trip!) < 15);
+        expect(there.length / away.length).toBeGreaterThan(0.85);
     });
 });

@@ -1,6 +1,8 @@
 import type { RawMyActivityEntry } from '#lib/types/googleActivity.ts';
 import { DEMO_ARTISTS } from './catalog';
-import { atMinute, HOME, lifeDays, type LifeDay, type LifeOptions } from './life';
+import ROUTES from './routes.json';
+import { buildAgenda, instant, type Agenda, type Move, type Stay } from './agenda';
+import { type LifeDay, type LifeOptions } from './life';
 import { Random, zipfWeights } from './random';
 
 /**
@@ -8,270 +10,652 @@ import { Random, zipfWeights } from './random';
  * files of a Google Takeout, entry by entry, for the parser to read like any
  * other.
  *
- * It follows the shared calendar. The trips are searched for in the weeks
- * before them and mapped while they last, the running videos start when the
- * running does, a cold fills an afternoon with YouTube, and the music videos
- * are by the artists the listening sample plays. The channels, videos and
- * queries are invented.
+ * Read off the shared agenda, so it happens where the person is: YouTube in
+ * the evening at home, in long autoplay runs on a lazy Sunday or a sick day;
+ * work searches at the office; a Maps lookup before heading out; the trips
+ * searched in the weeks before them and mapped while they last; the move and
+ * the new job searched before they happen; the odd video at three in the
+ * morning. The channels, videos and queries are invented, the music videos are
+ * by the artists the listening sample plays.
  */
 
-const OFFICE = { lat: 45.7609, lon: 4.8575 };
+export interface ActivityOptions extends LifeOptions {
+    /** An agenda already built, so several samples can share one. */
+    agenda?: Agenda;
+}
 
 interface Video {
     title: string;
     channel: string;
     id: string;
-    /** Only watched once the running habit has started. */
-    running?: boolean;
+    minutes: number;
+    topic: 'food' | 'science' | 'tech' | 'city' | 'running' | 'travel' | 'music' | 'comedy';
 }
 
-const CHANNELS: Record<string, string[]> = {
-    'Kitchen Notes': [
-        'Five-ingredient risotto',
-        'The proper French omelette',
-        'Sourdough from scratch, day by day',
-        'Knife skills in ten minutes',
-        'Weeknight curry for two',
-        'Why your pasta water matters',
-        'Three sauces every cook should know',
-        'Roasting vegetables properly',
+/** Each channel's title patterns, and what fills them. */
+const CHANNELS: Record<
+    string,
+    { topic: Video['topic']; titles: string[]; fill: string[]; minutes: [number, number] }
+> = {
+    'Kitchen Notes': {
+        topic: 'food',
+        titles: [
+            '{} in fifteen minutes',
+            'The secret to a good {}',
+            '{}, three ways',
+            'I made {} every day for a week',
+            'Why your {} never works',
+        ],
+        fill: [
+            'risotto',
+            'omelette',
+            'sourdough',
+            'ramen',
+            'tarte tatin',
+            'curry',
+            'gnocchi',
+            'shakshuka',
+            'focaccia',
+            'pho',
+            'ratatouille',
+            'dumplings',
+        ],
+        minutes: [8, 22],
+    },
+    'Why Things Work': {
+        topic: 'science',
+        titles: [
+            'How {} actually works',
+            'The strange physics of {}',
+            'Why {} is harder than it looks',
+            'What nobody tells you about {}',
+        ],
+        fill: [
+            'tides',
+            'bicycles',
+            'locks',
+            'noise-cancelling',
+            'ice',
+            'clocks',
+            'batteries',
+            'elevators',
+            'magnets',
+            'rainbows',
+            'GPS',
+            'sourdough starters',
+        ],
+        minutes: [10, 28],
+    },
+    'Byte Size': {
+        topic: 'tech',
+        titles: [
+            '{} explained in ten minutes',
+            'I tried {} for a month',
+            'The {} setup I use every day',
+            'Stop doing {} like this',
+        ],
+        fill: [
+            'home servers',
+            'mechanical keyboards',
+            'backups',
+            'password managers',
+            'Linux',
+            'note-taking',
+            'self-hosting',
+            'Raspberry Pi',
+            'spreadsheets',
+            'e-readers',
+        ],
+        minutes: [9, 24],
+    },
+    'Paris à pied': {
+        topic: 'city',
+        titles: ['{}, end to end', 'A morning in {}', 'The hidden side of {}', '{} at night'],
+        fill: [
+            'the Marais',
+            'Belleville',
+            'the Butte-aux-Cailles',
+            'Montmartre',
+            'the Canal Saint-Martin',
+            'the Latin Quarter',
+            'Batignolles',
+            'the 13th',
+            'the covered passages',
+        ],
+        minutes: [12, 40],
+    },
+    'Run Easy': {
+        topic: 'running',
+        titles: [
+            '{}: what actually matters',
+            'The beginner guide to {}',
+            'I got {} wrong for years',
+            '{} without getting hurt',
+        ],
+        fill: [
+            'easy runs',
+            'half marathon training',
+            'running cadence',
+            'interval sessions',
+            'running shoes',
+            'tapering',
+            'long runs',
+            'race day nutrition',
+            'shin splints',
+        ],
+        minutes: [8, 20],
+    },
+    'Slow Travel': {
+        topic: 'travel',
+        titles: ['{} in 48 hours', 'Hidden {}', 'Where locals eat in {}', 'Is {} worth it?'],
+        fill: [
+            'Marseille',
+            'Rome',
+            'Barcelona',
+            'Biarritz',
+            'Quiberon',
+            'Annecy',
+            'Lisbon',
+            'Naples',
+        ],
+        minutes: [12, 30],
+    },
+    'Late Desk': {
+        topic: 'comedy',
+        titles: [
+            'Monologue: {}',
+            '{} — the full sketch',
+            'The best of {}',
+            'Audience questions: {}',
+        ],
+        fill: [
+            'Monday',
+            'the weather',
+            'the commute',
+            'airports',
+            'flat hunting',
+            'group chats',
+            'the gym',
+            'holidays',
+            'meetings',
+        ],
+        minutes: [5, 14],
+    },
+};
+
+/** Searches made at work, one set per job. */
+const WORK_QUERIES = {
+    A: [
+        'brand guidelines template',
+        'campaign kpi benchmark',
+        'google slides master layout',
+        'press release format',
+        'newsletter open rate average',
+        'canva export pdf print',
+        'linkedin post best time',
+        'agency pitch deck examples',
+        'translate briefing english',
+        'excel pivot table dates',
     ],
-    'Why Things Work': [
-        'How tides work',
-        'Why the sky turns red at dusk',
-        'How a lock actually opens',
-        'The physics of a bicycle',
-        'Where the moon came from',
-        'How noise-cancelling works',
-        'Why ice floats',
-    ],
-    'Byte Size': [
-        'Your first home server',
-        'Mechanical keyboards, explained',
-        'Backups you will actually keep',
-        'How the internet reaches your flat',
-        'Three tools I use every day',
-    ],
-    'City Walks': [
-        'Lyon traboules, end to end',
-        'A morning on the Croix-Rousse',
-        'The Saône at night',
-        'Old Lyon in the rain',
+    B: [
+        'css grid gap',
+        'postgres index on expression',
+        'typescript satisfies operator',
+        'git rebase onto',
+        'docker compose healthcheck',
+        'regex lookbehind javascript',
+        'svelte 5 runes effect',
+        'http 429 retry after',
+        'duckdb window function',
+        'rust lifetime elision',
+        'figma auto layout wrap',
+        'jwt refresh token rotation',
     ],
 };
 
-const RUNNING = [
-    'Half marathon plan, week by week',
-    'How to breathe when you run',
-    'Easy runs: slower than you think',
-    'Running shoes, what actually matters',
-    'Stretching after a long run',
-    'Hills without suffering',
+const HOME_QUERIES = [
+    'weather paris',
+    'weather paris',
+    'weather paris',
+    'what to cook tonight',
+    'cinema paris showtimes',
+    'pharmacy open sunday paris',
+    'how long to boil an egg',
+    'ratp traffic',
+    'velib station near me',
+    'paris events this weekend',
+    'football results',
+    'exchange rate euro pound',
+    'opening hours monoprix',
+    'recipe {}',
+    'translate {}',
+    '{} meaning',
 ];
 
-/** Everyday searches, with a weight for how often they come back. */
-const SEARCHES: [string, number][] = [
-    ['weather lyon', 8],
-    ['tcl metro times', 3],
-    ['what to cook tonight', 3],
-    ['cinema lyon showtimes', 2],
-    ['pharmacy open sunday lyon', 1],
-    ['how long to boil an egg', 1],
-    ['exchange rate euro pound', 1],
-    ['bike repair croix rousse', 1],
-    ['lyon events this weekend', 2],
-    ['best ramen lyon', 1],
-    ['translate dépannage', 1],
-    ['football results', 2],
-];
+const PLACE_NAMES: Record<string, string> = {
+    'demo-louvre': 'Musée du Louvre',
+    'demo-orsay': "Musée d'Orsay",
+    'demo-pompidou': 'Centre Pompidou',
+    'demo-market': "Marché d'Aligre",
+    'demo-cinemaA': 'MK2 Quai de Seine',
+    'demo-cinemaB': 'MK2 Bibliothèque',
+    'demo-vincennes': 'Bois de Vincennes',
+    'demo-luxembourg': 'Jardin du Luxembourg',
+    'demo-franchard': 'Gorges de Franchard',
+    'demo-gareDeLyon': 'Gare de Lyon',
+    'demo-montparnasse': 'Gare Montparnasse',
+    'demo-orly': 'Paris Orly Airport',
+    'demo-pigalle': 'Pigalle',
+    'demo-belleville': 'Belleville',
+    'demo-montparnasseFriends': 'Rue Daguerre',
+    'demo-barA': 'bars Oberkampf',
+    'demo-barB': 'bars Butte-aux-Cailles',
+    'demo-lunchA': 'restaurants Opéra',
+    'demo-lunchB': 'restaurants Austerlitz',
+};
 
-const RUN_SEARCHES = [
-    '10k training plan',
-    'running cadence',
-    'lyon half marathon date',
-    'shin splints',
-];
-const SICK_SEARCHES = ['fever how many days', 'sore throat remedy', 'is it a cold or flu'];
+/** Where each named place is, for the Maps lookups made from home. */
+const PLACE_COORDS: Record<string, [number, number]> = Object.fromEntries(
+    Object.entries(ROUTES.places).map(([key, at]) => [`demo-${key}`, at as [number, number]])
+);
 
-const MAPS_LYON: [string, { lat: number; lon: number }][] = [
-    ['Gare Part-Dieu', { lat: 45.7606, lon: 4.8596 }],
-    ["Parc de la Tête d'Or", { lat: 45.7772, lon: 4.855 }],
-    ['Musée des Confluences', { lat: 45.7326, lon: 4.8183 }],
-    ['Halles de Lyon Paul Bocuse', { lat: 45.7633, lon: 4.8506 }],
-    ['Fourvière', { lat: 45.7622, lon: 4.8222 }],
-];
+const SIGHTS: Record<string, string[]> = {
+    marseille: [
+        '',
+        'Gare Saint-Charles',
+        'Vieux-Port',
+        'Notre-Dame de la Garde',
+        'Vallon des Auffes',
+        'MuCEM',
+        'Le Panier',
+        'Cours Julien',
+    ],
+    rome: [
+        '',
+        'Colosseum',
+        'Roman Forum',
+        'Pantheon',
+        'Piazza Navona',
+        'Trevi Fountain',
+        'Spanish Steps',
+        'Trastevere',
+    ],
+    barcelona: [
+        '',
+        'Sagrada Família',
+        'Passeig de Gràcia',
+        'Barri Gòtic',
+        'El Born',
+        'Barceloneta',
+        'Montjuïc',
+    ],
+    biarritz: [
+        '',
+        'Grande Plage',
+        'Rocher de la Vierge',
+        'Port des Pêcheurs',
+        'Côte des Basques',
+        'Phare de Biarritz',
+    ],
+    quiberon: ['', 'Port Maria', 'Côte Sauvage', 'Pointe du Percho', 'Beg Rohu'],
+    annecy: ['', 'Vieille ville', 'Le Pâquier', 'Pont des Amours', 'Imperial Palace'],
+};
 
-/** Every video the person might watch, the music ones from the listening sample's artists. */
+/** Every video the person might watch. */
 function videoCatalog(random: Random): Video[] {
     let next = 0;
     const id = () => `demo${(next++).toString(36).padStart(6, '0')}`;
     const videos: Video[] = [];
 
-    for (const [channel, titles] of Object.entries(CHANNELS)) {
-        for (const title of titles) videos.push({ title, channel, id: id() });
+    for (const [channel, { topic, titles, fill, minutes }] of Object.entries(CHANNELS)) {
+        for (const subject of fill) {
+            for (const title of random
+                .shuffle([...titles])
+                .slice(0, random.int(2, titles.length))) {
+                videos.push({
+                    title: title.replace('{}', subject),
+                    channel,
+                    id: id(),
+                    topic,
+                    minutes: random.range(...minutes),
+                });
+            }
+        }
+        // A numbered series, which gets watched in order.
+        for (let episode = 1; episode <= random.int(12, 30); episode += 1) {
+            videos.push({
+                title: `${channel} weekly, episode ${episode}`,
+                channel,
+                id: id(),
+                topic,
+                minutes: random.range(...minutes),
+            });
+        }
     }
-    for (const title of RUNNING)
-        videos.push({ title, channel: 'Run Easy', id: id(), running: true });
-    for (const artist of random.shuffle([...DEMO_ARTISTS]).slice(0, 30)) {
+    for (const artist of random.shuffle([...DEMO_ARTISTS]).slice(0, 60)) {
+        for (const album of artist.albums) {
+            videos.push({
+                title: `${artist.name} – ${album} (full album)`,
+                channel: artist.name,
+                id: id(),
+                topic: 'music',
+                minutes: random.range(35, 60),
+            });
+        }
         videos.push({
-            title: `${artist.name} – ${random.pick(artist.albums)} (full album)`,
+            title: `${artist.name} – live session`,
             channel: artist.name,
             id: id(),
+            topic: 'music',
+            minutes: random.range(15, 45),
         });
     }
     return random.shuffle(videos);
 }
 
-const channelUrl = (name: string) =>
-    `https://www.youtube.com/channel/demo-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-
+const slug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 const searchUrl = (query: string) =>
     `https://www.google.com/search?q=${encodeURIComponent(query).replace(/%20/g, '+')}`;
+const mapsUrl = (place: string, lat: number, lon: number) =>
+    `https://www.google.com/maps/search/${encodeURIComponent(place)}/@${lat.toFixed(6)},${lon.toFixed(6)},15z`;
 
 /** Where the person was, in the form Takeout attaches to an entry. */
-function locationInfos(at: { lat: number; lon: number }) {
+function locationInfos(lat: number, lon: number) {
     return [
         {
             name: 'At this general area',
-            url: `https://www.google.com/maps/@?api=1&map_action=map&center=${at.lat.toFixed(6)},${at.lon.toFixed(6)}&zoom=12`,
+            url: `https://www.google.com/maps/@?api=1&map_action=map&center=${lat.toFixed(6)},${lon.toFixed(6)}&zoom=12`,
             source: 'From your device',
         },
     ];
 }
 
-/** Every entry of the last three years of the shared life, oldest first. */
-export function generateMyActivity(options: LifeOptions = {}): RawMyActivityEntry[] {
-    const days = lifeDays(options);
+/** Every entry of the shared life, oldest first. */
+export function generateMyActivity(options: ActivityOptions = {}): RawMyActivityEntry[] {
+    const agenda = options.agenda ?? buildAgenda(options);
+    const { days } = agenda;
     const random = new Random((options.seed ?? 20261122) + 3);
     const videos = videoCatalog(random);
-    const weights = zipfWeights(videos.length, 0.9);
-    const searchWeights = SEARCHES.map(([, weight]) => weight);
-    const runningFrom = days.find((day) => day.run)?.date ?? '9999';
-
+    const firstRun = days.find((d) => d.run !== 'none')?.date ?? '9999';
+    const moveDay = days.find((d) => d.phase === 'B')?.date ?? '9999';
+    const hireDay = days.find((d) => d.phase === 'B' && d.kind === 'work')?.date ?? '9999';
     const entries: RawMyActivityEntry[] = [];
-    const at = (day: LifeDay, hour: number) => atMinute(day, hour * 60);
 
-    const watch = (day: LifeDay, hour: number) => {
-        let video = videos[random.weightedIndex(weights)];
-        if (video.running && day.date < runningFrom) video = videos[random.weightedIndex(weights)];
-        if (video.running && day.date < runningFrom) return;
+    const dayOf = (minute: number) => days[Math.min(days.length - 1, Math.floor(minute / 1440))];
+    const iso = (minute: number) => instant(agenda, minute).toISOString();
+
+    // What gets watched shifts with the life: running once it starts, travel
+    // before a trip, city walks around the move, comfort viewing when ill.
+    const topicWeight = (video: Video, day: LifeDay) => {
+        if (video.topic === 'running') return day.date >= firstRun ? 3 : 0.05;
+        if (video.topic === 'travel') return upcomingTrip(day) ? 6 : 0.4;
+        if (video.topic === 'city') return Math.abs(daysBetween(day.date, moveDay)) < 60 ? 4 : 0.8;
+        if (video.topic === 'comedy') return day.kind === 'sick' ? 5 : 1;
+        if (video.topic === 'tech') return day.phase === 'B' ? 1.6 : 0.6;
+        return 1;
+    };
+    const popularity = zipfWeights(videos.length, 0.8);
+    const byChannel = new Map<string, Video[]>();
+    for (const video of videos) {
+        byChannel.set(video.channel, [...(byChannel.get(video.channel) ?? []), video]);
+    }
+
+    // The trip each day is looking forward to, four weeks ahead at most.
+    const ahead = new Map<LifeDay, LifeDay['trip']>();
+    let nextTrip: LifeDay['trip'] = null;
+    let nextStart = '';
+    for (let i = days.length - 1; i >= 0; i -= 1) {
+        const day = days[i];
+        if (day.trip && day.trip.from === day.date) {
+            nextTrip = day.trip;
+            nextStart = day.date;
+        }
+        const wait = nextTrip ? daysBetween(nextStart, day.date) : Infinity;
+        ahead.set(day, wait > 0 && wait <= 28 ? nextTrip : null);
+    }
+    const upcomingTrip = (day: LifeDay) => ahead.get(day) ?? null;
+
+    function daysBetween(a: string, b: string) {
+        return (Date.parse(a) - Date.parse(b)) / 86_400_000;
+    }
+
+    const watch = (minute: number, video: Video) =>
         entries.push({
             header: 'YouTube',
             title: `Watched ${video.title}`,
             titleUrl: `https://www.youtube.com/watch?v=${video.id}`,
-            subtitles: [{ name: video.channel, url: channelUrl(video.channel) }],
-            time: at(day, hour).toISOString(),
+            subtitles: [
+                {
+                    name: video.channel,
+                    url: `https://www.youtube.com/channel/demo-${slug(video.channel)}`,
+                },
+            ],
+            time: iso(minute),
             products: ['YouTube'],
         });
-    };
 
-    const search = (day: LifeDay, hour: number, query: string, where = HOME) => {
+    const search = (minute: number, query: string, lat: number, lon: number) =>
         entries.push({
             header: 'Search',
             title: `Searched for ${query}`,
             titleUrl: searchUrl(query),
-            time: at(day, hour).toISOString(),
+            time: iso(minute),
             products: ['Search'],
-            locationInfos: locationInfos(where),
+            locationInfos: locationInfos(lat, lon),
         });
-    };
 
-    const map = (
-        day: LifeDay,
-        hour: number,
-        place: string,
-        coords: { lat: number; lon: number }
-    ) => {
+    const map = (minute: number, place: string, lat: number, lon: number, directions = false) =>
         entries.push({
             header: 'Maps',
-            title: `Searched for ${place}`,
-            titleUrl: `https://www.google.com/maps/search/${encodeURIComponent(place)}/@${coords.lat.toFixed(6)},${coords.lon.toFixed(6)},15z`,
-            time: at(day, hour).toISOString(),
+            title: directions ? `Directions to ${place}` : `Searched for ${place}`,
+            titleUrl: mapsUrl(place, lat, lon),
+            time: iso(minute),
             products: ['Maps'],
         });
-    };
 
-    // The trips, so each one can be planned in the weeks before it.
-    const upcoming = new Map<string, NonNullable<LifeDay['trip']>>();
-    for (const day of days) if (day.trip) upcoming.set(day.trip.from, day.trip);
-
-    for (let index = 0; index < days.length; index += 1) {
-        const day = days[index];
-        const evening = () => random.range(19.5, 23.8);
-
-        // Planning: a trip starting in the next three weeks gets searched for.
-        for (let ahead = 1; ahead <= 21; ahead += 1) {
-            const trip = upcoming.get(days[index + ahead]?.date ?? '');
-            if (!trip || !random.bool(0.12)) continue;
-            const query = random.pick([
-                `train lyon ${trip.name.toLowerCase()}`,
-                `${trip.name.toLowerCase()} things to do`,
-                `hotel ${trip.name.toLowerCase()}`,
-                `${trip.name.toLowerCase()} weather`,
-            ]);
-            search(day, evening(), query);
-        }
-
-        switch (day.kind) {
-            case 'work': {
-                if (random.bool(0.7)) search(day, random.normal(7.4, 0.2), 'weather lyon');
-                for (let i = random.int(1, 5); i > 0; i -= 1) {
-                    const [query] = SEARCHES[random.weightedIndex(searchWeights)];
-                    search(day, random.range(9, 18), query, OFFICE);
-                }
-                if (random.bool(0.15)) {
-                    const [place, coords] = random.pick(MAPS_LYON);
-                    map(day, random.range(12, 19), place, coords);
-                }
-                for (let i = random.int(2, 9); i > 0; i -= 1) watch(day, evening());
-                break;
-            }
-            case 'weekend': {
-                for (let i = random.int(2, 6); i > 0; i -= 1) {
-                    const [query] = SEARCHES[random.weightedIndex(searchWeights)];
-                    search(day, random.range(9.5, 22), query);
-                }
-                if (random.bool(0.4)) {
-                    const [place, coords] = random.pick(MAPS_LYON);
-                    map(day, random.range(10, 16), place, coords);
-                }
-                for (let i = random.int(4, 14); i > 0; i -= 1) watch(day, random.range(10, 23.8));
-                break;
-            }
-            case 'holiday': {
-                const trip = day.trip!;
-                const where = { lat: trip.lat, lon: trip.lon };
-                for (let i = random.int(2, 6); i > 0; i -= 1) {
-                    const near = {
-                        lat: trip.lat + random.normal(0, 0.012),
-                        lon: trip.lon + random.normal(0, 0.016),
-                    };
-                    const place = random.pick([
-                        'restaurant',
-                        'museum',
-                        'beach',
-                        'bakery',
-                        'old town',
-                        'viewpoint',
-                    ]);
-                    map(day, random.range(9.5, 21), `${place} ${trip.name}`, near);
-                }
-                if (random.bool(0.5))
-                    search(day, random.range(8, 10), `${trip.name.toLowerCase()} weather`, where);
-                for (let i = random.int(0, 2); i > 0; i -= 1) watch(day, random.range(22, 23.8));
-                break;
-            }
-            case 'sick': {
-                search(day, random.range(9, 12), random.pick(SICK_SEARCHES));
-                for (let i = random.int(10, 18); i > 0; i -= 1) watch(day, random.range(10, 23.5));
-                break;
-            }
-        }
-
-        if (day.date >= runningFrom && random.bool(0.08)) {
-            search(day, evening(), random.pick(RUN_SEARCHES));
+    /** An autoplay run: one video after another, until the evening ends. */
+    function session(from: number, to: number, day: LifeDay) {
+        let minute = from;
+        const weights = videos.map((v, i) => popularity[i] * topicWeight(v, day));
+        let current = videos[random.weightedIndex(weights)];
+        while (minute < to) {
+            watch(minute, current);
+            minute += current.minutes * random.range(0.3, 1) + random.range(0.2, 2);
+            // Autoplay stays on the channel more often than not.
+            current = random.bool(0.55)
+                ? random.pick(byChannel.get(current.channel)!)
+                : videos[random.weightedIndex(weights)];
         }
     }
+
+    function stay(episode: Stay) {
+        const day = dayOf(episode.from);
+        const hours = (episode.to - episode.from) / 60;
+        const { lat, lon } = episode.place;
+        const between = (from: number, to: number) => random.range(from, Math.max(from, to));
+
+        switch (episode.activity) {
+            case 'home': {
+                const lazy =
+                    day.kind === 'sick'
+                        ? 3
+                        : day.kind === 'weekend' || day.kind === 'off'
+                          ? 1.6
+                          : 1;
+                // On a remote day the working hours are spent working.
+                const workHours = day.kind === 'remote' ? hours * 0.6 : 0;
+                for (let k = Math.round(workHours * random.range(3, 6)); k > 0; k -= 1) {
+                    search(
+                        between(episode.from, episode.to),
+                        random.pick(WORK_QUERIES[day.phase]),
+                        lat,
+                        lon
+                    );
+                }
+                const sessions = Math.round((hours / 1.6) * lazy * random.range(0.6, 1.5));
+                for (let k = 0; k < sessions; k += 1) {
+                    const from = between(episode.from, episode.to - 20);
+                    const length = Math.min(episode.to - from, random.range(25, 150) * lazy);
+                    session(from, from + length, day);
+                }
+                for (let k = Math.round(hours * random.range(1, 2.6)); k > 0; k -= 1) {
+                    const query = random
+                        .pick(HOME_QUERIES)
+                        .replace('{}', random.pick(CHANNELS['Kitchen Notes'].fill));
+                    search(between(episode.from, episode.to), query, lat, lon);
+                }
+                // Browsing the map for somewhere to go.
+                for (let k = Math.round(hours * random.range(0, 0.5)); k > 0; k -= 1) {
+                    const [id, name] = random.pick(Object.entries(PLACE_NAMES));
+                    const spot = PLACE_COORDS[id];
+                    if (spot) map(between(episode.from, episode.to), name, spot[0], spot[1]);
+                }
+                break;
+            }
+            case 'work': {
+                for (let k = Math.round(hours * random.range(4, 8)); k > 0; k -= 1) {
+                    search(
+                        between(episode.from, episode.to),
+                        random.pick(WORK_QUERIES[day.phase]),
+                        lat,
+                        lon
+                    );
+                }
+                break;
+            }
+            case 'sleep': {
+                // Now and then a night without sleep, and a phone.
+                if (hours > 4 && random.bool(0.025)) {
+                    const from = episode.from + random.range(120, 240);
+                    session(from, from + random.range(20, 70), day);
+                }
+                break;
+            }
+            case 'sight': {
+                const trip = day.trip;
+                const index = Number(episode.place.id.split('-').pop());
+                if (trip && SIGHTS[trip.city]?.[index]) {
+                    map(episode.from - random.range(5, 30), SIGHTS[trip.city][index], lat, lon);
+                }
+                if (random.bool(0.5))
+                    search(
+                        between(episode.from, episode.to),
+                        `${random.pick(['restaurant', 'gelato', 'café', 'museum'])} near me`,
+                        lat,
+                        lon
+                    );
+                break;
+            }
+            default: {
+                for (let k = Math.round(hours * random.range(0, 1.2)); k > 0; k -= 1) {
+                    search(
+                        between(episode.from, episode.to),
+                        random.pick(HOME_QUERIES).replace('{}', 'merci'),
+                        lat,
+                        lon
+                    );
+                }
+            }
+        }
+    }
+
+    function move(episode: Move, target: Agenda['episodes'][number] | undefined) {
+        const end = episode.path[episode.path.length - 1];
+        const name = target?.type === 'stay' ? PLACE_NAMES[target.place.id] : undefined;
+        // Looking up where to go, a little before going.
+        if (name && random.bool(0.85)) {
+            map(episode.from - random.range(3, 40), name, end[0], end[1], random.bool(0.6));
+        }
+        if (episode.mode === 'train' || episode.mode === 'plane') {
+            search(
+                episode.from - random.range(30, 120),
+                episode.mode === 'train' ? 'sncf train status' : 'orly departures',
+                end[0],
+                end[1]
+            );
+        }
+    }
+
+    agenda.episodes.forEach((episode, index) => {
+        if (episode.type === 'stay') stay(episode);
+        else move(episode, agenda.episodes[index + 1]);
+    });
+
+    // What a day was looking forward to: a trip, the move, the new job, the race.
+    days.forEach((day, index) => {
+        const evening = index * 1440 + random.range(19, 23.5) * 60;
+        const trip = upcomingTrip(day);
+        if (trip && random.bool(0.6)) {
+            const name = trip.name.toLowerCase();
+            const query = random.pick([
+                trip.mode === 'train'
+                    ? `train paris ${name}`
+                    : trip.mode === 'plane'
+                      ? `flights paris ${name}`
+                      : `paris ${name} drive time`,
+                `${name} things to do`,
+                `hotel ${name}`,
+                `${name} weather`,
+                `${name} best restaurants`,
+            ]);
+            search(evening, query, 48.85, 2.35);
+        }
+        const toMove = daysBetween(moveDay, day.date);
+        if (toMove > 0 && toMove < 50 && random.bool(0.5)) {
+            search(
+                evening,
+                random.pick([
+                    'moving boxes paris',
+                    'apartment butte aux cailles',
+                    'change of address france',
+                    'van rental paris',
+                    'internet box installation',
+                ]),
+                48.85,
+                2.35
+            );
+        }
+        const toHire = daysBetween(hireDay, day.date);
+        if (toHire > 0 && toHire < 70 && random.bool(0.4)) {
+            search(
+                evening,
+                random.pick([
+                    'station f startups',
+                    'interview questions engineer',
+                    'notice period france',
+                    'salary negotiation tips',
+                ]),
+                48.85,
+                2.35
+            );
+        }
+        if (day.date >= firstRun && random.bool(0.1)) {
+            search(
+                evening,
+                random.pick([
+                    'half marathon pace calculator',
+                    'running cadence',
+                    'paris half marathon date',
+                    'best running routes paris',
+                    'shin splints',
+                ]),
+                48.83,
+                2.35
+            );
+        }
+        if (day.start.getMonth() === 11 && day.start.getDate() < 22 && random.bool(0.4)) {
+            search(
+                evening,
+                random.pick([
+                    'christmas gift ideas',
+                    'train paris annecy',
+                    'christmas market paris',
+                ]),
+                48.85,
+                2.35
+            );
+        }
+    });
 
     return entries.sort((a, b) => (a.time! < b.time! ? -1 : 1));
 }

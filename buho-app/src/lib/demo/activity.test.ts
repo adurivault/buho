@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { generateMyActivity } from './activity';
-import { lifeDays } from './life';
+import { buildAgenda } from './agenda';
 import { parseActivityEntry } from '#lib/data/sources/googleActivity/parser.ts';
 import { moduleById } from '#lib/data/modules.ts';
 import type { ActivityRow } from '#lib/types/googleActivity.ts';
@@ -11,28 +11,31 @@ import type { ActivityRow } from '#lib/types/googleActivity.ts';
  */
 
 const UNTIL = new Date('2026-06-30');
-const entries = generateMyActivity({ until: UNTIL });
+const agenda = buildAgenda({ until: UNTIL });
+const entries = generateMyActivity({ until: UNTIL, agenda });
 const rows = entries.map(parseActivityEntry);
 const parsed = rows.filter((row): row is ActivityRow => row !== null);
-const life = lifeDays({ until: UNTIL });
+const life = agenda.days;
 const days = new Map(life.map((day) => [day.date, day]));
 
 describe('the activity sample goes through the Takeout parser', () => {
-    it('parses every entry', () => {
+    it('parses every entry, as many as a heavy user leaves', () => {
         expect(parsed.length).toBe(entries.length);
-        expect(parsed.length).toBeGreaterThan(10_000);
+        expect(parsed.length).toBeGreaterThan(80_000);
     });
 
     it('fills YouTube, Search and Maps, with the verbs Takeout uses', () => {
         expect(new Set(parsed.map((r) => r.service))).toEqual(
             new Set(['youtube', 'search', 'maps'])
         );
-        expect(new Set(parsed.map((r) => r.action))).toEqual(new Set(['watched', 'searched']));
+        expect(new Set(parsed.map((r) => r.action))).toEqual(
+            new Set(['watched', 'searched', 'directions'])
+        );
     });
 
     it('keeps where it happened and what was mapped', () => {
-        expect(parsed.filter((r) => r.lat !== null).length).toBeGreaterThan(1_000);
-        expect(parsed.filter((r) => r.placeLat !== null).length).toBeGreaterThan(100);
+        expect(parsed.filter((r) => r.lat !== null).length).toBeGreaterThan(10_000);
+        expect(parsed.filter((r) => r.placeLat !== null).length).toBeGreaterThan(1_000);
     });
 
     it('declares the module it fills', () => {
@@ -54,21 +57,39 @@ describe('the entries follow the life', () => {
         expect(planned.length / trips.length).toBeGreaterThan(0.8);
     });
 
-    it('watches running videos only once the running has started', () => {
-        const firstRun = life.find((day) => day.run)!.date;
-        const running = parsed.filter((r) => r.secondary === 'Run Easy');
-        expect(running.length).toBeGreaterThan(0);
-        expect(running.every((r) => r.date >= firstRun)).toBe(true);
+    it('searches for the move before it happens', () => {
+        const moved = life.find((day) => day.phase === 'B')!.date;
+        const before = parsed.filter(
+            (r) => r.date < moved && /moving boxes|change of address|van rental/.test(r.label)
+        );
+        expect(before.length).toBeGreaterThan(3);
     });
 
-    it('watches more on a sick day than on a workday', () => {
+    it('watches running videos once the running has started', () => {
+        const firstRun = life.find((day) => day.run !== 'none')!.date;
+        const running = parsed.filter((r) => r.secondary === 'Run Easy');
+        const early = running.filter((r) => r.date < firstRun);
+        expect(running.length).toBeGreaterThan(100);
+        expect(early.length / running.length).toBeLessThan(0.15);
+    });
+
+    it('watches more on a sick day than on an office day', () => {
         const watchedOn = (kind: string) => {
-            const dates = life.filter((day) => day.kind === kind).map((day) => day.date);
             const count = parsed.filter(
                 (r) => r.action === 'watched' && days.get(r.date)?.kind === kind
             ).length;
-            return count / dates.length;
+            return count / life.filter((day) => day.kind === kind).length;
         };
         expect(watchedOn('sick')).toBeGreaterThan(watchedOn('work') * 2);
+    });
+
+    it('watches in the evening rather than at the office', () => {
+        const office = parsed.filter((r) => days.get(r.date)?.kind === 'work');
+        const hour = (r: ActivityRow) => Number(r.timestamp.slice(11, 13));
+        const evening = office.filter((r) => r.action === 'watched' && hour(r) >= 19).length;
+        const working = office.filter(
+            (r) => r.action === 'watched' && hour(r) >= 10 && hour(r) < 17
+        ).length;
+        expect(evening).toBeGreaterThan(working * 3);
     });
 });

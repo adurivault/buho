@@ -5,3 +5,4 @@ FRA ADM2: Institut national de l'information géographique et forestière (IGN-F
 FR arrondissements: OpenDataSoft georef-france (IGN/INSEE) — Open Licence / Licence Ouverte
 Cities: GeoNames — CC-BY 4.0
 World regions/countries & oceans: Natural Earth — public domain
+Demo routes (src/lib/demo/routes.json): computed with OSRM from OpenStreetMap data — © OpenStreetMap contributors, ODbL

@@ -1,6 +1,7 @@
 import { FIT_MONITORING, type DecodedFit, type FitMesg } from '#lib/data/formats/fit/decode.ts';
 import { fitSeconds } from '#lib/data/formats/fit/units.ts';
-import { atMinute, lifeDays, type LifeDay, type LifeOptions } from './life';
+import { buildAgenda, type Activity, type Agenda } from './agenda';
+import { atMinute, type LifeDay, type LifeOptions } from './life';
 import { Random } from './random';
 
 /**
@@ -10,96 +11,90 @@ import { Random } from './random';
  * Decoded files rather than packets or readings, so the sample takes the same
  * road as a real export: `stepPacketsFromFiles` differences the cumulative
  * counters and `healthReadingsFromFiles` resolves the offsets and drops the
- * sentinels, exactly as they do for a Garmin archive. A sample that skipped
- * them would be a sample of something the app never shows.
+ * sentinels, exactly as they do for a Garmin archive.
  *
- * The day is planned minute by minute — asleep, sitting, walking, running or
- * off the wrist — and every reading is drawn from that plan, so the steps, the
- * heart rate, the stress and the breathing all tell the same story: the run
- * shows in all four, the cold lifts the resting heart rate, the holiday walks
- * twice as far.
+ * Every minute is read off the shared agenda — asleep, sitting, strolling
+ * round a museum, walking to work, cycling, running, standing in a bar, or off
+ * the wrist — so the steps, the heart rate, the stress and the breathing tell
+ * the same story as the map: the run is the loop round Montsouris, the night
+ * out ends with a walk home at two and a restless night after it.
  */
 
 export interface WatchOptions extends LifeOptions {
     /** How many months back the watch was bought. */
     months?: number;
+    /** An agenda already built, so several samples can share one. */
+    agenda?: Agenda;
 }
 
-type State = 'sleep' | 'rest' | 'walk' | 'run' | 'off';
+const SLEEP = 0;
+const REST = 1;
+const WALK = 2;
+const RUN = 3;
+const BIKE = 4;
+const SEATED = 5;
+const STROLL = 6;
+const BAR = 7;
+const OFF = 8;
 
 /** How often each reading is written, in minutes. */
-const HEART_EVERY = 5;
-const STRESS_EVERY = 10;
-const BREATH_EVERY = 10;
+const HEART_EVERY = 2;
+const STRESS_EVERY = 3;
+const BREATH_EVERY = 4;
 /** The step counters are written at the end of each quarter-hour with movement in it. */
 const COUNTER_EVERY = 15;
 
-const MINUTES = 24 * 60;
+const STAY_STATE: Record<Activity, number> = {
+    sleep: SLEEP,
+    home: REST,
+    work: REST,
+    lunch: REST,
+    friends: REST,
+    bar: BAR,
+    cinema: SEATED,
+    museum: STROLL,
+    market: STROLL,
+    park: STROLL,
+    sight: STROLL,
+};
 
-/** Fill `[from, to)` of the plan, clamped to the day. */
-function fill(plan: State[], from: number, to: number, state: State) {
-    for (let m = Math.max(0, Math.round(from)); m < Math.min(MINUTES, Math.round(to)); m += 1) {
-        plan[m] = state;
+/** What each minute of the agenda was, from `first` on. */
+function minuteStates(agenda: Agenda, first: number, last: number) {
+    const length = last - first;
+    const state = new Uint8Array(length).fill(REST);
+    const effort = new Float32Array(length);
+    const context = new Array<Activity | undefined>(length);
+
+    for (const episode of agenda.episodes) {
+        const from = Math.max(first, Math.round(episode.from));
+        const to = Math.min(last, Math.round(episode.to));
+        if (to <= from) continue;
+        for (let m = from; m < to; m += 1) {
+            const i = m - first;
+            if (episode.type === 'stay') {
+                state[i] = STAY_STATE[episode.activity];
+                context[i] = episode.activity;
+            } else if (episode.mode === 'metro') {
+                // On foot to the platform and from it, standing in between.
+                const t = (m - episode.from) / (episode.to - episode.from);
+                state[i] = t < 0.18 || t > 0.85 ? WALK : SEATED;
+            } else {
+                state[i] =
+                    episode.mode === 'walk'
+                        ? WALK
+                        : episode.mode === 'run'
+                          ? RUN
+                          : episode.mode === 'bike'
+                            ? BIKE
+                            : SEATED;
+                effort[i] = episode.effort ?? 0;
+            }
+        }
     }
+    return { state, effort, context };
 }
 
-/** One day, minute by minute. */
-function planDay(day: LifeDay, random: Random): State[] {
-    const plan: State[] = new Array(MINUTES).fill('rest');
-    const late = day.kind === 'weekend' || day.kind === 'holiday';
-
-    const wake = late ? random.normal(8.6 * 60, 35) : random.normal(7 * 60, 12);
-    const bed = random.normal((late ? 24.1 : 23.3) * 60, 25);
-    fill(plan, 0, wake, 'sleep');
-    fill(plan, bed, MINUTES, 'sleep');
-
-    // The shower, every morning, and the watch on the charger every few days.
-    fill(plan, wake + 10, wake + 30, 'off');
-    if (random.bool(0.25)) {
-        const charge = random.range(19, 21.5) * 60;
-        fill(plan, charge, charge + random.range(45, 90), 'off');
-    }
-
-    const walk = (from: number, minutes: number) => fill(plan, from, from + minutes, 'walk');
-
-    switch (day.kind) {
-        case 'work':
-            walk(random.normal(8.1 * 60, 6), random.range(16, 24));
-            if (random.bool(0.6)) walk(random.normal(12.4 * 60, 10), random.range(10, 25));
-            walk(random.normal(18.1 * 60, 15), random.range(16, 26));
-            for (let i = random.int(0, 3); i > 0; i -= 1) walk(random.range(9.5, 17) * 60, 4);
-            break;
-        case 'weekend':
-            for (let i = random.int(1, 3); i > 0; i -= 1) {
-                walk(random.range(10, 19) * 60, random.range(15, 55));
-            }
-            break;
-        case 'holiday':
-            for (let i = random.int(3, 5); i > 0; i -= 1) {
-                walk(random.range(9.5, 21) * 60, random.range(25, 75));
-            }
-            break;
-        case 'sick':
-            if (random.bool(0.6)) walk(random.range(11, 17) * 60, random.range(6, 14));
-            break;
-    }
-
-    if (day.run) {
-        // Before work on a weekday, a longer one late on a Sunday morning.
-        const sunday = day.weekday === 0;
-        const start = sunday ? random.normal(10 * 60, 20) : wake + random.range(5, 10);
-        const minutes = sunday ? random.range(55, 80) : random.range(30, 45);
-        fill(plan, start, start + minutes, 'run');
-        if (!sunday) fill(plan, start + minutes, start + minutes + 20, 'off');
-    }
-
-    // Some nights the watch stays on the bedside table.
-    if (random.bool(0.06)) fill(plan, bed, MINUTES, 'off');
-
-    return plan;
-}
-
-/** One reading of the step counters, cumulative since local midnight. */
+/** Counters cumulative since local midnight, as the watch keeps them. */
 interface Counters {
     cycles: number;
     activeTime: number;
@@ -109,147 +104,217 @@ interface Counters {
 
 const zero = (): Counters => ({ cycles: 0, activeTime: 0, distance: 0, calories: 0 });
 
-/** The monitoring file of one day. */
-function dayFile(day: LifeDay, random: Random): DecodedFit {
-    const plan = planDay(day, random);
-    const offsetMinutes = -day.start.getTimezoneOffset();
-    const at = (minute: number) => atMinute(day, minute);
-
-    // Resting heart rate: lower as the habit builds, up for a cold, a little
-    // up in winter.
-    const month = day.start.getMonth();
-    const winter = month <= 1 || month === 11 ? 1.5 : 0;
-    const resting = 61 - 7 * day.fitness + (day.kind === 'sick' ? 7 : 0) + winter;
-
-    const monitoring: FitMesg[] = [];
-    const stress: FitMesg[] = [];
-    const breath: FitMesg[] = [];
-
-    const walking = zero();
-    const running = zero();
-    // What each counter read when it was last written: a quarter-hour with no
-    // movement writes nothing, as on the watch.
-    const written = { walking: 0, running: 0 };
-    let walked = 0;
-    let ran = 0;
-    // How hard the heart is still working, so it climbs into a run and settles after.
-    let effort = 0;
-    let load = random.range(0.2, 0.5);
-
-    for (let minute = 0; minute < MINUTES; minute += 1) {
-        const state = plan[minute];
-
-        if (state === 'walk') {
-            const steps = random.normal(day.kind === 'holiday' ? 98 : 108, 8);
-            walking.cycles += steps / 2;
-            walking.activeTime += 60;
-            walking.distance += steps * 0.74;
-            walking.calories += steps * 0.04;
-            walked += 1;
-        } else if (state === 'run') {
-            const steps = random.normal(164, 4);
-            running.cycles += steps / 2;
-            running.activeTime += 60;
-            running.distance += steps * (1.02 + 0.12 * day.fitness);
-            running.calories += steps * 0.065;
-            ran += 1;
-        } else if (state === 'rest' && random.bool(0.04)) {
-            // Pottering: a few steps between the desk and the kitchen.
-            const steps = random.int(8, 40);
-            walking.cycles += steps / 2;
-            walking.activeTime += Math.min(60, steps);
-            walking.distance += steps * 0.7;
-            walking.calories += steps * 0.035;
-        }
-
-        const target = state === 'run' ? 1 : state === 'walk' ? 0.35 : 0;
-        effort += (target - effort) * (target > effort ? 0.35 : 0.12);
-
-        // Stress follows the workday, eases in the evening, and sleeps.
-        const hour = minute / 60;
-        const working = day.kind === 'work' && hour >= 8.5 && hour < 18;
-        const loadTarget = working ? 0.55 : day.kind === 'holiday' ? 0.15 : 0.25;
-        load += (loadTarget - load) * 0.02 + random.normal(0, 0.03);
-        load = Math.min(1, Math.max(0, load));
-
-        const end = minute + 1;
-        if (end % COUNTER_EVERY === 0) {
-            const intensity = ran > 0 ? 6 : walked > 0 ? 3 : 0;
-            for (const [type, counters] of [
-                ['walking', walking],
-                ['running', running],
-            ] as const) {
-                const cycles = Math.round(counters.cycles);
-                if (cycles === written[type]) continue;
-                written[type] = cycles;
-                monitoring.push({
-                    timestamp: at(end),
-                    activityType: type,
-                    cycles,
-                    activeTime: counters.activeTime,
-                    distance: Math.round(counters.distance),
-                    activeCalories: Math.round(counters.calories),
-                    intensity,
-                });
-            }
-            walked = 0;
-            ran = 0;
-        }
-
-        if (state === 'off') continue;
-
-        if (minute % HEART_EVERY === 0) {
-            const awake = state === 'sleep' ? -4 : 10 + 12 * load;
-            const heartRate = resting + awake + effort * (85 + 10 * (1 - day.fitness));
-            monitoring.push({
-                timestamp: at(minute),
-                heartRate: Math.round(random.normal(heartRate, 3)),
-            });
-        }
-
-        if (minute % STRESS_EVERY === 0) {
-            // Garmin cannot read stress while you move, and says so with a
-            // negative value; the importer drops it.
-            const value =
-                effort > 0.2
-                    ? -2
-                    : state === 'sleep'
-                      ? random.normal(12, 4)
-                      : random.normal(15 + 55 * load, 8);
-            stress.push({ stressLevelTime: at(minute), stressLevelValue: Math.round(value) });
-        }
-
-        if (minute % BREATH_EVERY === 0) {
-            const rate = state === 'sleep' ? 12.5 : 14.5 + 18 * effort;
-            breath.push({
-                timestamp: at(minute),
-                respirationRate: Math.round(random.normal(rate, 0.8) * 10) / 10,
-            });
-        }
-    }
-
-    return {
-        fileType: FIT_MONITORING,
-        recordMesgs: [],
-        sessionMesgs: [],
-        activityMesgs: [],
-        monitoringMesgs: monitoring,
-        // Both clocks, so the importer places the day in its own time zone.
-        monitoringInfoMesgs: [
-            { timestamp: day.start, localTimestamp: fitSeconds(day.start) + offsetMinutes * 60 },
-        ],
-        stressLevelMesgs: stress,
-        respirationRateMesgs: breath,
-        monitoringHrDataMesgs: [],
-    };
+function add(counters: Counters, steps: number, stride: number, perStep: number) {
+    counters.cycles += steps / 2;
+    counters.activeTime += Math.min(60, steps * 0.55);
+    counters.distance += steps * stride;
+    counters.calories += steps * perStep;
 }
 
 /** The monitoring files of every day the watch was worn, oldest first. */
 export function generateWatchFiles(options: WatchOptions = {}): DecodedFit[] {
-    const { months = 18, ...life } = options;
-    const days = lifeDays(life);
-    const random = new Random((life.seed ?? 20261122) + 1);
+    const { months = 18, agenda = buildAgenda(options) } = options;
+    const random = new Random((options.seed ?? 20261122) + 1);
+    const { days } = agenda;
 
-    const bought = days.length - Math.round((months * 365.25) / 12);
-    return days.slice(Math.max(0, bought)).map((day) => dayFile(day, random));
+    const bought = Math.max(0, days.length - Math.round((months * 365.25) / 12));
+    const first = bought * 1440;
+    const last = days.length * 1440;
+    const { state, effort, context } = minuteStates(agenda, first, last);
+
+    // Off the wrist: the shower after waking and after a run, the charger
+    // every few evenings, a night on the bedside table now and then.
+    for (let i = 1; i < state.length; i += 1) {
+        const woke = state[i - 1] === SLEEP && state[i] !== SLEEP;
+        const ranOut = state[i - 1] === RUN && state[i] !== RUN;
+        if (woke || ranOut) {
+            const from = i + (woke ? random.int(8, 30) : random.int(2, 10));
+            for (let k = from; k < Math.min(state.length, from + random.int(10, 20)); k += 1) {
+                if (state[k] === REST) state[k] = OFF;
+            }
+        }
+    }
+    for (let d = 0; d < days.length - bought; d += 1) {
+        if (random.bool(0.22)) {
+            const from = d * 1440 + random.int(19 * 60, 22 * 60);
+            for (let k = from; k < Math.min(state.length, from + random.int(40, 100)); k += 1) {
+                if (state[k] === REST) state[k] = OFF;
+            }
+        }
+        if (random.bool(0.05)) {
+            const end = Math.min(state.length, (d + 1) * 1440 + 7 * 60);
+            for (let k = d * 1440 + 22 * 60; k < end; k += 1) {
+                if (state[k] === SLEEP) state[k] = OFF;
+            }
+        }
+    }
+
+    const files: DecodedFit[] = [];
+    // Carried across days: the heart does not reset at midnight.
+    let lag = 0;
+    let load = 0.3;
+    let afterBar = 0;
+
+    for (let d = bought; d < days.length; d += 1) {
+        const day = days[d];
+        if (day.watchless) continue;
+        files.push(dayFile(day, (d - bought) * 1440));
+    }
+    return files;
+
+    function dayFile(day: LifeDay, offset: number): DecodedFit {
+        const offsetMinutes = -day.start.getTimezoneOffset();
+        const at = (minute: number) => atMinute(day, minute);
+
+        // Resting heart rate: lower as the habit builds, up for a cold, a
+        // little up in winter.
+        const month = day.start.getMonth();
+        const winter = month <= 1 || month === 11 ? 1.5 : 0;
+        const resting = 62 - 8 * day.fitness + (day.kind === 'sick' ? 7 : 0) + winter;
+
+        const monitoring: FitMesg[] = [];
+        const stress: FitMesg[] = [];
+        const breath: FitMesg[] = [];
+        const walking = zero();
+        const running = zero();
+        const written = { walking: 0, running: 0 };
+        let moved = 0;
+        let ran = 0;
+
+        for (let minute = 0; minute < 1440; minute += 1) {
+            const i = offset + minute;
+            const s = state[i];
+            const hard = effort[i];
+            const doing = context[i];
+
+            let steps = 0;
+            if (s === WALK) steps = random.normal(day.kind === 'holiday' ? 100 : 108, 9);
+            else if (s === STROLL)
+                steps = random.bool(0.5) ? random.range(35, 95) : random.range(0, 15);
+            else if (s === BAR) steps = random.bool(0.25) ? random.range(10, 45) : 0;
+            else if (s === BIKE) steps = random.range(0, 4);
+            else if (s === REST) {
+                // Pottering: up from the desk, round the kitchen.
+                const chance = doing === 'work' ? 0.07 : doing === 'home' ? 0.04 : 0.02;
+                if (random.bool(chance)) steps = random.range(15, 70);
+            }
+
+            if (s === RUN) {
+                const cadence = random.normal(158 + 12 * hard, 3);
+                add(running, cadence, 0.95 + 0.25 * hard + 0.1 * day.fitness, 0.07);
+                ran += 1;
+            } else if (steps > 0) {
+                add(walking, steps, s === WALK ? 0.76 : 0.65, 0.04);
+                moved += 1;
+            }
+
+            // The heart lags behind the body, climbing into an effort and
+            // settling after it.
+            const target =
+                s === RUN
+                    ? 65 + 30 * hard - 6 * day.fitness
+                    : s === BIKE
+                      ? 48
+                      : s === WALK
+                        ? 38
+                        : s === STROLL
+                          ? 22
+                          : s === BAR
+                            ? 24
+                            : 0;
+            lag += (target - lag) * (target > lag ? 0.3 : 0.1);
+
+            const hour = minute / 60;
+            const loadTarget =
+                doing === 'work'
+                    ? 0.55 + 0.15 * Math.sin(hour)
+                    : day.kind === 'holiday'
+                      ? 0.12
+                      : day.kind === 'sick'
+                        ? 0.4
+                        : 0.25;
+            load += (loadTarget - load) * 0.02 + random.normal(0, 0.025);
+            load = Math.min(1, Math.max(0, load));
+            if (s === BAR) afterBar = 1;
+            else if (s !== SLEEP) afterBar *= 0.999;
+
+            if ((minute + 1) % COUNTER_EVERY === 0) {
+                const intensity = ran > 0 ? 6 : moved > 6 ? 3 : moved > 0 ? 1 : 0;
+                for (const [type, counters] of [
+                    ['walking', walking],
+                    ['running', running],
+                ] as const) {
+                    const cycles = Math.round(counters.cycles);
+                    if (cycles === written[type]) continue;
+                    written[type] = cycles;
+                    monitoring.push({
+                        timestamp: at(minute + 1),
+                        activityType: type,
+                        cycles,
+                        activeTime: Math.round(counters.activeTime),
+                        distance: Math.round(counters.distance),
+                        activeCalories: Math.round(counters.calories),
+                        intensity,
+                    });
+                }
+                moved = 0;
+                ran = 0;
+            }
+
+            if (s === OFF) continue;
+
+            if (minute % HEART_EVERY === 0) {
+                // Asleep: the slow cycles of a night, restless after a night out.
+                const asleep = -5 + 2.5 * Math.sin((minute / 90) * Math.PI * 2) + 7 * afterBar;
+                const base = s === SLEEP ? asleep : s === SEATED ? 7 : 10 + 14 * load;
+                monitoring.push({
+                    timestamp: at(minute),
+                    heartRate: Math.round(
+                        random.normal(resting + base + lag, s === SLEEP ? 1.5 : 3.5)
+                    ),
+                });
+            }
+
+            if (minute % STRESS_EVERY === 0) {
+                // Garmin cannot read stress while you move, and says so with a
+                // negative value; the importer drops it.
+                const value =
+                    lag > 12
+                        ? -2
+                        : s === SLEEP
+                          ? random.normal(10 + 10 * afterBar, 4)
+                          : random.normal(12 + 60 * load, 9);
+                stress.push({
+                    stressLevelTime: at(minute),
+                    stressLevelValue: Math.round(Math.min(99, value)),
+                });
+            }
+
+            if (minute % BREATH_EVERY === 0) {
+                const rate = s === SLEEP ? 12.8 : 14.5 + lag * 0.24;
+                breath.push({
+                    timestamp: at(minute),
+                    respirationRate: Math.round(random.normal(rate, 0.7) * 10) / 10,
+                });
+            }
+        }
+
+        return {
+            fileType: FIT_MONITORING,
+            recordMesgs: [],
+            sessionMesgs: [],
+            activityMesgs: [],
+            monitoringMesgs: monitoring,
+            // Both clocks, so the importer places the day in its own time zone.
+            monitoringInfoMesgs: [
+                {
+                    timestamp: day.start,
+                    localTimestamp: fitSeconds(day.start) + offsetMinutes * 60,
+                },
+            ],
+            stressLevelMesgs: stress,
+            respirationRateMesgs: breath,
+            monitoringHrDataMesgs: [],
+        };
+    }
 }
