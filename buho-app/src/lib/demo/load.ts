@@ -1,6 +1,19 @@
-import { initDuckDB, insertMessages, insertPlays } from '#lib/data/db/index.ts';
+import {
+    dropTable,
+    initDuckDB,
+    insertGoogleActivity,
+    insertHealthReadings,
+    insertLocationSegments,
+    insertMessages,
+    insertPlays,
+    insertStepPackets,
+} from '#lib/data/db/index.ts';
 import { buildMessageRows } from '#lib/data/import/buildRows.ts';
 import { parseSpotifyData } from '#lib/data/sources/spotify/parse.ts';
+import { parseTimelineData } from '#lib/data/sources/googleTimeline/parse.ts';
+import { parseActivityEntry } from '#lib/data/sources/googleActivity/parser.ts';
+import { stepPacketsFromFiles } from '#lib/data/sources/garmin/stepPackets.ts';
+import { healthReadingsFromFiles } from '#lib/data/sources/garmin/healthReadings.ts';
 import { dataStore } from '#lib/stores/dataStore.svelte.ts';
 import type { ModuleId } from '#lib/data/modules.ts';
 
@@ -17,10 +30,13 @@ import type { ModuleId } from '#lib/data/modules.ts';
  * the vocabularies stay out of the main bundle. Nobody who came here with their
  * own export should be downloading a fake one.
  *
- * Both samples take the same road as a real import — through the parser, or
- * through `buildMessageRows` — rather than writing rows straight to DuckDB. If
- * the sample skipped a step the import performs, it would be a sample of
- * something the app never actually shows.
+ * Every sample takes the same road as a real import — through the parser, the
+ * Garmin builders, or `buildMessageRows` — rather than writing rows straight to
+ * DuckDB. If the sample skipped a step the import performs, it would be a
+ * sample of something the app never actually shows.
+ *
+ * The watch, location and activity samples are one person (`life.ts`), so
+ * loading them together lines their days up on the calendar.
  */
 
 /**
@@ -40,6 +56,30 @@ const BUILDERS: Partial<Record<ModuleId, () => Promise<void>>> = {
         await insertMessages(rows);
         dataStore.loadDemoData('messages');
         await dataStore.refreshSummaries();
+    },
+    positions: async () => {
+        const { generateTimeline } = await import('./places');
+        // Derived from the segments, like after any import of positions.
+        await dropTable('position_days');
+        await insertLocationSegments(parseTimelineData(generateTimeline()));
+        dataStore.loadDemoData('positions');
+        dataStore.rederivePositions();
+    },
+    activity: async () => {
+        const { generateMyActivity } = await import('./activity');
+        const rows = generateMyActivity().map(parseActivityEntry);
+        await insertGoogleActivity(rows.filter((row) => row !== null));
+        dataStore.loadDemoData('activity');
+    },
+    steps: async () => {
+        const { generateWatchFiles } = await import('./watch');
+        await insertStepPackets(stepPacketsFromFiles(generateWatchFiles()));
+        dataStore.loadDemoData('steps');
+    },
+    health: async () => {
+        const { generateWatchFiles } = await import('./watch');
+        await insertHealthReadings(healthReadingsFromFiles(generateWatchFiles()));
+        dataStore.loadDemoData('health');
     },
 };
 

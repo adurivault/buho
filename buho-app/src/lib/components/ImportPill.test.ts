@@ -60,7 +60,9 @@ describe('ImportPill', () => {
 
     it('offers no sample for a module that has none', () => {
         device.showcase = true;
-        render(ImportPill, { props: { module: moduleById('positions') } });
+        // Every module ships one today; the flag is what keeps a new one honest.
+        const module = { ...moduleById('positions'), hasDemo: false };
+        render(ImportPill, { props: { module } });
 
         expect(screen.queryByRole('button', { name: /Load demo data/i })).not.toBeInTheDocument();
     });
@@ -143,7 +145,7 @@ describe('ImportPill', () => {
         expect(screen.queryByText('Demo data')).toBeNull();
     });
 
-    it('never claims demo data on a module that ships none', () => {
+    it('never calls a real import demo because another module is on its sample', () => {
         // `isDemo` is a statement about the plays table; a Timeline drop while on
         // demo music must not make the map read as demo too.
         dataStore.loadDemoData('listening');

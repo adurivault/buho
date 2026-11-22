@@ -366,6 +366,12 @@ class DataStore {
         try {
             await db.initDuckDB();
             await db.dropTable(module.table);
+            if (module.id === 'positions') {
+                // Derived from the segments, so meaningless once they are gone.
+                await db.dropTable('position_days');
+                this.geo = null;
+                this.daysVersion += 1;
+            }
             this.demoModules[id] = false;
 
             await this.refreshLoaded();
@@ -437,6 +443,16 @@ class DataStore {
             });
             this.loading = null;
         }
+    }
+
+    /**
+     * Rebuild what is derived from the positions table — the daily summary and
+     * the place labels — in the background, as after an import of positions.
+     * The sample's way in, since it stores its segments without `runImport`.
+     */
+    rederivePositions() {
+        this.geo = null;
+        void this.enrichGeo(++this.importGeneration);
     }
 
     /**

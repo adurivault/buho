@@ -103,6 +103,7 @@ export const DATA_MODULES: DataModule[] = [
         icon: 'map-pin',
         href: 'positions/explore',
         section: '/positions',
+        hasDemo: true,
         guide: 'positions/guide',
     },
     {
@@ -126,6 +127,7 @@ export const DATA_MODULES: DataModule[] = [
         icon: 'google-activity',
         href: 'activity/explore',
         section: '/activity',
+        hasDemo: true,
     },
     {
         id: 'steps',
@@ -136,6 +138,7 @@ export const DATA_MODULES: DataModule[] = [
         icon: 'footprints',
         href: 'steps/explore',
         section: '/steps',
+        hasDemo: true,
     },
     {
         id: 'health',
@@ -146,6 +149,7 @@ export const DATA_MODULES: DataModule[] = [
         icon: 'heartbeat',
         href: 'health/explore',
         section: '/health',
+        hasDemo: true,
     },
 ];
 

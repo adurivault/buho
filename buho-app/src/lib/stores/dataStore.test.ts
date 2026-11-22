@@ -292,6 +292,19 @@ describe('dataStore', () => {
         expect(dataStore.isSample('messages')).toBe(false);
     });
 
+    /** The daily summary is built from the segments, so it goes with them. */
+    it('takes the derived daily table with the positions sample', async () => {
+        dataStore.loadDemoData('positions');
+        vi.mocked(db.dropTable).mockClear();
+
+        await dataStore.clearDemo('positions');
+        await settle();
+
+        expect(db.dropTable).toHaveBeenCalledWith('location_segments');
+        expect(db.dropTable).toHaveBeenCalledWith('position_days');
+        expect(dataStore.isSample('positions')).toBe(false);
+    });
+
     it('leaves a real history in place', async () => {
         dataStore.loadUserData('listening');
         vi.mocked(db.dropTable).mockClear();

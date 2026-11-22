@@ -66,8 +66,10 @@ describe('ModuleEmptyState', () => {
         expect(dataStore.isSample('listening')).toBe(false);
     });
 
+    // Every module ships one today; the flag is what keeps a new one honest.
     it('offers no sample where there is none', () => {
-        render(ModuleEmptyState, { props: { module: moduleById('positions') } });
+        const module = { ...moduleById('positions'), hasDemo: false };
+        render(ModuleEmptyState, { props: { module } });
 
         expect(screen.queryByRole('button', { name: 'Load demo data' })).toBeNull();
     });
