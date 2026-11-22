@@ -51,6 +51,24 @@ describe('DropZone', () => {
         expect(onWindowDrop).not.toHaveBeenCalled();
     });
 
+    test('a click anywhere on the zone opens the file picker', async () => {
+        const click = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {});
+        const { container } = render(DropZone, { props: { surface: 'source-page' } });
+
+        await fireEvent.click(container.querySelector('.hint') as HTMLElement);
+        expect(click).toHaveBeenCalledTimes(1);
+        expect((click.mock.contexts[0] as HTMLInputElement).hasAttribute('webkitdirectory')).toBe(
+            false
+        );
+
+        // The folder picker is its own, and does not open the file one as well.
+        await fireEvent.click(screen.getByRole('button', { name: 'Choose a folder' }));
+        expect(click).toHaveBeenCalledTimes(2);
+        expect((click.mock.contexts[1] as HTMLInputElement).hasAttribute('webkitdirectory')).toBe(
+            true
+        );
+    });
+
     test('the pickers are there for anyone who would rather not drag', () => {
         render(DropZone, { props: { surface: 'dialog' } });
 

@@ -85,6 +85,16 @@
         fileInput?.click();
     }
 
+    /**
+     * The whole zone opens the file picker, so the pickers inside can be a line
+     * of text rather than two more buttons. A click on one of them is that
+     * picker's own business.
+     */
+    function onZoneClick(event: MouseEvent) {
+        if ((event.target as Element).closest('button')) return;
+        pickFiles();
+    }
+
     function pickFolder() {
         picked = 'folder';
         trackEvent('import-file-picked', { pick: 'folder', surface });
@@ -106,10 +116,12 @@
 
 <!-- Reaching for the zone is the sign a file is coming: the engine starts on
      the hover or the tab, so it downloads while the file dialog is open. -->
-<!-- svelte-ignore a11y_no_static_element_interactions -->
+<!-- The click is a mouse shortcut: the buttons inside are the keyboard's way in. -->
+<!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
 <div
     class="zone"
     class:dragging
+    onclick={onZoneClick}
     onpointerenter={warmUpDuckDB}
     onfocusin={warmUpDuckDB}
     ondragover={(event) => {
@@ -125,10 +137,20 @@
         <p class="lead drop-lead">{title}</p>
         <p class="lead pick-lead">{pickTitle}</p>
         <p class="hint">{hint}</p>
-        <div class="buttons">
-            <button class="primary" type="button" onclick={pickFiles}>Choose files</button>
-            <button class="quiet" type="button" onclick={pickFolder}>Choose a folder</button>
-        </div>
+        <p class="pickers">
+            <button class="pick" type="button" onclick={pickFiles}>Choose files</button>
+            <span class="folder">
+                or
+                <button
+                    class="pick"
+                    type="button"
+                    aria-label="Choose a folder"
+                    onclick={pickFolder}
+                >
+                    a folder
+                </button>
+            </span>
+        </p>
     </div>
 </div>
 
@@ -148,9 +170,14 @@
         border: 2px dashed var(--module-fill);
         border-radius: var(--radius-xl);
         background: color-mix(in srgb, var(--module-soft) 55%, transparent);
+        cursor: pointer;
         transition:
             border-color 0.15s,
             background-color 0.15s;
+    }
+
+    .zone:hover {
+        border-color: var(--module-peak);
     }
 
     .dragging {
@@ -194,44 +221,31 @@
         color: hsl(var(--muted-foreground));
     }
 
-    .buttons {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        margin-top: 0.9rem;
+    .pickers {
+        margin: 0.7rem 0 0;
+        font-size: var(--text-body);
+        color: hsl(var(--muted-foreground));
     }
 
-    .primary {
-        padding: 0.5rem 1.1rem;
-        border-radius: var(--radius-pill);
-        background: hsl(var(--primary));
-        color: hsl(var(--background));
-        font-size: var(--text-body);
+    /* Links in all but name: the zone around them is the target. The
+       underline takes the module's colour, the text stays ink. */
+    .pick {
         font-weight: 600;
+        color: hsl(var(--foreground));
+        text-decoration: underline;
+        text-decoration-color: var(--module-fill);
+        text-decoration-thickness: 2px;
+        text-underline-offset: 4px;
         cursor: pointer;
-        transition: opacity 0.15s;
+        transition: text-decoration-color 0.15s;
     }
 
-    .primary:hover {
-        opacity: 0.9;
-    }
-
-    .quiet {
-        padding: 0.5rem 1.1rem;
-        border: 1px solid hsl(var(--border));
-        border-radius: var(--radius-pill);
-        background: hsl(var(--card));
-        font-size: var(--text-body);
-        cursor: pointer;
-        transition: border-color 0.15s;
-    }
-
-    .quiet:hover {
-        border-color: hsl(var(--foreground));
+    .pick:hover {
+        text-decoration-color: var(--module-peak);
     }
 
     /* A phone has no drag gesture to offer, so the dashed target stops being a
-       target and becomes a plain heading over the buttons, which are the whole
+       target and becomes a plain heading over the picker, which is the whole
        of it there. */
     @media (max-width: 767px) {
         .zone {
@@ -251,8 +265,18 @@
 
         /* `webkitdirectory` picks nothing on iOS Safari, and an export that
            arrives on a phone arrives as one file anyway. */
-        .quiet {
+        .folder {
             display: none;
+        }
+
+        /* With no zone around it, the one picker left is the control. */
+        .pickers > .pick {
+            display: inline-block;
+            padding: 0.55rem 1.2rem;
+            border-radius: var(--radius-pill);
+            background: hsl(var(--primary));
+            color: hsl(var(--background));
+            text-decoration: none;
         }
     }
 </style>
