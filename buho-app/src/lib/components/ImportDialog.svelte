@@ -50,7 +50,10 @@
     /** The export you'd most likely be after, given where you opened this from. */
     function firstSourceFor(module: ModuleId | undefined): string {
         if (!module) return CATALOG_SOURCES[0].id;
-        return CATALOG_SOURCES.find((source) => source.fills[module])?.id ?? CATALOG_SOURCES[0].id;
+        return (
+            CATALOG_SOURCES.find((source) => source.fills.includes(module))?.id ??
+            CATALOG_SOURCES[0].id
+        );
     }
 
     function close() {

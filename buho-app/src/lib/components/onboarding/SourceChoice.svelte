@@ -2,7 +2,7 @@
     import { resolve } from '$app/paths';
     import Icon from '#lib/components/Icon.svelte';
     import NetworkIcon from '#lib/components/NetworkIcon.svelte';
-    import { moduleById, type ModuleId } from '#lib/data/modules.ts';
+    import { moduleById } from '#lib/data/modules.ts';
     import type { CatalogSource } from '#lib/data/sources/catalog.ts';
     import { funnelLabel, quickStartSource, sourcesByWait } from '#lib/onboarding/funnel.ts';
 
@@ -37,9 +37,7 @@
 
     /** The dataset it feeds, named the way the sidebar and the hub name it. */
     function fills(source: CatalogSource): string {
-        return (Object.keys(source.fills) as ModuleId[])
-            .map((id) => moduleById(id).label)
-            .join(' · ');
+        return source.fills.map((id) => moduleById(id).label).join(' · ');
     }
 </script>
 

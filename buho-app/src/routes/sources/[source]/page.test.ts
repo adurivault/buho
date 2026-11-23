@@ -43,6 +43,17 @@ describe('source detail page', () => {
         expect(facts.getByText(spotify.size)).toBeInTheDocument();
     });
 
+    /** Get it, wait for it, drop it — each a heading under the export's name. */
+    test('the guide is three stages under the title', () => {
+        renderSource(spotify);
+
+        const stages = screen
+            .getAllByRole('heading', { level: 2 })
+            .map((h) => h.textContent?.trim());
+        expect(stages).toEqual([spotify.guide.get, spotify.guide.wait.title, 'Drop it here']);
+        expect(screen.getByText(spotify.guide.intro)).toBeInTheDocument();
+    });
+
     test('the steps to get it are rendered, in order', () => {
         renderSource(spotify);
 
@@ -93,7 +104,7 @@ describe('source detail page', () => {
         renderSource(garmin);
 
         const text = document.querySelector('.destination')!.textContent!.replace(/\s+/g, ' ');
-        expect(text).toContain('lands in Positions, Steps and Health.');
+        expect(text).toContain('Its data goes into Positions, Steps and Health.');
     });
 
     test('the export link opens in a new tab, safely', () => {
@@ -136,12 +147,12 @@ describe('source detail page', () => {
 
     test('nothing imported: the page says nothing about holding data', () => {
         renderSource(spotify);
-        expect(screen.queryByText(/already holds data/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Already loaded/)).not.toBeInTheDocument();
     });
 
     test('it says so when the module this export feeds already holds data', () => {
         dataStore.loadUserData('listening');
         renderSource(spotify);
-        expect(screen.getByText(/already holds data/)).toBeInTheDocument();
+        expect(screen.getByText(/Already loaded/)).toBeInTheDocument();
     });
 });

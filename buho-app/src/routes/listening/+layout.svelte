@@ -9,7 +9,7 @@
     import { dataStore } from '#lib/stores/dataStore.svelte.ts';
 
     /* Named after the data, not the service that recorded it — the same
-	   name the /sources matrix uses for this column. */
+	   name the /sources page uses for this panel. */
     const module = moduleById('listening');
     const title = module.label;
 

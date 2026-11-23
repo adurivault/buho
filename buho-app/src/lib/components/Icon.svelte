@@ -13,8 +13,8 @@
      * `currentColor`, like {@link NetworkIcon} — these identify a thing, they
      * aren't brand reproductions.
      *
-     * Shared by the sidebar and the /sources matrix, which have to agree: the
-     * matrix explains what lights up in the sidebar, and two drawings of the
+     * Shared by the sidebar and the /sources page, which have to agree: the
+     * page explains what lights up in the sidebar, and two drawings of the
      * same thing would quietly drift apart.
      *
      * Lucide covers four of them. Its icons are built on the same 24-unit grid

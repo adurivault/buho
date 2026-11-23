@@ -3,27 +3,37 @@
     import NetworkIcon from '#lib/components/NetworkIcon.svelte';
     import Icon from '#lib/components/Icon.svelte';
     import Seo from '#lib/components/Seo.svelte';
-    import { CATALOG_SOURCES, modulesFilledBy } from '#lib/data/sources/catalog.ts';
+    import {
+        CATALOG_SOURCES,
+        EXPORT_WAIT_ORDER,
+        modulesFilledBy,
+        sourcesFilling,
+        type ExportWait,
+    } from '#lib/data/sources/catalog.ts';
     import { SITE_URL } from '#lib/seo.ts';
     import { DATA_MODULES } from '#lib/data/modules.ts';
     import { dataStore } from '#lib/stores/dataStore.svelte.ts';
 
     /**
-     * The map, and only the map: which export feeds which dataset.
+     * Which export feeds which dataset, read from the dataset's side.
+     *
+     * Someone arriving here wants to see their listening or their trips, and
+     * the export is the means: so one panel per dataset, in sidebar order, and
+     * in each the exports that fill it, quickest to get first. An export feeding
+     * several datasets appears under each, naming the others, which keeps the
+     * many-to-many relationship readable without a table.
      *
      * How to get hold of one, what arrives and which of it is opened is a
-     * per-export question, answered at length on `/sources/[source]` — every
-     * row of the matrix is the way in.
+     * per-export question, answered on `/sources/[source]` — every row is the
+     * way in.
      */
-    const loadedModules = $derived(DATA_MODULES.filter((module) => dataStore.loaded[module.id]));
+
+    /** How many of the four wait tiers a source's meter fills: one for instant, four for days. */
+    const waitTier = (wait: ExportWait) => EXPORT_WAIT_ORDER.indexOf(wait) + 1;
 
     /**
-     * The matrix as a list, so the page is answerable without reading a table.
-     *
-     * A table is the right shape for a person comparing ten exports at a glance
-     * and the wrong one for anything parsing the page: the relationship it
-     * encodes lives in the intersection of a row and a column, which survives
-     * no extraction. Stated here once, in the same order the table renders.
+     * The same relationship as a list, for anything parsing the page rather
+     * than reading it. Stated once per export, in catalog order.
      */
     const matrixLd = {
         '@context': 'https://schema.org',
@@ -54,107 +64,85 @@
 
 <div class="page">
     <header class="intro">
-        <h1>Sources &amp; modules</h1>
+        <h1>Sources</h1>
         <p class="lede">
-            Buho reads exports from services you already use, and sorts what it finds into a handful
-            of datasets. The two aren't a one-to-one match: one export can fill two datasets, and
-            one dataset can be fed by several exports. Here is the whole map.
+            Each panel is a dataset in Buho, with the exports that fill it. The quickest to get
+            comes first.
         </p>
         <p class="promise">
-            All of it happens in your browser. Your files are never uploaded.
+            Your files are read in your browser and never uploaded.
             <a href="{resolve('faq')}#verify">How to check</a>
         </p>
     </header>
 
-    <section aria-labelledby="matrix-heading">
-        <h2 id="matrix-heading">What feeds what</h2>
-        <p class="section-lede">
-            Rows are the exports you can get hold of; columns are what Buho builds from them — and
-            the icons in the sidebar, in the same order. Follow a row to find out how to request
-            that export, what arrives, and which of it is opened.
-            {#if loadedModules.length > 0}
-                <span class="live">
-                    Holding data right now: {loadedModules
-                        .map((module) => module.label)
-                        .join(', ')}.
-                </span>
-            {:else}
-                <span class="live">Nothing is loaded yet.</span>
-            {/if}
-        </p>
-
-        <div class="matrix-scroll">
-            <table class="matrix">
-                <thead>
-                    <tr>
-                        <th scope="col" class="corner">
-                            <span class="corner-source">Source ↓</span>
-                            <span class="corner-module">Module →</span>
-                        </th>
-                        {#each DATA_MODULES as module (module.id)}
-                            {@const loaded = dataStore.loaded[module.id]}
-                            <th scope="col" class="module-head" data-module={module.id}>
-                                <a class="module-link" href={resolve(module.href)}>
-                                    <span class="module-glyph" class:loaded>
-                                        <Icon name={module.icon} size={18} />
-                                    </span>
-                                    <span class="module-label">{module.label}</span>
-                                </a>
-                                <span class="module-state" class:loaded>
-                                    {loaded ? 'holds data' : 'empty'}
+    <div class="panels">
+        {#each DATA_MODULES as module (module.id)}
+            {@const loaded = dataStore.loaded[module.id]}
+            <section class="panel" data-module={module.id} aria-labelledby="module-{module.id}">
+                <div class="panel-head">
+                    <div class="panel-title">
+                        <h2 id="module-{module.id}">
+                            <a class="module-link" href={resolve(module.href)}>
+                                <span class="module-glyph">
+                                    <Icon name={module.icon} size={18} />
                                 </span>
-                            </th>
-                        {/each}
-                    </tr>
-                </thead>
-                <tbody>
-                    {#each CATALOG_SOURCES as source (source.id)}
-                        <tr>
-                            <th scope="row" class="source-head">
-                                <a
-                                    class="source-link"
-                                    href={resolve('/sources/[source]', {
-                                        source: source.id,
-                                    })}
-                                >
-                                    {#if source.network}
-                                        <NetworkIcon network={source.network} size={18} />
-                                    {:else}
-                                        <Icon name={source.icon} size={18} />
-                                    {/if}
-                                    <span>{source.label}</span>
-                                </a>
-                                <span class="source-format">{source.format}</span>
-                            </th>
-                            {#each DATA_MODULES as module (module.id)}
-                                {@const fill = source.fills[module.id]}
-                                <td class="cell" data-module={module.id}>
-                                    {#if fill}
-                                        <span class="grain" title={fill.detail}>
-                                            <span class="dot"></span>
-                                            {fill.grain}
-                                        </span>
-                                    {:else}
-                                        <span class="none" aria-hidden="true">–</span>
-                                        <span class="sr-only">not provided</span>
-                                    {/if}
-                                </td>
-                            {/each}
-                        </tr>
-                    {/each}
-                </tbody>
-            </table>
-        </div>
-
-        <dl class="module-legend">
-            {#each DATA_MODULES as module (module.id)}
-                <div data-module={module.id}>
-                    <dt>{module.label}</dt>
-                    <dd>{module.blurb}</dd>
+                                {module.label}
+                            </a>
+                        </h2>
+                        <span class="module-state" class:loaded>
+                            {loaded ? 'holds data' : 'empty'}
+                        </span>
+                    </div>
+                    <p class="blurb">{module.blurb}</p>
                 </div>
-            {/each}
-        </dl>
-    </section>
+
+                <ul class="exports">
+                    {#each sourcesFilling(module.id) as source (source.id)}
+                        {@const alsoFeeds = modulesFilledBy(source).filter(
+                            (other) => other.id !== module.id
+                        )}
+                        <li>
+                            <a
+                                class="export"
+                                href={resolve('/sources/[source]', { source: source.id })}
+                            >
+                                <span class="export-glyph">
+                                    {#if source.network}
+                                        <NetworkIcon network={source.network} size={16} />
+                                    {:else}
+                                        <Icon name={source.icon} size={16} />
+                                    {/if}
+                                </span>
+                                <span class="export-name">{source.label}</span>
+                                <span class="export-wait">
+                                    <span class="meter" aria-hidden="true">
+                                        {#each EXPORT_WAIT_ORDER as tier, index (tier)}
+                                            <i class:on={index < waitTier(source.wait)}></i>
+                                        {/each}
+                                    </span>
+                                    {source.delay}
+                                </span>
+                                <span class="export-format">{source.format}</span>
+                                {#if alsoFeeds.length > 0}
+                                    <span class="export-also">
+                                        Also feeds{#each alsoFeeds as other, index (other.id)}{index ===
+                                            0
+                                                ? ' '
+                                                : ' and '}<span
+                                                class="also-module"
+                                                data-module={other.id}
+                                            >
+                                                <span class="dot"></span>{other.label}
+                                            </span>{/each}
+                                    </span>
+                                {/if}
+                            </a>
+                        </li>
+                    {/each}
+                </ul>
+            </section>
+        {/each}
+    </div>
 
     <footer>
         <a href={resolve('faq')}>Is my data uploaded? And other questions →</a>
@@ -162,57 +150,29 @@
 </div>
 
 <style>
-    /* The same five roles as /sources/[source]: the two pages are one place,
-       and ten font sizes across them was the reason neither felt like it. */
+    /* The same type roles as /sources/[source]: the two pages are one place. */
     .page {
-        /* Wider than the prose it sits above, which keeps its own 46rem cap:
-           the matrix is the page, and it is seven columns wide. */
         max-width: 72rem;
         margin: 0 auto;
         padding: 3rem 1.5rem 5rem;
     }
 
-    footer {
-        padding-top: 1.5rem;
-        border-top: 1px solid hsl(var(--border));
-        font-size: var(--text-small);
-    }
-
-    footer a {
-        color: hsl(var(--muted-foreground));
-        transition: color 0.15s;
-    }
-
-    footer a:hover {
-        color: hsl(var(--foreground));
-    }
-
-    .sr-only {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        padding: 0;
-        margin: -1px;
-        overflow: hidden;
-        clip: rect(0, 0, 0, 0);
-        white-space: nowrap;
-    }
-
     .intro {
-        margin-bottom: 3rem;
+        margin-bottom: 2rem;
     }
 
     h1 {
         font-size: var(--text-title);
-        margin: 0 0 0.75rem;
+        letter-spacing: -0.015em;
+        margin: 0 0 0.6rem;
     }
 
     .lede {
-        max-width: 46rem;
-        font-size: var(--text-body);
+        max-width: 42rem;
+        margin: 0;
+        font-size: var(--text-lede);
         line-height: 1.6;
         color: hsl(var(--muted-foreground));
-        margin: 0;
     }
 
     .promise {
@@ -235,218 +195,205 @@
         color: hsl(var(--foreground));
     }
 
-    section {
+    /* ---- panels ---------------------------------------------------------- */
+
+    /* Panels keep their own height: a dataset fed by one export is not
+       stretched to match one fed by three. */
+    .panels {
+        display: grid;
+        gap: 1rem;
+        align-items: start;
         margin-bottom: 3.5rem;
     }
 
-    h2 {
-        font-size: var(--text-subheading);
-        margin: 0 0 0.375rem;
+    @media (min-width: 700px) {
+        .panels {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
     }
 
-    .section-lede {
-        max-width: 46rem;
-        margin: 0 0 1.5rem;
-        font-size: var(--text-body);
-        line-height: 1.6;
-        color: hsl(var(--muted-foreground));
+    @media (min-width: 1040px) {
+        .panels {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
     }
 
-    .live {
-        color: hsl(var(--foreground));
-    }
-
-    /* ---- matrix ---------------------------------------------------------- */
-
-    /* The safety net, not the plan: the cells below are sized so seven columns
-       fit a laptop without it. It catches a phone, and a browser zoomed in. */
-    .matrix-scroll {
-        overflow-x: auto;
-        border: 1px solid hsl(var(--border));
+    /* Each panel is a dataset, so it wears the dataset's colour: the same
+       legend as the sidebar, the dots and the charts. */
+    .panel {
+        min-width: 0;
+        overflow: hidden;
+        border: 1px solid color-mix(in srgb, var(--module-accent) 28%, hsl(var(--border)));
         border-radius: var(--radius-md);
         background: hsl(var(--card));
     }
 
-    .matrix {
-        width: 100%;
-        border-collapse: collapse;
+    .panel-head {
+        padding: 0.8rem 0.95rem 0.75rem;
+        border-bottom: 1px solid color-mix(in srgb, var(--module-accent) 28%, hsl(var(--border)));
+        background: var(--module-soft);
+    }
+
+    .panel-title {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    h2 {
+        margin: 0;
         font-size: var(--text-body);
-    }
-
-    /*
-     * Columns shared out rather than measured, everywhere there is room for
-     * seven of them.
-     *
-     * Left to size itself, the table asks for what its longest line wants —
-     * "message_1.json files, in one or more .zip" on one line is a 24rem source
-     * column on its own — and seven columns of that run off the side of a laptop.
-     * Sharing the width out is what makes the whole map visible at once, which is
-     * the only reason the page exists. Below the breakpoint there is no width to
-     * share and the scroller takes over.
-     */
-    @media (min-width: 768px) {
-        .matrix {
-            table-layout: fixed;
-        }
-
-        .corner {
-            width: 17%;
-        }
-
-        .module-head {
-            width: 13.8%;
-        }
-    }
-
-    .matrix th,
-    .matrix td {
-        padding: 0.55rem 0.625rem;
-        text-align: left;
-        vertical-align: top;
-        border-bottom: 1px solid hsl(var(--border));
-    }
-
-    .matrix tbody tr:last-child th,
-    .matrix tbody tr:last-child td {
-        border-bottom: none;
-    }
-
-    .corner {
-        white-space: nowrap;
-        font-weight: 600;
-        font-size: var(--text-label);
-        color: hsl(var(--muted-foreground));
-    }
-
-    .corner-source,
-    .corner-module {
-        display: block;
-    }
-
-    .corner-module {
-        margin-left: 1.25rem;
-    }
-
-    /* Six of these across. The floor is what a two-word label needs once it
-       wraps under its own glyph — "Google activity" is the one that decides it. */
-    .module-head {
-        min-width: 6.25rem;
-        background: color-mix(in srgb, var(--module-accent) 6%, transparent);
+        font-weight: 700;
     }
 
     .module-link {
-        display: flex;
+        display: inline-flex;
         align-items: center;
-        gap: 0.4rem;
-        text-decoration: none;
+        gap: 0.45rem;
         color: hsl(var(--foreground));
-        font-weight: 600;
+        text-decoration: none;
     }
 
-    .module-link:hover .module-label {
+    .module-link:hover {
         text-decoration: underline;
-        text-underline-offset: 2px;
+        text-underline-offset: 3px;
     }
 
-    /* Grey until the module holds something, matching the sidebar icon. */
     .module-glyph {
         display: inline-flex;
-        color: hsl(var(--muted-foreground));
-    }
-
-    .module-glyph.loaded {
         color: var(--module-accent);
-    }
-
-    .module-state {
-        display: block;
-        margin-top: 0.2rem;
-        font-size: var(--text-label);
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-        color: hsl(var(--muted-foreground));
     }
 
     .module-state.loaded {
         color: var(--module-accent);
     }
 
-    .source-head {
-        min-width: 9rem;
-    }
-
-    .source-link {
-        display: flex;
-        align-items: center;
-        gap: 0.45rem;
-        font-weight: 600;
-        color: hsl(var(--foreground));
-        text-decoration: none;
-    }
-
-    .source-link:hover {
-        text-decoration: underline;
-        text-underline-offset: 2px;
-    }
-
-    .source-format {
-        display: block;
-        margin-top: 0.2rem;
+    .module-state {
+        margin-left: auto;
         font-size: var(--text-label);
-        font-weight: 400;
-        color: hsl(var(--muted-foreground));
-    }
-
-    .grain {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.35rem;
-        font-size: var(--text-small);
-        padding: 0.15rem 0.5rem 0.15rem 0.4rem;
-        border-radius: var(--radius-pill);
-        border: 1px solid color-mix(in srgb, var(--module-accent) 35%, transparent);
-        background: color-mix(in srgb, var(--module-accent) 12%, transparent);
-        cursor: help;
-    }
-
-    .dot {
-        width: 0.4rem;
-        height: 0.4rem;
-        border-radius: 50%;
-        background: var(--module-accent);
-        flex: none;
-    }
-
-    .none {
-        color: hsl(var(--muted-foreground) / 0.5);
-    }
-
-    .module-legend {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-        gap: 1rem;
-        margin: 1.25rem 0 0;
-    }
-
-    .module-legend dt {
-        font-size: var(--text-small);
         font-weight: 600;
-        padding-left: 0.6rem;
-        border-left: 3px solid var(--module-accent);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: hsl(var(--muted-foreground));
+        white-space: nowrap;
     }
 
-    .module-legend dd {
-        margin: 0.3rem 0 0 0.6rem;
+    .blurb {
+        margin: 0.2rem 0 0;
         font-size: var(--text-small);
         line-height: 1.5;
         color: hsl(var(--muted-foreground));
+    }
+
+    .exports {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+    }
+
+    .exports li + li {
+        border-top: 1px solid hsl(var(--border));
+    }
+
+    /* Name and wait on the first line, what arrives under the name: the wait is
+       what decides, so it sits on the edge the eye runs down. */
+    .export {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        column-gap: 0.55rem;
+        row-gap: 0.1rem;
+        align-items: center;
+        padding: 0.65rem 0.95rem;
+        color: hsl(var(--foreground));
+        text-decoration: none;
+        transition: background-color 0.15s;
+    }
+
+    .export:hover {
+        background: color-mix(in srgb, var(--module-accent) 7%, transparent);
+    }
+
+    .export:hover .export-name {
+        text-decoration: underline;
+        text-underline-offset: 3px;
+    }
+
+    .export-glyph {
+        display: inline-flex;
+    }
+
+    .export-name {
+        font-size: var(--text-body);
+        font-weight: 600;
+        overflow-wrap: anywhere;
+    }
+
+    .export-wait {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: var(--text-small);
+        white-space: nowrap;
+    }
+
+    .meter {
+        display: inline-flex;
+        gap: 2px;
+    }
+
+    .meter i {
+        width: 4px;
+        height: 0.7rem;
+        border-radius: 1px;
+        background: hsl(var(--border));
+    }
+
+    .meter i.on {
+        background: var(--module-accent);
+    }
+
+    .export-format,
+    .export-also {
+        grid-column: 2 / 4;
+        font-size: var(--text-small);
+        line-height: 1.5;
+        color: hsl(var(--muted-foreground));
+    }
+
+    .also-module {
+        white-space: nowrap;
+    }
+
+    .dot {
+        display: inline-block;
+        width: 0.4rem;
+        height: 0.4rem;
+        margin-right: 0.25rem;
+        border-radius: 50%;
+        background: var(--module-accent);
+        vertical-align: 0.08em;
+    }
+
+    footer {
+        padding-top: 1.5rem;
+        border-top: 1px solid hsl(var(--border));
+        font-size: var(--text-small);
+    }
+
+    footer a {
+        color: hsl(var(--muted-foreground));
+        transition: color 0.15s;
+    }
+
+    footer a:hover {
+        color: hsl(var(--foreground));
     }
 
     @media (max-width: 767px) {
         .page {
             padding: 2rem 1rem 5rem;
         }
+
         h1 {
             font-size: var(--text-figure);
         }

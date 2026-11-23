@@ -8,21 +8,13 @@ import { DATA_MODULES, type DataModule, type ModuleId } from '../modules';
  * Sources and modules are deliberately not the same list: one export can feed
  * two modules (a Garmin archive carries both GPS tracks and step counters) and
  * one module can be fed by several exports (positions come from Google and from
- * a watch; conversations from three different services). The matrix is the only
- * place that relationship is stated in full.
+ * a watch; conversations from three different services). The /sources page is
+ * the one place that relationship is stated in full.
  *
  * This is documentation, not routing — the parsers in `SOURCE_PARSERS` decide
  * what is actually read. `parserIds` ties each row back to the modules doing the
  * work, and `catalog.test.ts` fails if the two drift apart.
  */
-
-/** What one source contributes to one module — a single cell of the matrix. */
-export interface Fill {
-    /** Two or three words, so the matrix says something at a glance. */
-    grain: string;
-    /** The full answer, for the per-source detail below the matrix. */
-    detail: string;
-}
 
 /** Where to request an export, when the provider has a page for it. */
 export interface ExportLink {
@@ -48,22 +40,50 @@ export type ExportWait = 'instant' | 'minutes' | 'hours' | 'days';
 export const EXPORT_WAIT_ORDER: ExportWait[] = ['instant', 'minutes', 'hours', 'days'];
 
 /**
- * How to actually get this export, step by step.
+ * One of the downloads an export is split across: what it holds, where to ask
+ * for it, and what to do there.
+ */
+export interface GuideDownload {
+    /** What this download holds that the other does not, in a few words. */
+    title: string;
+    /** One sentence on what it covers. */
+    body: string;
+    link: ExportLink;
+    /** What to do on that page, up to the request. */
+    steps: string[];
+}
+
+/**
+ * How to actually get this export, in the three stages every export goes
+ * through: get it out of the service, wait for it (or carry it over from the
+ * phone), drop it into Buho.
  *
  * Lives on the catalog row rather than in the import dialog because the dialog
  * shows whichever guide you ask for — there is one drop zone for all eight
  * sources now, so there is no per-service dialog left to hold the prose.
  *
- * `steps`, `warning` and the `note` fields are rendered with `{@html}` for their
- * inline emphasis, so they must stay literals: never anything derived from user
- * data.
+ * `steps`, `warning`, `dropNote`, the `body` fields and the `note` fields are
+ * rendered with `{@html}` for their inline emphasis, so they must stay
+ * literals: never anything derived from user data.
  */
 export interface SourceGuide {
-    /** One or two sentences on what this export is, before the steps. */
+    /** One or two sentences on what this export is, before the stages. */
     intro: string;
+    /**
+     * What a reader has to understand about the service before the steps make
+     * sense — a feature they may never have turned on, a change in how it
+     * stores things. Three short points at most; `catalog.test.ts` holds it to
+     * that.
+     */
+    background?: { title: string; points: string[] };
+    /** The first stage's heading, in this export's terms: "Request it from Spotify". */
+    get: string;
     /** The few settings that decide whether the export is usable at all. */
     settings?: Array<{ label: string; value: string; note?: string }>;
-    /** What to do, in order, once the link above has landed. */
+    /**
+     * What to do on the provider's side, in order, up to the request. Waiting
+     * for the file and dropping it are stages of their own, not steps.
+     */
     steps: string[];
     /**
      * Where the steps differ by device. Used by Google Timeline, whose export
@@ -72,16 +92,21 @@ export interface SourceGuide {
      */
     platforms?: Array<{ id: string; label: string; steps: string[] }>;
     /**
-     * A second, separate download the service splits its data across. Messenger
-     * is the case that matters: since Meta turned on end-to-end encryption, the
-     * standard export stops at the switchover date.
+     * The downloads a service splits its data across, each with its own page
+     * and steps; `steps` is then empty and these replace it, along with the
+     * source's `link`. Messenger is the case: since Meta turned on end-to-end
+     * encryption, the standard export stops at the switchover date.
      */
-    extra?: { title: string; body: string; href: string; label: string };
-    /** The one mistake people actually make, called out after the steps. */
+    downloads?: GuideDownload[];
+    /** The one mistake made while asking for it, said under the first stage. */
     warning?: string;
+    /** The second stage: what stands between the request and the file in hand. */
+    wait: { title: string; body: string };
+    /** The one thing to know when handing the file over, beside the drop zone. */
+    dropNote?: string;
 }
 
-/** One export you can hand to Buho — the rows of the matrix. */
+/** One export you can hand to Buho. */
 export interface CatalogSource {
     id: string;
     label: string;
@@ -103,7 +128,7 @@ export interface CatalogSource {
      * registry and reads the dropped files directly.
      */
     parserIds: string[];
-    /** The glyph standing for this source in the matrix. */
+    /** The glyph standing for this source on /sources and in the import dialog. */
     icon: IconName;
     /**
      * For the three messaging services, which share one glyph and one module:
@@ -126,12 +151,10 @@ export interface CatalogSource {
      * finish in the same sitting, on the device already in their hand.
      */
     madeOnPhone?: boolean;
-    /** What each module gets out of it. Absent means the source doesn't feed it. */
-    fills: Partial<Record<ModuleId, Fill>>;
+    /** The modules it feeds. */
+    fills: ModuleId[];
     link?: ExportLink;
-    /** The one thing people get wrong, when there is one. */
-    caveat?: string;
-    /** How to obtain it, shown in the import dialog. */
+    /** How to obtain it: the import dialog, onboarding and the source page all show it. */
     guide: SourceGuide;
 }
 
@@ -148,34 +171,31 @@ export const CATALOG_SOURCES: CatalogSource[] = [
         size: 'A few MB, all of it text',
         delay: 'Around 24 hours',
         wait: 'hours',
-        fills: {
-            listening: {
-                grain: 'Every play',
-                detail: 'One row per play: track, artist, album, the moment it started, and how many milliseconds you actually listened before skipping. Why each track started and ended too, which no other music export records.',
-            },
-        },
+        fills: ['listening'],
         link: {
             href: 'https://www.spotify.com/account/privacy/',
             label: 'Spotify privacy settings',
         },
-        caveat: 'Ask for the *extended* history, not the one-year "Account data". They share a page, and only the extended one goes back to the beginning.',
         guide: {
-            intro: "Spotify's full play-by-play lives behind a separate request from the one-year summary, on the same privacy page.",
+            intro: 'Spotify offers two exports on the same privacy page. Buho needs the extended streaming history, which covers every play since the account was created.',
+            get: 'Request it from Spotify',
             settings: [
                 {
                     label: 'Request',
                     value: 'Extended streaming history',
-                    note: "Not 'Account data': that one covers a single year and is offered first.",
+                    note: "Not 'Account data', which only covers the last year.",
                 },
             ],
             steps: [
                 'Scroll to <strong>Download your data</strong> and tick <strong>Extended streaming history</strong>.',
-                'Click <strong>Request data</strong>, then confirm through the email Spotify sends.',
-                'Spotify emails a download link when it&rsquo;s ready, usually within a day, though Spotify reserves up to 30.',
-                "Drop the <code class='text-xs'>.zip</code> here, or the folder if you already unzipped it.",
+                'Click <strong>Request data</strong>, then confirm in the email Spotify sends.',
             ],
-            warning:
-                'The account files bundled in the same zip are read past, not parsed. Only the streaming history counts, so there&rsquo;s nothing to sort out beforehand.',
+            wait: {
+                title: 'Wait for the email',
+                body: 'Spotify emails a download link, usually within a day. It can take up to 30 days.',
+            },
+            dropNote:
+                'The zip also holds account files. Buho skips them, so you can drop it as is.',
         },
     },
     {
@@ -190,26 +210,21 @@ export const CATALOG_SOURCES: CatalogSource[] = [
         size: 'Under a megabyte',
         delay: 'A few days',
         wait: 'days',
-        fills: {
-            listening: {
-                grain: 'Every play',
-                detail: "Track, artist, album and ISRC, with the moment and how many seconds you listened. No skip reasons, no shuffle flag and no podcasts — Deezer records none of them, so the views built on those stay Spotify's.",
-            },
-        },
+        fills: ['listening'],
         link: {
             href: 'https://www.deezer.com/account/personal_data',
             label: "Deezer's personal data page",
         },
-        caveat: 'The history that arrives is partial: a few thousand plays with years missing from the middle, not the complete record Spotify sends. Whatever is there merges into the same table.',
         guide: {
-            intro: 'Deezer sends one spreadsheet holding everything it has on you. Only the listening-history sheet inside it is read.',
-            steps: [
-                'Ask for your personal data: a single request, with no options to set.',
-                'Deezer emails a link, usually within a few days.',
-                "Drop the <code class='text-xs'>.xlsx</code> here as it came.",
-            ],
+            intro: 'Deezer sends a single spreadsheet with all the data it holds on you. Buho reads the listening history sheet.',
+            get: 'Request it from Deezer',
+            steps: ['Request your personal data. There are no options to set.'],
             warning:
-                'Expect gaps: what Deezer exports is <strong>a partial history</strong> (a few thousand plays, with whole years missing), not the complete record Spotify sends.',
+                'Deezer&rsquo;s history is <strong>partial</strong>. Expect a few thousand plays, with whole years missing.',
+            wait: {
+                title: 'Wait for the email',
+                body: 'Deezer emails a link, usually within a few days.',
+            },
         },
     },
     {
@@ -224,19 +239,14 @@ export const CATALOG_SOURCES: CatalogSource[] = [
         size: 'Around 100 MB for 100k scrobbles, mostly album art URLs',
         delay: 'Immediate',
         wait: 'instant',
-        fills: {
-            listening: {
-                grain: 'Every play',
-                detail: "Track, artist, album and the moment it was scrobbled — and nothing else. A scrobble records no duration, no device and no reason a track ended, so listening time and the views built on it stay Spotify's and Deezer's.",
-            },
-        },
+        fills: ['listening'],
         link: {
             href: 'https://mainstream.ghan.nl/export.html',
             label: "Last.fm's community export tool",
         },
-        caveat: 'Scrobbles are usually a mirror of what you played elsewhere. Drop a Spotify export and a Last.fm one covering the same years and you get both: every play twice, once per service.',
         guide: {
-            intro: 'Last.fm has no export of its own. The community tool above replays the public API for any username and hands you the file. No login, no API key, nothing to wait for.',
+            intro: 'Last.fm has no export of its own. A community tool downloads your scrobbles through the public API. It needs no login or API key.',
+            get: 'Export it with the community tool',
             settings: [
                 {
                     label: 'Export type',
@@ -245,17 +255,21 @@ export const CATALOG_SOURCES: CatalogSource[] = [
                 {
                     label: 'Format',
                     value: 'JSON',
-                    note: 'Not CSV or XML: those two are offered first on the same line.',
+                    note: 'Not CSV or XML.',
                 },
             ],
             steps: [
-                'Open the tool and type your <strong>Last.fm username</strong>: your own or anyone&rsquo;s, the API is public.',
-                'Pick <strong>Scrobbles</strong> as the export type and <strong>JSON</strong> as the format, then click <strong>Go</strong>.',
-                'Leave the page open while it works. It fetches 200 scrobbles a page, so a long history takes a few minutes.',
-                "Save the file it offers (<code class='text-xs'>scrobbles-&lt;user&gt;-&lt;number&gt;.json</code>) and drop it here.",
+                'Open the tool and enter your <strong>Last.fm username</strong>.',
+                'Pick <strong>Scrobbles</strong> and <strong>JSON</strong>, then click <strong>Go</strong>.',
             ],
             warning:
-                'The number in the filename is where the export stopped. Keep it: pasting it back into the tool later fetches <strong>only the scrobbles since</strong>, and you can drop that second file here alongside the first. The overlap is dropped, not doubled.',
+                'If you also import Spotify for the same years, each play is counted twice, once per service.',
+            wait: {
+                title: 'Wait for the tool to finish',
+                body: "Keep the page open. It fetches 200 scrobbles per request, so a long history takes a few minutes. Then save the file, named <code class='text-xs'>scrobbles-&lt;user&gt;-&lt;number&gt;.json</code>.",
+            },
+            dropNote:
+                'The number in the filename marks where the export stopped. Enter it in the tool later to fetch only newer scrobbles, then drop the new file too. Buho removes the overlap.',
         },
     },
     {
@@ -271,41 +285,45 @@ export const CATALOG_SOURCES: CatalogSource[] = [
         delay: 'Immediate',
         wait: 'instant',
         madeOnPhone: true,
-        fills: {
-            positions: {
-                grain: 'Visits + path',
-                detail: 'A coarse point every minute or so, plus the visits Google named — home, work, and the places it recognised along the way.',
-            },
-        },
-        caveat: 'Timeline now lives on the phone, not in Takeout: the export comes out of your phone settings, so it has to travel to your computer.',
+        fills: ['positions'],
         guide: {
-            intro: 'Google no longer ships Timeline with Takeout: your location history now stays on your phone, so the export has to be done from there. It takes a minute, no waiting.',
+            intro: 'Timeline is a Google Maps feature that records the places you visit and the routes between them.',
+            background: {
+                title: 'About Timeline',
+                points: [
+                    'It is off by default. Once you turn it on, in Google Maps &rarr; your profile &rarr; <strong>Your Timeline</strong>, your phone keeps recording your location.',
+                    'Google used to store it on its servers, and Takeout could export it. It is now stored <strong>on your phone only</strong>, so you export it from the phone.',
+                    'It starts on the day you turn it on. A new Timeline deletes data older than <strong>3 months</strong> unless you turn off auto-delete in its settings.',
+                ],
+            },
+            get: 'Export it from your phone',
             steps: [],
             platforms: [
                 {
                     id: 'android',
                     label: 'Android',
                     steps: [
-                        "Open your phone's <strong>Settings</strong> app: the system settings, not the Google Maps app.",
-                        'Go to <strong>Location</strong> → <strong>Location services</strong> → <strong>Timeline</strong>, and pick your Google account if it asks.',
-                        'Tap <strong>Export Timeline data</strong> and choose where to save it.',
-                        "You get a <code class='text-xs'>Timeline.json</code> file. Send it to your computer (Drive, email, cable), then come back here.",
+                        "Open your phone's <strong>Settings</strong> app (not Google Maps).",
+                        'Go to <strong>Location</strong> → <strong>Location services</strong> → <strong>Timeline</strong>. Pick your Google account if asked.',
+                        'Tap <strong>Export Timeline data</strong> and choose where to save the file.',
                     ],
                 },
                 {
                     id: 'ios',
                     label: 'iPhone',
                     steps: [
-                        'Open the <strong>Google Maps</strong> app and tap your <strong>profile letter</strong> in the top right.',
+                        'Open <strong>Google Maps</strong> and tap your <strong>profile picture</strong> in the top right.',
                         'Tap <strong>Your Timeline</strong>.',
-                        'Tap the <strong>⋮</strong> icon in the top right, then <strong>Location &amp; privacy settings</strong>.',
+                        'Tap <strong>⋮</strong> in the top right, then <strong>Location &amp; privacy settings</strong>.',
                         'Tap <strong>Export Timeline data</strong>.',
-                        "Share the file to yourself (AirDrop, email, whatever) and open it here from your computer. It's named <code class='text-xs'>Timeline.json</code> or <code class='text-xs'>location-history.json</code>.",
                     ],
                 },
             ],
-            warning:
-                'Your phone shows these labels in its own language, and the menus move around between versions.',
+            warning: "Menu names follow your phone's language and change between versions.",
+            wait: {
+                title: 'Send it to your computer',
+                body: "Use email, Drive, AirDrop or a cable. The file is called <code class='text-xs'>Timeline.json</code> or <code class='text-xs'>location-history.json</code>.",
+            },
         },
     },
     {
@@ -320,16 +338,11 @@ export const CATALOG_SOURCES: CatalogSource[] = [
         size: 'Hundreds of MB and up, depending on what you tick',
         delay: 'Minutes to hours',
         wait: 'minutes',
-        fills: {
-            activity: {
-                grain: 'Every entry',
-                detail: 'One row per entry, across YouTube, Search, Maps and the rest: what it was, when, and the link it pointed at. No durations — Google records none.',
-            },
-        },
+        fills: ['activity'],
         link: { href: 'https://takeout.google.com/settings/takeout', label: 'Google Takeout' },
-        caveat: 'The default format is HTML, which carries none of the links this needs. Switch "Activity records" to JSON before requesting.',
         guide: {
-            intro: 'Takeout hands over everything Google logged, service by service. Only "My Activity" is read here, and only in its JSON form.',
+            intro: 'Takeout exports the data of every Google service. Buho reads "My Activity", in JSON.',
+            get: 'Request it from Google Takeout',
             settings: [
                 {
                     label: 'Format',
@@ -338,17 +351,21 @@ export const CATALOG_SOURCES: CatalogSource[] = [
                 {
                     label: 'Data',
                     value: 'My Activity',
-                    note: 'Deselect everything else: the rest of a Takeout is ignored anyway.',
+                    note: 'Buho ignores the rest of a Takeout.',
                 },
             ],
             steps: [
-                'Hit <strong>Deselect all</strong>, then scroll down and tick <strong>My Activity</strong> only.',
-                'Open <strong>Multiple formats</strong> on that row and switch <strong>Activity records</strong> from HTML to <strong>JSON</strong>.',
-                'Under <strong>All activity data included</strong> you can keep everything, or narrow it to YouTube, Search and Maps.',
-                'Request the export. Google emails a link, usually within a few minutes to a few hours.',
+                'Click <strong>Deselect all</strong>, then tick <strong>My Activity</strong>.',
+                'Click <strong>Multiple formats</strong> on that row and set <strong>Activity records</strong> to <strong>JSON</strong>.',
+                'Under <strong>All activity data included</strong>, keep everything or pick YouTube, Search and Maps.',
+                'Request the export.',
             ],
-            warning:
-                'A Takeout zip is often larger than a browser tab can unpack. If it fails, unzip it yourself and use <strong>Choose a folder</strong>: that path has no size limit.',
+            wait: {
+                title: 'Wait for the email',
+                body: 'Google emails a link, usually within a few minutes to a few hours.',
+            },
+            dropNote:
+                'Large Takeout zips can be too big for the browser to unpack. If that happens, unzip it yourself and use <strong>Choose a folder</strong>, which has no size limit.',
         },
     },
     {
@@ -364,19 +381,17 @@ export const CATALOG_SOURCES: CatalogSource[] = [
         size: 'Hundreds of MB, nearly all of it attachments',
         delay: 'Hours',
         wait: 'hours',
-        fills: {
-            messages: {
-                grain: 'Threads',
-                detail: 'Conversations with their participants, and every message in them — text, reactions, and what kind of attachment it carried. The attachments themselves are never opened.',
-            },
-        },
-        link: {
-            href: 'https://www.messenger.com/secure_storage/dyi',
-            label: 'Messenger secure-storage export',
-        },
-        caveat: 'Two downloads, not one. Each one-to-one chat was switched to end-to-end encryption on its own day (late 2023 for most accounts, through 2024 for the rest), and everything said since is only in the secure-storage export. Everything older, and every group chat, is only in the ordinary one. Drop both; Buho merges them.',
+        fills: ['messages'],
         guide: {
-            intro: "Your recent one-to-one conversations are encrypted, and Meta's ordinary export form does not carry them: they come from a second, separate download, which is the one to start with.",
+            intro: 'Messenger conversations come in two downloads. Buho merges them.',
+            background: {
+                title: 'Why two downloads',
+                points: [
+                    'Since late 2023, Meta has been switching Messenger chats to <strong>end-to-end encryption</strong>. Meta can no longer read those messages. They are kept in your <strong>secure storage</strong>, protected by your PIN.',
+                    'Meta&rsquo;s usual export only contains what it can read: messages from before each chat switched, and group chats. The rest comes from a separate export of the secure storage.',
+                ],
+            },
+            get: 'Request two downloads from Meta',
             settings: [
                 {
                     label: 'Format',
@@ -385,26 +400,46 @@ export const CATALOG_SOURCES: CatalogSource[] = [
                 {
                     label: 'Date range',
                     value: 'All time',
-                    note: 'Defaults to the last few months, which throws away most of your history.',
+                    note: 'The default is the last few months only.',
                 },
                 {
                     label: 'Media quality',
                     value: 'Low',
                 },
             ],
-            steps: [
-                'Open the secure-storage form above and unlock it with your <strong>Messenger PIN</strong>, the code you set when your chats were encrypted.',
-                'Set the three settings above, then request the download.',
-                'Meta emails a link when it is ready.',
+            steps: [],
+            downloads: [
+                {
+                    title: 'Encrypted chats',
+                    body: 'One-to-one chats since they switched to encryption, between late 2023 and 2024 depending on the account.',
+                    link: {
+                        href: 'https://www.messenger.com/secure_storage/dyi',
+                        label: 'Messenger secure-storage export',
+                    },
+                    steps: [
+                        'Unlock the form with your <strong>Messenger PIN</strong>, the one you set up for encrypted chats.',
+                        'Set the three settings above and request the download.',
+                    ],
+                },
+                {
+                    title: 'Older chats and groups',
+                    body: 'Messages from before the switch, and group chats.',
+                    link: {
+                        href: 'https://accountscenter.facebook.com/info_and_permissions/dyi',
+                        label: "Meta's ordinary export form",
+                    },
+                    steps: [
+                        'Choose <strong>Some of your information</strong> &rarr; <strong>Messages</strong>.',
+                        'Set the same three settings and request the download.',
+                    ],
+                },
             ],
-            extra: {
-                title: 'Then get everything from before the encryption',
-                body: 'The export above starts the day each chat was switched over &mdash; <strong>late 2023 for most accounts, through 2024 for the rest</strong>. Everything older, and every group chat, which were never encrypted, comes from Meta&rsquo;s ordinary export form instead: <strong>Some of your information</strong> &rarr; <strong>Messages</strong>, with the same three settings. That one comes back in <strong>a few minutes</strong>. Drop both exports here; Buho merges them.',
-                href: 'https://accountscenter.facebook.com/info_and_permissions/dyi',
-                label: "Meta's ordinary export form",
+            wait: {
+                title: 'Wait for both emails',
+                body: 'The usual export takes a few minutes, the encrypted one a few hours.',
             },
-            warning:
-                'Large exports are split into several zip files: <strong>download all of them</strong> and drop them here together, or you&rsquo;ll be missing conversations.',
+            dropNote:
+                'Large exports come as several zip files. Download all of them from both requests and drop them together.',
         },
     },
     {
@@ -420,19 +455,14 @@ export const CATALOG_SOURCES: CatalogSource[] = [
         size: 'Hundreds of MB, nearly all of it attachments',
         delay: 'Hours',
         wait: 'hours',
-        fills: {
-            messages: {
-                grain: 'Threads',
-                detail: 'The same threads, participants and messages as Messenger — the schema is identical — labelled Instagram.',
-            },
-        },
+        fills: ['messages'],
         link: {
             href: 'https://accountscenter.instagram.com/info_and_permissions/dyi/',
             label: "Instagram's export page",
         },
-        caveat: 'Unpack an archive and drop the thread files alone and the folder names go with it, and the service then reads as "unknown".',
         guide: {
-            intro: 'Same form as Messenger, on the Instagram side of the Accounts Center. The archives look identical; Buho tells them apart on its own.',
+            intro: 'Instagram uses the same export form as Messenger, in the Accounts Center. Buho tells the two apart.',
+            get: 'Request it from Instagram',
             settings: [
                 {
                     label: 'Format',
@@ -441,7 +471,7 @@ export const CATALOG_SOURCES: CatalogSource[] = [
                 {
                     label: 'Date range',
                     value: 'All time',
-                    note: 'Defaults to the last few months, which throws away most of your history.',
+                    note: 'The default is the last few months only.',
                 },
                 {
                     label: 'Media quality',
@@ -449,13 +479,16 @@ export const CATALOG_SOURCES: CatalogSource[] = [
                 },
             ],
             steps: [
-                'Choose <strong>Download or transfer information</strong>, then pick your Instagram account.',
-                'Select <strong>Some of your information</strong> and tick <strong>Messages</strong>. Anything else you tick is simply ignored, so there is no harm in taking it.',
-                'Set the three settings above, then request the download.',
-                "Meta emails you when it's ready, usually within a few hours.",
+                'Choose <strong>Download or transfer information</strong>, then your Instagram account.',
+                'Select <strong>Some of your information</strong> and tick <strong>Messages</strong>. Anything else you tick is ignored.',
+                'Set the three settings above and request the download.',
             ],
-            warning:
-                'Large exports are split into several zip files: <strong>download all of them</strong> and drop them here together, or you&rsquo;ll be missing conversations.',
+            wait: {
+                title: 'Wait for the email',
+                body: 'Meta emails you, usually within a few hours.',
+            },
+            dropNote:
+                'Large exports come as several zip files. Download all of them and drop them together, zipped or unzipped. Keep the folder structure, which Buho uses to recognise Instagram.',
         },
     },
     {
@@ -472,15 +505,10 @@ export const CATALOG_SOURCES: CatalogSource[] = [
         delay: 'Immediate',
         wait: 'instant',
         madeOnPhone: true,
-        fills: {
-            messages: {
-                grain: 'One thread each',
-                detail: 'One conversation per file, multi-line messages reassembled. Reactions are absent from these exports, and system notices are kept without a sender.',
-            },
-        },
-        caveat: "No bulk export exists: conversations leave the phone one by one. You can drop all of them at once, though. Dates are in the phone's locale, so day/month order is worked out per file.",
+        fills: ['messages'],
         guide: {
-            intro: 'WhatsApp has no bulk export and no web form: conversations are exported one at a time, from the phone app.',
+            intro: 'WhatsApp exports one conversation at a time, from the phone app.',
+            get: 'Export each chat from your phone',
             settings: [
                 {
                     label: 'Attachments',
@@ -488,13 +516,15 @@ export const CATALOG_SOURCES: CatalogSource[] = [
                 },
             ],
             steps: [
-                'Open a conversation, tap the contact or group name at the top.',
-                'Scroll down to <strong>Export chat</strong>, then choose <strong>Without media</strong>.',
-                "Send the <code class='text-xs'>.txt</code> to yourself by mail, AirDrop, whatever reaches your computer.",
-                'Repeat for the conversations you care about.',
+                'Open a conversation and tap its name at the top.',
+                'Tap <strong>Export chat</strong>, then <strong>Without media</strong>.',
+                'Repeat for each conversation you want.',
             ],
-            warning:
-                'You can drop <strong>all the exported chats at once</strong>. No need to add them one by one.',
+            wait: {
+                title: 'Send them to your computer',
+                body: "Use email, AirDrop or a cloud drive. Each conversation is a <code class='text-xs'>.txt</code> file.",
+            },
+            dropNote: 'You can drop all the files at once.',
         },
     },
     {
@@ -509,34 +539,24 @@ export const CATALOG_SOURCES: CatalogSource[] = [
         size: 'A gigabyte or two, most of it .fit files',
         delay: 'A few hours',
         wait: 'hours',
-        fills: {
-            positions: {
-                grain: 'GPS tracks',
-                detail: 'The tracks recorded during activities: a point every second or two, with speed and heading — far denser than Timeline, in the same table.',
-            },
-            steps: {
-                grain: 'Counters',
-                detail: 'The all-day step counters, kept as the recorded windows themselves rather than the daily totals Garmin computes from them.',
-            },
-            health: {
-                grain: 'Every minute',
-                detail: 'Heart rate, stress and respiration, as sampled — about one reading a minute while the watch is worn. The gaps are kept as gaps: when it was off is as much of the record as what it measured.',
-            },
-        },
+        fills: ['positions', 'steps', 'health'],
         link: {
             href: 'https://www.garmin.com/account/datamanagement/exportdata/',
             label: 'Garmin data management',
         },
-        caveat: 'Only the raw recordings are read. The daily roll-ups and performance scores shipped alongside are left alone: seeing what they were computed from is the point.',
         guide: {
-            intro: 'One request gets everything the watch ever recorded: the step counters it keeps all day, and the GPS tracks of your activities, which join your location history.',
+            intro: 'One request exports everything your watch recorded, including steps, heart rate and the GPS tracks of your activities.',
+            get: 'Request it from Garmin Connect',
             steps: [
-                'Sign in at <strong>garmin.com</strong>, then open <strong>Account</strong> → <strong>Data Management</strong>.',
-                'Choose <strong>Export Your Data</strong> and confirm. Garmin emails a download link, usually within a few hours.',
-                'Drop the <code>.zip</code> here as it arrived. No need to unpack it.',
+                'Sign in at <strong>garmin.com</strong> and open <strong>Account</strong> → <strong>Data Management</strong>.',
+                'Choose <strong>Export Your Data</strong> and confirm.',
             ],
-            warning:
-                'The archive is a zip inside a zip holding around ten thousand <code>.fit</code> files. Reading it takes a few seconds. The progress bar is not stuck.',
+            wait: {
+                title: 'Wait for the email',
+                body: 'Garmin emails a download link, usually within a few hours.',
+            },
+            dropNote:
+                'Drop the <code>.zip</code> without unzipping it. It holds about ten thousand <code>.fit</code> files, so reading takes a few seconds.',
         },
     },
     {
@@ -551,27 +571,24 @@ export const CATALOG_SOURCES: CatalogSource[] = [
         size: 'Tens of MB, and up if you post photos',
         delay: 'A few minutes',
         wait: 'minutes',
-        fills: {
-            positions: {
-                grain: 'GPS tracks',
-                detail: 'The track of every activity you ever uploaded, at the resolution it was recorded — a point a second, with heart rate and cadence where the recorder had them. It reaches back further than the watch does: Strava kept what the phone before it recorded.',
-            },
-        },
+        fills: ['positions'],
         link: {
             href: 'https://www.strava.com/athlete/download_my_account',
             label: "Strava's archive request page",
         },
-        caveat: 'Strava hands each activity back in the format it was uploaded in, so one export holds three at once: the phone years as .gpx, the watch years as .fit. All of them are read.',
         guide: {
-            intro: 'One request gets every activity you ever uploaded, each in the format it arrived in. There is nothing to configure.',
+            intro: 'One request exports every activity you uploaded, in its original format. There are no options to set.',
+            get: 'Request it from Strava',
             steps: [
-                'Open the page above while signed in. It is reachable from <strong>Settings</strong> &rarr; <strong>My Account</strong> too.',
+                'Open the page above while signed in. It is also under <strong>Settings</strong> &rarr; <strong>My Account</strong>.',
                 'Click <strong>Request Your Archive</strong>.',
-                'Strava emails a download link, usually within a few minutes.',
-                'Drop the <code>.zip</code> here as it arrived. No need to unpack it.',
             ],
-            warning:
-                'If a watch also feeds Garmin Connect, the same outings are in both exports. Drop both anyway: <strong>the overlap is resolved, not counted twice</strong>, minute by minute.',
+            wait: {
+                title: 'Wait for the email',
+                body: 'Strava emails a download link, usually within a few minutes.',
+            },
+            dropNote:
+                'If your watch also syncs to Garmin Connect, both exports contain the same activities. You can drop both. Buho counts each activity once.',
         },
     },
 ];
@@ -581,21 +598,21 @@ export function sourceLabel(id: string): string {
     return CATALOG_SOURCES.find((source) => source.id === id)?.label ?? id;
 }
 
-/** The modules a source feeds, in column order. */
+/** The modules a source feeds, in sidebar order. */
 export function modulesFilledBy(source: CatalogSource): DataModule[] {
-    return DATA_MODULES.filter((module) => source.fills[module.id] !== undefined);
+    return DATA_MODULES.filter((module) => source.fills.includes(module.id));
 }
 
 /**
  * The exports that can fill a module, soonest to arrive first.
  *
- * The other direction of the same matrix, and the one an empty module needs:
+ * The dataset's side of the relationship, and the one an empty module needs:
  * standing in front of a dataset with nothing in it, the useful question is not
  * "what is this" but "what do I go and ask for". Ordering by wait means the
  * first name offered is the one that costs the least to try.
  */
 export function sourcesFilling(module: ModuleId): CatalogSource[] {
-    return CATALOG_SOURCES.filter((source) => source.fills[module] !== undefined).sort(
+    return CATALOG_SOURCES.filter((source) => source.fills.includes(module)).sort(
         (a, b) => EXPORT_WAIT_ORDER.indexOf(a.wait) - EXPORT_WAIT_ORDER.indexOf(b.wait)
     );
 }

@@ -6,7 +6,7 @@
     import HandheldGate from '#lib/components/handheld/HandheldGate.svelte';
 
     /* Named after the data, not the service that recorded it — the same
-	   name the /sources matrix uses for this column. */
+	   name the /sources page uses for this panel. */
     const module = moduleById('steps');
     const title = module.label;
 

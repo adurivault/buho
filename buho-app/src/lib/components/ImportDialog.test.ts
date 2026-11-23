@@ -100,10 +100,10 @@ describe('ImportDialog', () => {
         open('positions');
         await fireEvent.click(screen.getByText(/how do I get one/i));
 
-        expect(screen.getByText(/system settings, not the Google Maps app/i)).toBeInTheDocument();
+        expect(screen.getByText(/\(not Google Maps\)/)).toBeInTheDocument();
 
         await fireEvent.click(screen.getByRole('tab', { name: 'iPhone' }));
-        expect(screen.queryByText(/system settings, not the Google Maps app/i)).toBeNull();
+        expect(screen.queryByText(/\(not Google Maps\)/)).toBeNull();
         expect(screen.getByText(/Location & privacy settings/i)).toBeInTheDocument();
     });
 

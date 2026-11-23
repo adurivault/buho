@@ -6,8 +6,8 @@ import type { IconName } from '#lib/components/icons.ts';
  * each.
  *
  * This is the app's spine, not documentation: the sidebar renders from it, and
- * so do the columns of the /sources matrix. Keeping them on one list is what
- * makes the matrix a true legend for the sidebar — a source added to one shows
+ * so do the panels of the /sources page. Keeping them on one list is what
+ * makes that page a true legend for the sidebar — a module added to one shows
  * up in the other, in the same order and the same colour.
  *
  * What *feeds* each module is a separate question, answered in `catalog.ts`.
@@ -18,7 +18,7 @@ export type ModuleId = 'listening' | 'messages' | 'positions' | 'activity' | 'st
 export interface DataModule {
     id: ModuleId;
     /**
-     * The dataset's own name — matrix column header, module header, sidebar.
+     * The dataset's own name — /sources panel, module header, sidebar.
      *
      * There used to be a second `navLabel` beside it, "the service people know
      * it by", for the sidebar alone. It put two axes on one list: Steps was
@@ -49,10 +49,10 @@ export interface DataModule {
     /** The DuckDB table it is stored in. */
     table: string;
     /**
-     * The glyph for the dataset, in the sidebar and as a matrix column header.
+     * The glyph for the dataset, in the sidebar and on its /sources panel.
      * It stands for the data, not whoever recorded it — Steps is footprints
      * everywhere, while Garmin's own triangle marks the *export* it comes from,
-     * one row of the matrix.
+     * one row inside the panel.
      */
     icon: IconName;
     /** Landing route. Still needs `resolve()` — the app is served under a base path. */

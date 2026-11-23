@@ -16,7 +16,7 @@ describe('data modules', () => {
 
     test('a module names the dataset, not the service that recorded it', () => {
         // The sidebar may still say "Garmin" — that's where you'd look for it —
-        // but the label is what the page header and the matrix column show.
+        // but the label is what the page header and the /sources panel show.
         expect(moduleById('steps').label).toBe('Steps');
         expect(moduleById('positions').label).toBe('Positions');
         expect(moduleById('listening').label).toBe('Listening');

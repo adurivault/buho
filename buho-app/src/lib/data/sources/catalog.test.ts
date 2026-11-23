@@ -41,7 +41,7 @@ describe('source catalog', () => {
     test('every source fills at least one module, and only known ones', () => {
         const moduleIds = new Set<string>(DATA_MODULES.map((module) => module.id));
         for (const source of CATALOG_SOURCES) {
-            const filled = Object.keys(source.fills);
+            const filled = source.fills;
             expect(filled.length, `${source.label} fills nothing`).toBeGreaterThan(0);
             for (const id of filled) {
                 expect(moduleIds, `${source.label} fills unknown module "${id}"`).toContain(id);
@@ -51,7 +51,7 @@ describe('source catalog', () => {
 
     test('every module is fed by at least one source', () => {
         for (const module of DATA_MODULES) {
-            const feeders = CATALOG_SOURCES.filter((source) => source.fills[module.id]);
+            const feeders = CATALOG_SOURCES.filter((source) => source.fills.includes(module.id));
             expect(feeders.length, `nothing fills "${module.id}"`).toBeGreaterThan(0);
         }
     });
@@ -85,12 +85,76 @@ describe('source catalog', () => {
             const { guide } = source;
             expect(guide.intro.length, `${source.label} has no intro`).toBeGreaterThan(0);
 
-            // Timeline's steps differ by phone, so it carries platforms instead.
+            expect(guide.get.length, `${source.label} has no first stage`).toBeGreaterThan(0);
+            expect(guide.wait.title.length, `${source.label} has no second stage`).toBeGreaterThan(
+                0
+            );
+            expect(guide.wait.body.length).toBeGreaterThan(0);
+
+            // Timeline's steps differ by phone and Messenger's by download, so
+            // those carry platforms or downloads instead.
             const hasSteps = guide.steps.length > 0;
             const hasPlatforms =
                 (guide.platforms ?? []).every((p) => p.steps.length > 0) &&
                 (guide.platforms ?? []).length > 0;
-            expect(hasSteps || hasPlatforms, `${source.label} has no steps`).toBe(true);
+            const hasDownloads =
+                (guide.downloads ?? []).every((d) => d.steps.length > 0) &&
+                (guide.downloads ?? []).length > 0;
+            expect(hasSteps || hasPlatforms || hasDownloads, `${source.label} has no steps`).toBe(
+                true
+            );
+        }
+    });
+
+    /**
+     * Waiting for the file and dropping it are stages of their own. A step
+     * saying either would put them back in the list, and say them twice.
+     */
+    test('the steps stop at the request', () => {
+        for (const source of CATALOG_SOURCES) {
+            const { guide } = source;
+            const steps = [
+                ...guide.steps,
+                ...(guide.platforms ?? []).flatMap((p) => p.steps),
+                ...(guide.downloads ?? []).flatMap((d) => d.steps),
+            ];
+            for (const step of steps) {
+                expect(step, `${source.label}: a step drops the file`).not.toMatch(/\bdrop\b/i);
+                expect(step, `${source.label}: a step waits for an email`).not.toMatch(
+                    /\bemails? (you|a)\b/i
+                );
+            }
+        }
+    });
+
+    /** Context before the steps, not a second page of reading. */
+    test('a background stays short', () => {
+        for (const source of CATALOG_SOURCES) {
+            const background = source.guide.background;
+            if (!background) continue;
+            expect(
+                background.points.length,
+                `${source.label} explains at length`
+            ).toBeLessThanOrEqual(3);
+            for (const point of background.points) {
+                const text = point.replace(/<[^>]+>/g, '').replace(/&\w+;/g, ' ');
+                expect(
+                    text.length,
+                    `${source.label}: "${text.slice(0, 40)}…" runs long`
+                ).toBeLessThanOrEqual(220);
+            }
+        }
+    });
+
+    /** A split export carries a link per download, so the source has none of its own. */
+    test('a split export links each download, and nothing besides', () => {
+        for (const source of CATALOG_SOURCES) {
+            if (!source.guide.downloads) continue;
+            expect(source.link, `${source.label} has a link beside its downloads`).toBeUndefined();
+            expect(source.guide.steps).toEqual([]);
+            for (const download of source.guide.downloads) {
+                expect(download.link.href).toMatch(/^https:\/\//);
+            }
         }
     });
 
@@ -137,7 +201,7 @@ describe('source catalog', () => {
     test('storage covers exactly the modules the source claims to fill', () => {
         for (const source of CATALOG_SOURCES) {
             const stored = SOURCE_STORAGE[source.id].map((store) => store.module).sort();
-            const claimed = Object.keys(source.fills).sort();
+            const claimed = [...source.fills].sort();
             expect(stored, `${source.label} stores and fills different modules`).toEqual(claimed);
         }
     });
@@ -174,7 +238,7 @@ describe('source catalog', () => {
         const garmin = CATALOG_SOURCES.find((source) => source.id === 'garmin');
         expect(garmin).toBeDefined();
 
-        // The one export feeding three modules — the case the matrix exists for.
+        // The one export feeding three modules.
         expect(modulesFilledBy(garmin!).map((module) => module.id)).toEqual<ModuleId[]>([
             'positions',
             'steps',

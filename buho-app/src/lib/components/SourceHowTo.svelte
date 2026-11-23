@@ -1,44 +1,45 @@
 <script lang="ts">
-    import type { CatalogSource } from '#lib/data/sources/catalog.ts';
+    import type { Snippet } from 'svelte';
+    import type { CatalogSource, ExportLink } from '#lib/data/sources/catalog.ts';
     import { trackEvent } from '#lib/analytics.ts';
 
     /**
-     * How to get one export: where to go, the settings that decide whether the
-     * file is usable, and what to do in order.
+     * How to get one export, in the three stages every export goes through: get
+     * it out of the service, wait for it, drop it into Buho.
      *
-     * Shared by the import dialog and the per-source page under /sources, which
-     * would otherwise render every guide twice and drift. Whichever
-     * one you are looking at, the words come from `catalog.ts`.
+     * Shared by the import dialog, onboarding and the per-source page under
+     * /sources, which would otherwise render every guide three times and drift.
+     * Whichever one you are looking at, the words come from `catalog.ts`.
      *
-     * Two things it deliberately does not do any more:
+     * The stages are headings because they are what a reader is looking for:
+     * what to click, how long it takes, where the file goes. Each block sits in
+     * the stage it is about — the settings above the steps that refer to them,
+     * the drop advice beside the drop — and a stage carries one aside at most.
      *
-     *   - **The destination is a link, not a button.** It used to be a filled
-     *     accent pill, which reads as an in-app action; people did not know it
-     *     would take them to another site. It now shows where it goes.
-     *   - **The step numbers are numbers.** They were white numerals in filled
-     *     accent discs, which made a four-item list the heaviest thing on the
-     *     page — heavier than the heading above it, and it arrived last.
+     * The destination is a filled button carrying its host: it is the one thing
+     * to do on arrival, and the host plus the arrow say it leaves Buho.
      */
     interface Props {
         source: CatalogSource;
+        /** Whether to open with the export's intro; the source page states it under its title. */
+        intro?: boolean;
+        /** The level of the stage headings, under whatever heading the surface has. */
+        headingLevel?: 2 | 3;
+        /** The place the file goes, on a surface that holds one: stage three is then "here". */
+        drop?: Snippet;
     }
 
-    /*
-     * The numbers and the link take `--module-accent`: the module's colour in
-     * the import dialog, which opens from inside a module and wears it — there
-     * it means "you are in Listening" — and the neutral ink everywhere else.
-     * Where the subject is the export rather than the dataset, a source has no
-     * colour of its own, and borrowing the accent of whatever module it feeds
-     * would read as a brand colour that is simply wrong.
-     */
-    let { source }: Props = $props();
+    let { source, intro = true, headingLevel = 3, drop }: Props = $props();
+
+    const guide = $derived(source.guide);
+    const heading = $derived(`h${headingLevel}`);
 
     /** For the one guide whose steps differ by device — see SourceGuide.platforms. */
     let platform = $state<string>('android');
 
-    const steps = $derived.by(() => {
-        const platforms = source.guide.platforms;
-        if (!platforms?.length) return source.guide.steps;
+    const platformSteps = $derived.by(() => {
+        const platforms = guide.platforms;
+        if (!platforms?.length) return [];
         return (platforms.find((p) => p.id === platform) ?? platforms[0]).steps;
     });
 
@@ -64,53 +65,36 @@
     }
 </script>
 
-<div class="howto">
-    <p class="intro">{source.guide.intro}</p>
+{#snippet go(link: ExportLink, which: 'export' | 'extra')}
+    <a
+        class="go"
+        href={link.href}
+        target="_blank"
+        rel="noreferrer"
+        onclick={() => trackExit(which)}
+    >
+        <span class="go-label">{link.label}</span>
+        <span class="go-host">{host(link.href)} ↗</span>
+    </a>
+{/snippet}
 
-    {#if source.link}
-        <a
-            class="go"
-            href={source.link.href}
-            target="_blank"
-            rel="noreferrer"
-            onclick={() => trackExit('export')}
-        >
-            <span class="go-label">{source.link.label}</span>
-            <span class="go-host">{host(source.link.href)} ↗</span>
-        </a>
-    {/if}
-
-    {#if source.guide.platforms}
-        <div class="tabs" role="tablist" aria-label="Phone platform">
-            {#each source.guide.platforms as tab (tab.id)}
-                <button
-                    role="tab"
-                    aria-selected={platform === tab.id}
-                    class:selected={platform === tab.id}
-                    onclick={() => (platform = tab.id)}
-                >
-                    {tab.label}
-                </button>
-            {/each}
-        </div>
-    {/if}
-
+{#snippet stepList(steps: string[])}
     <ol class="steps">
         {#each steps as instruction, index (index)}
             <li>
-                <!-- Literals from the catalog, for the inline emphasis — never
-                     anything user-derived. -->
-                <!-- eslint-disable-next-line svelte/no-at-html-tags -- static catalog/SEO content, never user data -->
+                <!-- eslint-disable-next-line svelte/no-at-html-tags -- static catalog content, never user data -->
                 <span>{@html instruction}</span>
             </li>
         {/each}
     </ol>
+{/snippet}
 
-    {#if source.guide.settings}
+{#snippet settings(title: string)}
+    {#if guide.settings}
         <div class="settings">
-            <p class="settings-title">Get these right</p>
+            <p class="settings-title">{title}</p>
             <dl>
-                {#each source.guide.settings as setting (setting.label)}
+                {#each guide.settings as setting (setting.label)}
                     <div>
                         <dt>{setting.label}</dt>
                         <dd class="value">{setting.value}</dd>
@@ -122,82 +106,268 @@
             </dl>
         </div>
     {/if}
+{/snippet}
 
-    {#if source.guide.extra}
-        <div class="extra">
-            <p class="extra-title">{source.guide.extra.title}</p>
-            <!-- eslint-disable-next-line svelte/no-at-html-tags -- static catalog/SEO content, never user data -->
-            <p class="extra-body">{@html source.guide.extra.body}</p>
-            <a
-                class="go"
-                href={source.guide.extra.href}
-                target="_blank"
-                rel="noreferrer"
-                onclick={() => trackExit('extra')}
-            >
-                <span class="go-label">{source.guide.extra.label}</span>
-                <span class="go-host">{host(source.guide.extra.href)} ↗</span>
-            </a>
-        </div>
+{#snippet note(html: string)}
+    <!-- eslint-disable-next-line svelte/no-at-html-tags -- static catalog content, never user data -->
+    <p class="note-line">{@html html}</p>
+{/snippet}
+
+<div class="howto">
+    {#if intro}
+        <p class="intro">{guide.intro}</p>
     {/if}
 
-    {#if source.guide.warning}
-        <!-- eslint-disable-next-line svelte/no-at-html-tags -- static catalog/SEO content, never user data -->
-        <p class="warning">{@html source.guide.warning}</p>
+    {#if guide.background}
+        <section class="background">
+            <svelte:element this={heading} class="background-title">
+                {guide.background.title}
+            </svelte:element>
+            <ul>
+                {#each guide.background.points as point, index (index)}
+                    <!-- eslint-disable-next-line svelte/no-at-html-tags -- static catalog content, never user data -->
+                    <li><span>{@html point}</span></li>
+                {/each}
+            </ul>
+        </section>
     {/if}
+
+    <ol class="stages">
+        <li class="stage">
+            <span class="stage-num">1</span>
+            <div class="stage-main">
+                <svelte:element this={heading} class="stage-title">{guide.get}</svelte:element>
+                <div class="stage-body">
+                    {#if guide.platforms}
+                        <div class="tabs" role="tablist" aria-label="Phone platform">
+                            {#each guide.platforms as tab (tab.id)}
+                                <button
+                                    role="tab"
+                                    aria-selected={platform === tab.id}
+                                    class:selected={platform === tab.id}
+                                    onclick={() => (platform = tab.id)}
+                                >
+                                    {tab.label}
+                                </button>
+                            {/each}
+                        </div>
+                        {@render settings('Set these before exporting')}
+                        {@render stepList(platformSteps)}
+                    {:else if guide.downloads}
+                        {@render settings('Set these on both forms')}
+                        <div class="downloads">
+                            {#each guide.downloads as download, index (download.link.href)}
+                                <div class="download">
+                                    <p class="download-tag">
+                                        Download {index + 1} of {guide.downloads.length}
+                                    </p>
+                                    <p class="download-title">{download.title}</p>
+                                    <!-- eslint-disable-next-line svelte/no-at-html-tags -- static catalog content, never user data -->
+                                    <p class="download-body">{@html download.body}</p>
+                                    {@render go(download.link, index === 0 ? 'export' : 'extra')}
+                                    {@render stepList(download.steps)}
+                                </div>
+                            {/each}
+                        </div>
+                    {:else}
+                        {#if source.link}
+                            {@render go(source.link, 'export')}
+                        {/if}
+                        {@render settings('Set these before requesting')}
+                        {@render stepList(guide.steps)}
+                    {/if}
+
+                    {#if guide.warning}
+                        {@render note(guide.warning)}
+                    {/if}
+                </div>
+            </div>
+        </li>
+
+        <li class="stage">
+            <span class="stage-num">2</span>
+            <div class="stage-main">
+                <svelte:element this={heading} class="stage-title">
+                    {guide.wait.title}
+                </svelte:element>
+                <div class="stage-body">
+                    <!-- eslint-disable-next-line svelte/no-at-html-tags -- static catalog content, never user data -->
+                    <p>{@html guide.wait.body}</p>
+                </div>
+            </div>
+        </li>
+
+        <li class="stage">
+            <span class="stage-num">3</span>
+            <div class="stage-main">
+                <svelte:element this={heading} class="stage-title">
+                    {drop ? 'Drop it here' : 'Drop it into Buho'}
+                </svelte:element>
+                <div class="stage-body">
+                    {#if drop}
+                        {@render drop()}
+                    {:else}
+                        <p>Drop the file as you received it. Buho recognises the export.</p>
+                    {/if}
+                    {#if guide.dropNote}
+                        {@render note(guide.dropNote)}
+                    {/if}
+                </div>
+            </div>
+        </li>
+    </ol>
 </div>
 
 <style>
-    /* Falls back to its own values so the import dialog, which has no type
-       scale of its own, renders the same as the page does. */
     .howto {
         font-size: var(--text-body);
         line-height: 1.6;
     }
 
     .intro {
-        margin: 0;
+        margin: 0 0 1.25rem;
         color: hsl(var(--muted-foreground));
     }
 
-    /* Bordered and quiet, with the destination spelled out. A filled pill was
-       read as "do the thing", not "leave this page". */
+    /* Context, not a stage: set apart on a quiet ground, before the numbers
+       start. */
+    .background {
+        margin: 0 0 2rem;
+        padding: 0.9rem 1.05rem;
+        border-radius: var(--radius-md);
+        background: hsl(var(--secondary) / 0.55);
+    }
+
+    .background-title {
+        margin: 0 0 0.5rem;
+        font-size: var(--text-body);
+        font-weight: 700;
+    }
+
+    .background ul {
+        display: flex;
+        flex-direction: column;
+        gap: 0.45rem;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+    }
+
+    .background li {
+        display: grid;
+        grid-template-columns: 0.9rem minmax(0, 1fr);
+        line-height: 1.55;
+    }
+
+    .background li::before {
+        content: '–';
+        color: hsl(var(--muted-foreground));
+    }
+
+    /* ---- the three stages --------------------------------------------- */
+
+    .stages {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+
+    /* Number in the gutter, a rule running down from it to the next one: the
+       order is the information, so it is drawn rather than only numbered. */
+    .stage {
+        position: relative;
+        display: grid;
+        grid-template-columns: 2rem minmax(0, 1fr);
+        column-gap: 1rem;
+        padding-bottom: 2rem;
+    }
+
+    .stage:last-child {
+        padding-bottom: 0;
+    }
+
+    .stage:not(:last-child)::before {
+        content: '';
+        position: absolute;
+        left: calc(1rem - 0.5px);
+        top: 2.25rem;
+        bottom: 0.25rem;
+        width: 1px;
+        background: hsl(var(--border));
+    }
+
+    /* `--module-accent` is neutral ink on the source page and onboarding, and
+       the module's colour in the import dialog, which opens from inside a
+       module and wears it. */
+    .stage-num {
+        display: grid;
+        place-items: center;
+        width: 2rem;
+        height: 2rem;
+        border-radius: 50%;
+        border: 1.5px solid var(--module-accent);
+        color: var(--module-accent);
+        font-family: var(--font-mono);
+        font-size: var(--text-small);
+        font-weight: 600;
+    }
+
+    .stage-main {
+        min-width: 0;
+    }
+
+    .stage-title {
+        margin: 0.2rem 0 0.75rem;
+        font-size: var(--text-subheading);
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        line-height: 1.35;
+    }
+
+    .stage-body {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.9rem;
+    }
+
+    .stage-body > :global(*) {
+        max-width: 100%;
+    }
+
+    .stage-body p {
+        margin: 0;
+    }
+
+    /* ---- stage one ------------------------------------------------------ */
+
     .go {
         display: inline-flex;
-        align-items: baseline;
         flex-wrap: wrap;
-        gap: 0.5rem;
-        margin-top: 1rem;
-        padding: 0.5rem 0.85rem;
-        border: 1px solid color-mix(in srgb, var(--module-accent) 45%, transparent);
+        align-items: baseline;
+        gap: 0.2rem 0.6rem;
+        padding: 0.5rem 1rem;
         border-radius: var(--radius-pill);
+        background: hsl(var(--foreground));
+        color: hsl(var(--background));
+        font-weight: 600;
         text-decoration: none;
-        transition:
-            border-color 0.15s,
-            background-color 0.15s;
+        transition: opacity 0.15s;
     }
 
     .go:hover {
-        border-color: var(--module-accent);
-        background: color-mix(in srgb, var(--module-accent) 8%, transparent);
-    }
-
-    .go-label {
-        color: var(--module-accent);
-        font-weight: 600;
-        text-decoration: underline;
-        text-underline-offset: 3px;
+        opacity: 0.88;
     }
 
     .go-host {
         font-family: var(--font-mono);
         font-size: var(--text-small);
-        color: hsl(var(--muted-foreground));
+        font-weight: 500;
+        opacity: 0.75;
     }
 
     .tabs {
         display: inline-flex;
-        margin-top: 1rem;
         padding: 0.125rem;
         border: 1px solid hsl(var(--border));
         border-radius: var(--radius-pill);
@@ -218,38 +388,36 @@
         font-weight: 600;
     }
 
-    /* Numerals in the accent colour, on a rule. The list is the point of the
-       page, so it earns the space — but by being long, not by being loud. */
+    /* Lettered, so they never read as a fourth and fifth stage. */
     .steps {
         counter-reset: step;
-        margin: 1.25rem 0 0;
-        padding: 0 0 0 0.9rem;
-        border-left: 1px solid hsl(var(--border));
+        margin: 0;
+        padding: 0;
         list-style: none;
         display: flex;
         flex-direction: column;
-        gap: 0.7rem;
+        gap: 0.55rem;
     }
 
     .steps li {
         counter-increment: step;
         display: grid;
-        grid-template-columns: 1.35rem 1fr;
+        grid-template-columns: 1.35rem minmax(0, 1fr);
         align-items: baseline;
-        gap: 0.35rem;
+        gap: 0.3rem;
     }
 
     .steps li::before {
-        content: counter(step) '.';
+        content: counter(step, lower-alpha) '.';
         font-family: var(--font-mono);
         font-size: var(--text-small);
-        font-weight: 600;
-        color: var(--module-accent);
+        color: hsl(var(--muted-foreground));
     }
 
-    .settings,
-    .extra {
-        margin-top: 1.25rem;
+    /* The one card in a stage: settings decide whether the export is usable
+       at all, so they are set apart from the steps around them. */
+    .settings {
+        width: 100%;
         padding: 0.75rem 0.9rem;
         border: 1px solid hsl(var(--border));
         border-radius: var(--radius-md);
@@ -257,7 +425,7 @@
     }
 
     .settings-title,
-    .extra-title {
+    .download-tag {
         margin: 0;
         font-size: var(--text-label);
         font-weight: 600;
@@ -266,20 +434,14 @@
         color: hsl(var(--muted-foreground));
     }
 
-    /*
-     * One label column, one value column, whatever the settings say.
-     *
-     * They used to flow inline and wrap, with each note breaking to a new line
-     * inside its own group: the second setting started wherever the first
-     * happened to end, and its note landed under the middle of the row it
-     * belonged to. Three settings, three different left edges.
-     */
+    /* One label column, one value column, the note under the value it
+       qualifies — never under the label, which is not what it is about. */
     .settings dl {
         display: grid;
-        grid-template-columns: max-content 1fr;
-        column-gap: 0.75rem;
-        row-gap: 0.35rem;
-        margin: 0.55rem 0 0;
+        grid-template-columns: max-content minmax(0, 1fr);
+        column-gap: 0.9rem;
+        row-gap: 0.3rem;
+        margin: 0.5rem 0 0;
         align-items: baseline;
     }
 
@@ -291,18 +453,11 @@
         color: hsl(var(--muted-foreground));
     }
 
-    .settings dt::after {
-        content: ' ·';
-    }
-
     .value {
         margin: 0;
         font-weight: 600;
-        color: var(--module-accent);
     }
 
-    /* Under the value it qualifies, in the value column — never under the
-       label, which is not what it is about. */
     .note {
         grid-column: 2;
         margin: 0;
@@ -311,27 +466,51 @@
         color: hsl(var(--muted-foreground));
     }
 
-    .extra-title {
-        font-size: var(--text-body);
-        text-transform: none;
-        letter-spacing: 0;
-        color: hsl(var(--foreground));
+    /* Side by side where there is room: the two downloads are equals, asked
+       for in parallel, not a main one and an afterthought. */
+    .downloads {
+        width: 100%;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+        gap: 0.75rem;
     }
 
-    .extra-body {
-        margin: 0.35rem 0 0;
+    .download {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.6rem;
+        min-width: 0;
+        padding: 0.9rem;
+        border: 1px solid hsl(var(--border));
+        border-radius: var(--radius-md);
+    }
+
+    .download > :global(*) {
+        max-width: 100%;
+    }
+
+    .download p {
+        margin: 0;
+    }
+
+    .download-title {
+        font-weight: 700;
+        margin-top: -0.35rem !important;
+    }
+
+    .download-body {
+        font-size: var(--text-small);
         color: hsl(var(--muted-foreground));
     }
 
-    .extra .go {
-        margin-top: 0.75rem;
-    }
+    /* ---- notes ---------------------------------------------------------- */
 
-    .warning {
-        margin: 1.25rem 0 0;
-        padding: 0.7rem 0.9rem;
-        border-left: 3px solid color-mix(in srgb, var(--module-accent) 55%, transparent);
-        background: hsl(var(--secondary) / 0.4);
+    /* The one aside a stage may carry, in the one aside style. */
+    .note-line {
+        margin: 0;
+        padding-left: 0.75rem;
+        border-left: 2px solid hsl(var(--border-strong));
         color: hsl(var(--muted-foreground));
     }
 </style>
