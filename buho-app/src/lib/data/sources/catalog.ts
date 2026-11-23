@@ -560,6 +560,35 @@ export const CATALOG_SOURCES: CatalogSource[] = [
         },
     },
     {
+        id: 'apple-health',
+        label: 'Apple Health',
+        metaDescription:
+            'Export all your Apple Health data from the iPhone — years of steps, and how you walk — and chart it in your browser. Nothing leaves your device.',
+        icon: 'apple-health',
+        parserIds: ['apple-health'],
+        request: 'Health app → your picture → Export All Health Data',
+        format: 'export.xml, in a .zip',
+        size: 'Tens of MB zipped, hundreds once unpacked',
+        delay: 'A minute or two, on the phone',
+        wait: 'instant',
+        madeOnPhone: true,
+        fills: ['steps'],
+        guide: {
+            intro: 'The Health app exports everything your iPhone counted, including years of steps and how fast you walk.',
+            get: 'Export it from the Health app',
+            steps: [
+                'Open the <strong>Health</strong> app and tap your picture in the top right.',
+                'Tap <strong>Export All Health Data</strong> and confirm.',
+            ],
+            wait: {
+                title: 'Send it to your computer',
+                body: 'Preparing the file takes a minute or two. Save <code>export.zip</code> to Files, or send it with AirDrop or email.',
+            },
+            dropNote:
+                'Drop the <code>.zip</code> without unzipping it. It unpacks to several hundred megabytes, so reading takes a little while. Data other apps wrote into Health, like Garmin Connect or Strava, is read from their own exports instead.',
+        },
+    },
+    {
         id: 'strava',
         label: 'Strava',
         metaDescription:

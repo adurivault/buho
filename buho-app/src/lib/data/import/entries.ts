@@ -23,8 +23,12 @@ const READABLE = /\.(json|txt|gpx|tcx)$/i;
  * members are XML fragments meaningless on their own, and the Deezer parser
  * opens the workbook itself. A `.gz` is not expanded here either: it wraps a
  * single file, which the parser claiming it inflates itself.
+ *
+ * Apple Health's `export.xml` is text, but read as bytes all the same: it runs
+ * to hundreds of megabytes, close to the longest string an engine will build,
+ * and its parser decodes it a slice at a time instead.
  */
-const BINARY = /\.(fit|xlsx)$|\.(fit|gpx|tcx)\.gz$/i;
+const BINARY = /\.(fit|xlsx)$|\.(fit|gpx|tcx)\.gz$|(^|\/)export\.xml$/i;
 const ZIP = /\.zip$/i;
 
 const isOpenable = (name: string) => READABLE.test(name) || BINARY.test(name);

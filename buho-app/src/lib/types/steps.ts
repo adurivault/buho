@@ -23,21 +23,64 @@
  * avoids: a mixed window is genuinely both, and picking one would be a claim the
  * watch never made.
  *
+ * A phone keeps a coarser record: windows of at most ten minutes, each with the
+ * steps and the distance it counted and nothing else. It never says how much of
+ * the window was movement, nor whether any of it was running, so those fields
+ * are null on its packets rather than a zero that would read as "sat still" or
+ * "only walked".
+ *
  * `timestamp`/`startTimestamp`/`date` are local wall-clock strings ready for
- * insertion, resolved with the offset the watch itself recorded — a Garmin
- * export spans every timezone its owner travelled through.
+ * insertion, resolved with the offset the recorder itself knew — an export spans
+ * every timezone its owner travelled through.
  */
 export interface StepPacket {
+    /** The export it came from, as a catalog id: `garmin`, `apple-health`. */
+    source: StepSource;
     timestamp: string; // local wall-clock "YYYY-MM-DD HH:MM:SS", packet end
     date: string; // local day "YYYY-MM-DD"
     startTimestamp: string; // local wall-clock, packet start
     steps: number;
-    activeSeconds: number; // movement counted inside the window
+    activeSeconds: number | null; // movement counted inside the window; null when not measured
     spanSeconds: number; // wall-clock length of the window
-    distanceMeters: number;
-    calories: number;
+    distanceMeters: number | null;
+    calories: number | null;
     cadenceSpm: number | null; // steps per active minute; null when nothing was active
     intensity: number | null; // 0–7 as reported by the watch for the window
-    runningSteps: number; // of `steps`, how many came off the running counter
-    runningActiveSeconds: number; // of `activeSeconds`, how many it accounted for
+    runningSteps: number | null; // of `steps`, how many came off the running counter
+    runningActiveSeconds: number | null; // of `activeSeconds`, how many it accounted for
+    /**
+     * Whether the recorder was on the body: a watch that measured a pulse during
+     * the window. Null when it cannot tell — a phone, or a watch without a
+     * heart-rate sensor. It is what decides, hour by hour, whose steps count
+     * when two recorders overlap (see the steps view).
+     */
+    worn: boolean | null;
+}
+
+/** The exports that write step packets. */
+export type StepSource = 'garmin' | 'apple-health';
+
+/**
+ * How you walk, as a phone in a pocket reads it during a walk. Part of the
+ * steps module, beside the counts: the same walks, measured another way.
+ */
+export type GaitMetric = 'walking_speed' | 'step_length' | 'double_support' | 'walking_asymmetry';
+
+/** In reading order: the two anyone understands first, then the clinical two. */
+export const GAIT_METRICS: { id: GaitMetric; label: string; unit: string }[] = [
+    { id: 'walking_speed', label: 'Walking speed', unit: 'km/h' },
+    { id: 'step_length', label: 'Step length', unit: 'cm' },
+    { id: 'double_support', label: 'Double support', unit: '%' },
+    { id: 'walking_asymmetry', label: 'Walking asymmetry', unit: '%' },
+];
+
+/** One row of the `gait_readings` table. A few dozen a day, each taken mid-walk. */
+export interface GaitReading {
+    /** The export it came from, as a catalog id. */
+    source: 'apple-health';
+    /** Local wall-clock "YYYY-MM-DD HH:MM:SS", when the measured stretch began. */
+    timestamp: string;
+    date: string;
+    metric: GaitMetric;
+    value: number;
 }

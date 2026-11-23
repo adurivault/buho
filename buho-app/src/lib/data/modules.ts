@@ -159,6 +159,7 @@ export const DATA_MODULES: DataModule[] = [
             'At what time of day do you walk the most?',
             'Do you walk more in summer than in winter?',
             'How many of your steps are running?',
+            'Are you walking slower than you used to?',
         ],
         table: 'step_packets',
         icon: 'footprints',

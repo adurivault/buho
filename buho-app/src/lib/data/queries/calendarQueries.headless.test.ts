@@ -24,7 +24,9 @@ import {
     PLAYS_TABLE,
     POSITIONS_VIEW_SQL,
     STEP_PACKETS_TABLE,
+    STEPS_VIEW_SQL,
     supersedeSql,
+    supersedeStepsSql,
 } from '../db';
 import type { ModuleId } from '#lib/data/modules.ts';
 import { rampFor } from '#lib/visualizations/healthRamp.ts';
@@ -135,6 +137,7 @@ const entry = (at: string, service: string, action: string, label: string) => ({
 });
 
 const packet = (from: string, to: string, steps: number) => ({
+    source: 'garmin',
     timestamp: to,
     date: to.slice(0, 10),
     start_timestamp: from,
@@ -261,6 +264,8 @@ beforeEach(() => {
         packet('2025-03-10 23:30:00', '2025-03-10 23:59:59', 100),
         packet('2025-03-11 07:00:00', '2025-03-11 07:20:00', 3000),
     ]);
+    conn.query(supersedeStepsSql());
+    conn.query(STEPS_VIEW_SQL);
 
     insert('health_readings', [
         reading('2025-03-10 08:00:00', 60),
@@ -457,7 +462,7 @@ describe('getYearData', () => {
             activity: null,
             health: null,
         });
-        expect(sent().every((sql) => sql.includes('FROM step_packets'))).toBe(true);
+        expect(sent().every((sql) => sql.includes('FROM steps'))).toBe(true);
     });
 });
 

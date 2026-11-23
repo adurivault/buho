@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 import type { DecodedFit } from '#lib/data/formats/fit/decode.ts';
 import { fitSecondsToMs } from '#lib/data/formats/fit/units.ts';
 import type { StepSample } from './types';
-import { buildStepPackets, collectStepSamples } from './stepPackets';
+import type { HealthReading } from '#lib/types/health.ts';
+import {
+    buildStepPackets,
+    collectStepSamples,
+    markWorn,
+    type WatchStepPacket,
+} from './stepPackets';
 
 /** FIT seconds for a UTC wall-clock, so fixtures read as dates. */
 function at(iso: string): number {
@@ -385,5 +391,57 @@ describe('buildStepPackets', () => {
             '2024-03-31 06:00:00',
             '2024-03-31 07:00:00',
         ]);
+    });
+});
+
+describe('markWorn', () => {
+    const packet = (start: string, end: string): WatchStepPacket => ({
+        source: 'garmin',
+        startTimestamp: start,
+        timestamp: end,
+        date: end.slice(0, 10),
+        steps: 100,
+        activeSeconds: 60,
+        spanSeconds: 600,
+        distanceMeters: 80,
+        calories: 4,
+        cadenceSpm: 100,
+        intensity: 2,
+        runningSteps: 0,
+        runningActiveSeconds: 0,
+        worn: null,
+    });
+    const beat = (
+        timestamp: string,
+        metric: HealthReading['metric'] = 'heart_rate'
+    ): HealthReading => ({
+        timestamp,
+        date: timestamp.slice(0, 10),
+        metric,
+        value: 60,
+    });
+
+    it('marks worn the windows with a pulse inside, edges included', () => {
+        const packets = [
+            packet('2024-05-01 08:00:00', '2024-05-01 08:10:00'),
+            packet('2024-05-01 08:10:00', '2024-05-01 09:00:00'),
+            packet('2024-05-01 09:00:00', '2024-05-01 09:30:00'),
+        ];
+        const readings = [beat('2024-05-01 08:10:00'), beat('2024-05-01 09:45:00')];
+
+        expect(markWorn(packets, readings).map((p) => p.worn)).toEqual([true, true, false]);
+    });
+
+    it('reads only the pulse, not the other signals', () => {
+        const packets = [packet('2024-05-01 08:00:00', '2024-05-01 08:10:00')];
+        const readings = [beat('2024-05-01 07:00:00'), beat('2024-05-01 08:05:00', 'stress')];
+
+        expect(markWorn(packets, readings)[0].worn).toBe(false);
+    });
+
+    it('leaves the packets unknown when the watch never measured a pulse', () => {
+        const packets = [packet('2024-05-01 08:00:00', '2024-05-01 08:10:00')];
+
+        expect(markWorn(packets, [beat('2024-05-01 08:05:00', 'stress')])[0].worn).toBeNull();
     });
 });

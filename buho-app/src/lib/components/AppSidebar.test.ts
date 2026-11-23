@@ -90,7 +90,7 @@ describe('AppSidebar', () => {
             'Positions — from Google Timeline, Strava or Garmin Connect',
             'Messages — from WhatsApp, Messenger or Instagram',
             'Google activity — from Google Takeout',
-            'Steps — from Garmin Connect',
+            'Steps — from Apple Health or Garmin Connect',
             'Health — from Garmin Connect',
         ]);
     });
@@ -155,7 +155,7 @@ describe('AppSidebar', () => {
 
             expect(screen.getByText('Steps').closest('a')).toHaveAttribute(
                 'title',
-                'Steps — from Garmin Connect · data loaded'
+                'Steps — from Apple Health or Garmin Connect · data loaded'
             );
             expect(screen.getByText('Messages').closest('a')).toHaveAttribute(
                 'title',

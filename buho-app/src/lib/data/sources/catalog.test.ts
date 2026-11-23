@@ -200,7 +200,10 @@ describe('source catalog', () => {
 
     test('storage covers exactly the modules the source claims to fill', () => {
         for (const source of CATALOG_SOURCES) {
-            const stored = SOURCE_STORAGE[source.id].map((store) => store.module).sort();
+            const stored = SOURCE_STORAGE[source.id]
+                .filter((store) => !store.beside)
+                .map((store) => store.module)
+                .sort();
             const claimed = [...source.fills].sort();
             expect(stored, `${source.label} stores and fills different modules`).toEqual(claimed);
         }

@@ -18,6 +18,7 @@
     import {
         getStepBasePoints,
         getStepsTimeDomain,
+        NOT_MEASURED,
         type StepBasePoint,
     } from '#lib/data/queries/stepsQueries.ts';
     import {
@@ -153,6 +154,14 @@
         // one packet that carries it hides nothing: a line that only appears
         // when there is a reading can't misrepresent the packets without one.
         if (km >= 0.01) lines.push(`${km.toFixed(2)} km`);
+        // Only where the phone took a reading during the window.
+        const speed = m.walkingSpeed as number | null;
+        const stride = m.stepLength as number | null;
+        const gait = [
+            speed != null ? `${speed.toFixed(1)} km/h` : null,
+            stride != null ? `${Math.round(stride)} cm steps` : null,
+        ].filter(Boolean);
+        if (gait.length) lines.push(gait.join(' · '));
 
         return { title: `${steps.toLocaleString()} steps`, lines };
     }
@@ -169,7 +178,25 @@
         { key: 'span', field: 'fSpan', label: 'Window' },
         { key: 'dayofweek', field: 'dow', label: 'Day of week', format: dowLabel },
         { key: 'year', field: 'year', label: 'Year' },
+        // How the steps were walked, where a phone measured it: a property of
+        // the packets like any other, so it filters like any other.
+        { key: 'speed', field: 'fSpeed', label: 'Walking speed', format: withUnit('km/h') },
+        { key: 'stride', field: 'fStride', label: 'Step length', format: withUnit('cm') },
     ];
+
+    function withUnit(unit: string) {
+        return (v: string) => (v === NOT_MEASURED ? v : `${v} ${unit}`);
+    }
+
+    /**
+     * The gait pies need a phone that measured gait. Without one every packet
+     * is "Not measured", and a pie of a single slice says nothing.
+     */
+    const GAIT_KEYS = new Set(['speed', 'stride']);
+    const hasGait = $derived(
+        basePoints.some((p) => p.walkingSpeed != null || p.stepLength != null)
+    );
+    const visiblePies = $derived(PIE_DIMS.filter((d) => hasGait || !GAIT_KEYS.has(d.key)));
 
     /**
      * Cadence has no pie: its own panel draws the whole distribution and owns
@@ -578,7 +605,7 @@
 
         {#if !initialLoad && dbReady}
             <section class="dimensions-row" aria-label="Dimension breakdowns">
-                {#each PIE_DIMS as pd (pd.key)}
+                {#each visiblePies as pd (pd.key)}
                     <DimensionPie
                         title={pd.label}
                         filterKey={pd.key}

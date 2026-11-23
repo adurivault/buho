@@ -10,6 +10,7 @@ export * from './format';
 export * from './plays';
 export * from './positions';
 export * from './steps';
+export * from './gait';
 export * from './health';
 export * from './messages';
 export * from './activity';

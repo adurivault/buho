@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE HealthData [
+<!-- HealthKit Export Version: 14 -->
+<!ELEMENT HealthData (ExportDate,Me,(Record|Correlation|Workout|ActivitySummary|ClinicalRecord|Audiogram|VisionPrescription)*)>
+<!ATTLIST HealthData
+  locale CDATA #REQUIRED
+>
+<!ELEMENT Record ((MetadataEntry|HeartRateVariabilityMetadataList)*)>
+<!ATTLIST Record
+  type          CDATA #REQUIRED
+  unit          CDATA #IMPLIED
+  value         CDATA #IMPLIED
+  sourceName    CDATA #REQUIRED
+  sourceVersion CDATA #IMPLIED
+  device        CDATA #IMPLIED
+  creationDate  CDATA #IMPLIED
+  startDate     CDATA #REQUIRED
+  endDate       CDATA #REQUIRED
+>
+]>
+<HealthData locale="en_GB">
+ <ExportDate value="2024-08-01 10:00:00 +0200"/>
+ <Me HKCharacteristicTypeIdentifierBiologicalSex="HKBiologicalSexNotSet" HKCharacteristicTypeIdentifierBloodType="HKBloodTypeNotSet"/>
+ <Record type="HKQuantityTypeIdentifierStepCount" sourceName="Test iPhone" sourceVersion="17.2" device="&lt;&lt;HKDevice: 0x600002a1c0&gt;, name:iPhone, manufacturer:Apple Inc., model:iPhone, hardware:iPhone14,5, software:17.2&gt;" unit="count" creationDate="2024-01-15 09:08:00 +0200" startDate="2024-01-15 09:00:00 +0200" endDate="2024-01-15 09:08:00 +0200" value="812"/>
+ <Record type="HKQuantityTypeIdentifierStepCount" sourceName="Test iPhone" sourceVersion="17.2" device="&lt;&lt;HKDevice: 0x600002a1c0&gt;, name:iPhone, manufacturer:Apple Inc., model:iPhone, hardware:iPhone14,5, software:17.2&gt;" unit="count" creationDate="2024-01-15 09:20:00 +0200" startDate="2024-01-15 09:10:00 +0200" endDate="2024-01-15 09:20:00 +0200" value="1034"/>
+ <Record type="HKQuantityTypeIdentifierStepCount" sourceName="Test iPhone" sourceVersion="17.2" device="&lt;&lt;HKDevice: 0x600002a1c0&gt;, name:iPhone, manufacturer:Apple Inc., model:iPhone, hardware:iPhone14,5, software:17.2&gt;" unit="count" creationDate="2024-03-11 15:09:30 +0200" startDate="2024-03-11 15:00:00 +0200" endDate="2024-03-11 15:09:30 +0200" value="640"/>
+ <Record type="HKQuantityTypeIdentifierStepCount" sourceName="Connect" sourceVersion="17.2" unit="count" creationDate="2024-01-15 09:20:00 +0200" startDate="2024-01-15 09:00:00 +0200" endDate="2024-01-15 09:20:00 +0200" value="1900"/>
+ <Record type="HKQuantityTypeIdentifierDistanceWalkingRunning" sourceName="Test iPhone" sourceVersion="17.2" device="&lt;&lt;HKDevice: 0x600002a1c0&gt;, name:iPhone, manufacturer:Apple Inc., model:iPhone, hardware:iPhone14,5, software:17.2&gt;" unit="km" creationDate="2024-01-15 09:08:00 +0200" startDate="2024-01-15 09:00:00 +0200" endDate="2024-01-15 09:08:00 +0200" value="0.61"/>
+ <Record type="HKQuantityTypeIdentifierDistanceWalkingRunning" sourceName="Test iPhone" sourceVersion="17.2" device="&lt;&lt;HKDevice: 0x600002a1c0&gt;, name:iPhone, manufacturer:Apple Inc., model:iPhone, hardware:iPhone14,5, software:17.2&gt;" unit="km" creationDate="2024-01-15 09:20:00 +0200" startDate="2024-01-15 09:10:00 +0200" endDate="2024-01-15 09:20:00 +0200" value="0.79"/>
+ <Record type="HKQuantityTypeIdentifierWalkingSpeed" sourceName="Test iPhone" sourceVersion="17.2" device="&lt;&lt;HKDevice: 0x600002a1c0&gt;, name:iPhone, manufacturer:Apple Inc., model:iPhone, hardware:iPhone14,5, software:17.2&gt;" unit="km/hr" creationDate="2024-01-15 09:03:00 +0200" startDate="2024-01-15 09:02:00 +0200" endDate="2024-01-15 09:03:00 +0200" value="4.68"/>
+ <Record type="HKQuantityTypeIdentifierWalkingStepLength" sourceName="Test iPhone" sourceVersion="17.2" device="&lt;&lt;HKDevice: 0x600002a1c0&gt;, name:iPhone, manufacturer:Apple Inc., model:iPhone, hardware:iPhone14,5, software:17.2&gt;" unit="cm" creationDate="2024-01-15 09:03:00 +0200" startDate="2024-01-15 09:02:00 +0200" endDate="2024-01-15 09:03:00 +0200" value="71"/>
+ <Record type="HKQuantityTypeIdentifierWalkingDoubleSupportPercentage" sourceName="Test iPhone" sourceVersion="17.2" device="&lt;&lt;HKDevice: 0x600002a1c0&gt;, name:iPhone, manufacturer:Apple Inc., model:iPhone, hardware:iPhone14,5, software:17.2&gt;" unit="%" creationDate="2024-01-15 09:03:00 +0200" startDate="2024-01-15 09:02:00 +0200" endDate="2024-01-15 09:03:00 +0200" value="0.264"/>
+ <Record type="HKQuantityTypeIdentifierWalkingAsymmetryPercentage" sourceName="Test iPhone" sourceVersion="17.2" device="&lt;&lt;HKDevice: 0x600002a1c0&gt;, name:iPhone, manufacturer:Apple Inc., model:iPhone, hardware:iPhone14,5, software:17.2&gt;" unit="%" creationDate="2024-01-15 09:03:00 +0200" startDate="2024-01-15 09:02:00 +0200" endDate="2024-01-15 09:03:00 +0200" value="0.02"/>
+ <Record type="HKQuantityTypeIdentifierWalkingSpeed" sourceName="Test iPhone" sourceVersion="17.2" device="&lt;&lt;HKDevice: 0x600002a1c0&gt;, name:iPhone, manufacturer:Apple Inc., model:iPhone, hardware:iPhone14,5, software:17.2&gt;" unit="km/hr" creationDate="2024-03-11 15:02:00 +0200" startDate="2024-03-11 15:01:00 +0200" endDate="2024-03-11 15:02:00 +0200" value="4.9"/>
+ <Record type="HKCategoryTypeIdentifierSleepAnalysis" sourceName="Test iPhone" sourceVersion="17.2" device="&lt;&lt;HKDevice: 0x600002a1c0&gt;, name:iPhone, manufacturer:Apple Inc., model:iPhone, hardware:iPhone14,5, software:17.2&gt;" creationDate="2024-01-15 07:50:00 +0200" startDate="2024-01-14 23:40:00 +0200" endDate="2024-01-15 07:50:00 +0200" value="HKCategoryValueSleepAnalysisInBed">
+  <MetadataEntry key="HKTimeZone" value="Europe/Paris"/>
+ </Record>
+ <Record type="HKCategoryTypeIdentifierSleepAnalysis" sourceName="Test iPhone" sourceVersion="17.2" device="&lt;&lt;HKDevice: 0x600002a1c0&gt;, name:iPhone, manufacturer:Apple Inc., model:iPhone, hardware:iPhone14,5, software:17.2&gt;" creationDate="2024-01-16 08:05:00 +0200" startDate="2024-01-15 23:55:00 +0200" endDate="2024-01-16 08:05:00 +0200" value="HKCategoryValueSleepAnalysisInBed">
+  <MetadataEntry key="HKTimeZone" value="Europe/Paris"/>
+ </Record>
+ <Record type="HKCategoryTypeIdentifierSleepAnalysis" sourceName="Test iPhone" sourceVersion="17.2" device="&lt;&lt;HKDevice: 0x600002a1c0&gt;, name:iPhone, manufacturer:Apple Inc., model:iPhone, hardware:iPhone14,5, software:17.2&gt;" creationDate="2024-03-11 13:20:00 +0200" startDate="2024-03-11 05:30:00 +0200" endDate="2024-03-11 13:20:00 +0200" value="HKCategoryValueSleepAnalysisInBed">
+  <MetadataEntry key="HKTimeZone" value="America/Lima"/>
+ </Record>
+ <Record type="HKCategoryTypeIdentifierSleepAnalysis" sourceName="Test iPhone" sourceVersion="17.2" device="&lt;&lt;HKDevice: 0x600002a1c0&gt;, name:iPhone, manufacturer:Apple Inc., model:iPhone, hardware:iPhone14,5, software:17.2&gt;" creationDate="2024-03-12 13:10:00 +0200" startDate="2024-03-12 05:45:00 +0200" endDate="2024-03-12 13:10:00 +0200" value="HKCategoryValueSleepAnalysisInBed">
+  <MetadataEntry key="HKTimeZone" value="America/Lima"/>
+ </Record>
+</HealthData>

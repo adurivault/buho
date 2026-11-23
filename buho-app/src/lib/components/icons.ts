@@ -19,5 +19,6 @@ export type IconName =
     | 'footprints'
     | 'heartbeat'
     | 'garmin'
+    | 'apple-health'
     | 'strava'
     | 'calendar';

@@ -129,8 +129,17 @@ export async function runImport(
         message: 'Working out what you dropped...',
         progress: 0.2,
     });
-    const { plays, positions, steps, health, threads, activity, unrecognisedFiles, failedParsers } =
-        await readDrop(entries);
+    const {
+        plays,
+        positions,
+        steps,
+        gait,
+        health,
+        threads,
+        activity,
+        unrecognisedFiles,
+        failedParsers,
+    } = await readDrop(entries);
 
     for (const parser of failedParsers) hooks.parserFailed(parser);
 
@@ -146,7 +155,7 @@ export async function runImport(
             // recognised — reporting it as unreadable would send us looking at
             // the export instead of at the bug.
             failedParsers.length ? 'recognised-empty' : 'unrecognised',
-            `Nothing Buho reads in ${entries.length.toLocaleString()} file${entries.length > 1 ? 's' : ''}. Here's what it can read: Spotify's *extended* streaming history, a Deezer .xlsx, a Last.fm scrobbles .json, a Google Timeline export, Takeout's My Activity as JSON, Messenger or Instagram archives, WhatsApp .txt chats, or a Garmin export.`
+            `Nothing Buho reads in ${entries.length.toLocaleString()} file${entries.length > 1 ? 's' : ''}. Here's what it can read: Spotify's *extended* streaming history, a Deezer .xlsx, a Last.fm scrobbles .json, a Google Timeline export, Takeout's My Activity as JSON, Messenger or Instagram archives, WhatsApp .txt chats, a Garmin export, or an Apple Health export.`
         );
     }
 
@@ -259,9 +268,17 @@ export async function runImport(
             progress: 0.85,
         });
         await db.insertStepPackets(steps);
-        report.modules.push({ module: 'steps', rows: steps.length, services: ['garmin'] });
-        tally(rowsByService, 'garmin', steps.length);
+        report.modules.push({
+            module: 'steps',
+            rows: steps.length,
+            services: servicesIn(steps, (packet) => packet.source),
+        });
+        tallyBy(rowsByService, steps, (packet) => packet.source);
     }
+
+    // Read beside the step counts, in the same module, and not counted with
+    // them: the report and the analytics tally the module in packets.
+    if (gait.length) await db.insertGaitReadings(gait);
 
     if (health.length) {
         hooks.progress({

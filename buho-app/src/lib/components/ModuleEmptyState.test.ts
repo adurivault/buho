@@ -33,9 +33,11 @@ describe('ModuleEmptyState', () => {
      */
     it('takes the file in a drop zone of its own', async () => {
         const handleImport = vi.spyOn(dataStore, 'handleImport').mockResolvedValue(undefined);
-        const { container } = render(ModuleEmptyState, { props: { module: moduleById('steps') } });
+        const { container } = render(ModuleEmptyState, {
+            props: { module: moduleById('activity') },
+        });
 
-        expect(screen.getByText('Drop your Garmin Connect export here')).toBeInTheDocument();
+        expect(screen.getByText('Drop your Google Takeout export here')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Choose files' })).toBeInTheDocument();
 
         const file = new File(['{}'], 'export.zip');
@@ -47,7 +49,7 @@ describe('ModuleEmptyState', () => {
         expect(handleImport).toHaveBeenCalledWith(expect.any(Function), {
             pick: 'drop',
             surface: 'module',
-            expected: 'garmin',
+            expected: 'google-activity',
         });
     });
 
@@ -100,11 +102,11 @@ describe('ModuleEmptyState', () => {
 
     /** With one export there is no choice to explain, so a sentence names it. */
     it('names the one export to ask for in a sentence, with its wait', () => {
-        render(ModuleEmptyState, { props: { module: moduleById('steps') } });
+        render(ModuleEmptyState, { props: { module: moduleById('activity') } });
 
-        const garmin = screen.getByRole('link', { name: 'Garmin Connect' });
-        expect(garmin.getAttribute('href')).toMatch(/\/sources\/garmin$/);
-        expect(screen.getByText(/It takes a few hours/i)).toBeInTheDocument();
+        const takeout = screen.getByRole('link', { name: 'Google Takeout' });
+        expect(takeout.getAttribute('href')).toMatch(/\/sources\/google-activity$/);
+        expect(screen.getByText(/It takes minutes to hours/i)).toBeInTheDocument();
         expect(document.querySelectorAll('.feeds li')).toHaveLength(0);
     });
 

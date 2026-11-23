@@ -17,11 +17,12 @@ const EXPECTED: Record<FixtureSource, { parser: string; dataset: keyof Rows }> =
     normalizedJson: { parser: 'normalized-json', dataset: 'threads' },
     whatsappText: { parser: 'whatsapp-text', dataset: 'threads' },
     strava: { parser: 'strava', dataset: 'positions' },
+    appleHealth: { parser: 'apple-health', dataset: 'steps' },
 };
 
 type Rows = Pick<
     Awaited<ReturnType<typeof readDrop>>,
-    'plays' | 'positions' | 'activity' | 'threads'
+    'plays' | 'positions' | 'activity' | 'threads' | 'steps'
 >;
 
 describe.each(FIXTURE_SOURCES)('fixture: %s', (source) => {

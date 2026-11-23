@@ -1,11 +1,12 @@
 import type { HealthReading } from '#lib/types/health.ts';
-import type { StepPacket } from '#lib/types/steps.ts';
+import type { GaitReading, StepPacket } from '#lib/types/steps.ts';
 import type { ActivityRow } from '#lib/types/googleActivity.ts';
 import type { LocationSegment } from '#lib/types/positions.ts';
 import type { ParsedThread } from '#lib/types/messages.ts';
 import type { Play } from '#lib/types/play.ts';
 import type { AnySourceParser, ArchiveContext, ImportEntry, RoutingResult } from './types';
 import { PEEK_LENGTH } from './types';
+import { appleHealthParser } from './appleHealth/parser';
 import { deezerXlsxParser } from './deezer/parser';
 import { garminFitParser } from './garmin/parser';
 import { googleActivityParser } from './googleActivity/parser';
@@ -28,6 +29,7 @@ export const SOURCE_PARSERS: AnySourceParser[] = [
     googleActivityParser,
     googleTimelineParser,
     garminFitParser,
+    appleHealthParser,
     stravaParser,
     spotifyJsonParser,
     deezerXlsxParser,
@@ -47,9 +49,10 @@ const READABLE = /\.(json|txt|gpx|tcx)$/i;
  *
  * Skipping the peek is what makes that free. A zip member cannot be inflated by
  * prefix, so peeking one decompresses it whole — and a Strava export is several
- * hundred track files, every one of which the parser then reads again.
+ * hundred track files, every one of which the parser then reads again. Apple
+ * Health's `export.xml` is the extreme case: one file of hundreds of megabytes.
  */
-const NO_PEEK = /\.(fit|xlsx|gpx|tcx)$|\.(fit|gpx|tcx)\.gz$/i;
+const NO_PEEK = /\.(fit|xlsx|gpx|tcx)$|\.(fit|gpx|tcx)\.gz$|^export\.xml$/i;
 
 export function buildArchiveContext(entries: ImportEntry[]): ArchiveContext {
     const paths = entries.map((e) => e.path.toLowerCase());
@@ -119,6 +122,8 @@ export interface DropResult {
     /** Recorded positions, from every provider in the drop. */
     positions: LocationSegment[];
     steps: StepPacket[];
+    /** How those steps were walked, measured by a phone during the walk. */
+    gait: GaitReading[];
     /** Heart rate, stress and the rest, riding in on the same monitoring files. */
     health: HealthReading[];
     /** Plays, from every music service in the drop. */
@@ -159,6 +164,7 @@ export async function readDrop(entries: ImportEntry[]): Promise<DropResult> {
         activity: [],
         positions: [],
         steps: [],
+        gait: [],
         health: [],
         plays: [],
         unrecognisedFiles: unmatched.length,
@@ -181,12 +187,13 @@ export async function readDrop(entries: ImportEntry[]): Promise<DropResult> {
                 // Every music service lands in the same bucket, each row already
                 // carrying its own `source`.
                 appendAll(result.plays, await parser.parse(parserEntries, ctx));
-            } else if (parser.dataset === 'garmin') {
-                // The one export that yields two datasets at once — its tracks
-                // land in the same bucket as Google Timeline's.
-                const { positions, steps, health } = await parser.parse(parserEntries, ctx);
+            } else if (parser.dataset === 'monitoring') {
+                // The exports that yield several datasets at once — Garmin's
+                // tracks land in the same bucket as Google Timeline's.
+                const { positions, steps, gait, health } = await parser.parse(parserEntries, ctx);
                 appendAll(result.positions, positions);
                 appendAll(result.steps, steps);
+                appendAll(result.gait, gait);
                 appendAll(result.health, health);
             } else {
                 appendAll(result.activity, await parser.parse(parserEntries, ctx));

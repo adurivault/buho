@@ -1,5 +1,5 @@
 import type { HealthReading } from '#lib/types/health.ts';
-import type { StepPacket } from '#lib/types/steps.ts';
+import type { GaitReading, StepPacket } from '#lib/types/steps.ts';
 import type { ActivityRow } from '#lib/types/googleActivity.ts';
 import type { LocationSegment } from '#lib/types/positions.ts';
 import type { Network, ParsedThreadDraft } from '#lib/types/messages.ts';
@@ -30,7 +30,8 @@ export interface ImportEntry {
     /** The raw bytes. Read once, by the parser that claimed the entry. */
     bytes(): Promise<Uint8Array>;
     /**
-     * True for formats that are not text at all — Garmin's `.fit` files.
+     * True for formats that are not text at all — Garmin's `.fit` files — and
+     * for Apple Health's `export.xml`, text too large to read as one string.
      *
      * Routing skips the peek for these: the head of a binary file says nothing a
      * `match` could use, and a zip member cannot be inflated by prefix, so
@@ -60,19 +61,21 @@ export const PEEK_LENGTH = 2048;
  * one dropped folder can hold a Messenger archive next to a Google Takeout — but
  * storage is not: each dataset has its own table and its own columns.
  */
-export type Dataset = 'messages' | 'activity' | 'positions' | 'garmin' | 'listening';
+export type Dataset = 'messages' | 'activity' | 'positions' | 'monitoring' | 'listening';
 
 /**
- * What one Garmin export yields.
+ * What a recorder worn or carried all day yields: a Garmin export, Apple Health.
  *
- * The only parser that feeds two datasets at once, because a Garmin export is a
- * single family of `.fit` files that happens to carry both: routing hands each
- * file to exactly one parser, so splitting this in two would mean decoding all
- * ten thousand of them twice.
+ * The parsers that feed several datasets at once, because each export is one
+ * body of files that happens to carry all of them: routing hands each file to
+ * exactly one parser, so splitting this up would mean decoding Garmin's ten
+ * thousand `.fit` files, or Apple's one huge XML, several times over.
  */
-export interface GarminPayload {
+export interface MonitoringPayload {
     positions: LocationSegment[];
     steps: StepPacket[];
+    /** How the walks behind those steps were walked. Only a phone measures it. */
+    gait: GaitReading[];
     health: HealthReading[];
 }
 
@@ -81,7 +84,7 @@ export interface DatasetPayload {
     messages: ParsedThreadDraft[];
     activity: ActivityRow[];
     positions: LocationSegment[];
-    garmin: GarminPayload;
+    monitoring: MonitoringPayload;
     listening: Play[];
 }
 
@@ -115,7 +118,7 @@ export type AnySourceParser =
     | MessagesSourceParser
     | SourceParser<'activity'>
     | SourceParser<'positions'>
-    | SourceParser<'garmin'>
+    | SourceParser<'monitoring'>
     | SourceParser<'listening'>;
 
 /** What a routing pass concluded, so the UI can report it. */

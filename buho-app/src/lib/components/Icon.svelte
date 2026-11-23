@@ -2,6 +2,7 @@
     import Activity from '@lucide/svelte/icons/activity';
     import Calendar from '@lucide/svelte/icons/calendar';
     import Footprints from '@lucide/svelte/icons/footprints';
+    import Heart from '@lucide/svelte/icons/heart';
     import ListMusic from '@lucide/svelte/icons/list-music';
     import Music from '@lucide/svelte/icons/music';
     import Triangle from '@lucide/svelte/icons/triangle';
@@ -17,7 +18,7 @@
      * page explains what lights up in the sidebar, and two drawings of the
      * same thing would quietly drift apart.
      *
-     * Lucide covers four of them. Its icons are built on the same 24-unit grid
+     * Lucide covers most of them. Its icons are built on the same 24-unit grid
      * with the same stroke, so they sit beside the hand-drawn ones without
      * looking imported.
      */
@@ -49,6 +50,10 @@
     <!-- Garmin's mark is a triangle; the footprints are the step data, which is
          only one of the two things its export carries. -->
     <Triangle {size} />
+{:else if name === 'apple-health'}
+    <!-- Apple Health's mark is a heart. The Health *dataset* is a trace, so the
+         two never share a glyph. -->
+    <Heart {size} />
 {:else}
     <svg
         width={size}

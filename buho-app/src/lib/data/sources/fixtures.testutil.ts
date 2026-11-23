@@ -25,6 +25,7 @@ export const FIXTURE_SOURCES = [
     'normalizedJson',
     'whatsappText',
     'strava',
+    'appleHealth',
 ] as const;
 
 export type FixtureSource = (typeof FIXTURE_SOURCES)[number];

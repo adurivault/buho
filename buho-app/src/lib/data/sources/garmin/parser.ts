@@ -4,10 +4,10 @@ import {
     FIT_MONITORING,
     type DecodedFit,
 } from '#lib/data/formats/fit/decode.ts';
-import { stepPacketsFromFiles } from '#lib/data/sources/garmin/stepPackets.ts';
+import { markWorn, stepPacketsFromFiles } from '#lib/data/sources/garmin/stepPackets.ts';
 import { healthReadingsFromFiles } from '#lib/data/sources/garmin/healthReadings.ts';
 import { trackSegmentsFromFiles } from '#lib/data/sources/garmin/tracks.ts';
-import type { GarminPayload, ImportEntry, SourceParser } from '../types';
+import type { ImportEntry, MonitoringPayload, SourceParser } from '../types';
 
 /**
  * Garmin Connect's "Export Your Data" archive.
@@ -22,10 +22,10 @@ import type { GarminPayload, ImportEntry, SourceParser } from '../types';
  * all-day step counters. Sleep, HRV and respiration files are the majority by
  * count and are skipped.
  */
-export const garminFitParser: SourceParser<'garmin'> = {
+export const garminFitParser: SourceParser<'monitoring'> = {
     id: 'garmin',
     label: 'Garmin Connect',
-    dataset: 'garmin',
+    dataset: 'monitoring',
 
     match(entry: ImportEntry): number {
         // The extension is proof on its own: no other export Buho reads ships
@@ -33,7 +33,7 @@ export const garminFitParser: SourceParser<'garmin'> = {
         return /\.fit$/i.test(entry.name) ? 1 : 0;
     },
 
-    async parse(entries: ImportEntry[]): Promise<GarminPayload> {
+    async parse(entries: ImportEntry[]): Promise<MonitoringPayload> {
         const activities: DecodedFit[] = [];
         const monitoring: DecodedFit[] = [];
 
@@ -52,15 +52,18 @@ export const garminFitParser: SourceParser<'garmin'> = {
             else if (decoded?.fileType === FIT_MONITORING) monitoring.push(decoded);
         }
 
+        // Same files, read a second way: the counters and the health readings
+        // sit side by side in them.
+        const health = healthReadingsFromFiles(monitoring);
         return {
             positions: trackSegmentsFromFiles(activities),
             // Deferred to a single pass over every file: the counters are
             // cumulative and overlap across files, so packets can only be
-            // derived once the whole export has been read.
-            steps: stepPacketsFromFiles(monitoring),
-            // Same files, read a second way: the counters and the health
-            // readings sit side by side in them.
-            health: healthReadingsFromFiles(monitoring),
+            // derived once the whole export has been read. The pulse then says
+            // which of them the watch was actually worn for.
+            steps: markWorn(stepPacketsFromFiles(monitoring), health),
+            gait: [],
+            health,
         };
     },
 };

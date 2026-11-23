@@ -17,6 +17,7 @@ import {
     STEPS_COLUMNS,
     stepPacketsDedupeSql,
     locationDedupeSql,
+    STEP_PACKETS_TABLE,
     supersedeSql,
 } from '../../db';
 import type { LocationSegment } from '#lib/types/positions.ts';
@@ -32,12 +33,7 @@ const LOCATION_SCHEMA = `
     city_km DOUBLE, arrondissement VARCHAR, seg_id INTEGER
 `;
 
-const STEPS_SCHEMA = `
-    timestamp TIMESTAMP, date DATE, start_timestamp TIMESTAMP,
-    steps INTEGER, active_seconds DOUBLE, span_seconds DOUBLE, distance_meters DOUBLE,
-    calories DOUBLE, cadence_spm DOUBLE, intensity INTEGER,
-    running_steps INTEGER, running_active_seconds DOUBLE, step_id INTEGER
-`;
+const STEPS_SCHEMA = STEP_PACKETS_TABLE.schema;
 
 let db: HeadlessDuckDB;
 let conn: HeadlessConnection;
@@ -73,6 +69,7 @@ function segment(
 
 function packet(timestamp: string, steps: number): StepPacket {
     return {
+        source: 'garmin',
         timestamp,
         date: timestamp.slice(0, 10),
         startTimestamp: timestamp,
@@ -85,6 +82,7 @@ function packet(timestamp: string, steps: number): StepPacket {
         intensity: 4,
         runningSteps: 0,
         runningActiveSeconds: 0,
+        worn: true,
     };
 }
 
@@ -140,6 +138,7 @@ function importPackets(batch: StepPacket[]) {
     for (const p of batch) {
         conn.query(
             `INSERT INTO step_packets_incoming (${STEPS_COLUMNS}) VALUES (${[
+                p.source,
                 p.timestamp,
                 p.date,
                 p.startTimestamp,
@@ -152,6 +151,7 @@ function importPackets(batch: StepPacket[]) {
                 p.intensity,
                 p.runningSteps,
                 p.runningActiveSeconds,
+                p.worn,
             ]
                 .map(literal)
                 .join(', ')})`

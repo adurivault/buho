@@ -1,5 +1,5 @@
 import type { SqlNumber, SqlText } from './common';
-import { query } from '#lib/data/db/index.ts';
+import { query, tableExists } from '#lib/data/db/index.ts';
 import type { ConnectablePoint } from '#lib/data/queries/behaviorQueries.ts';
 
 // ---------------------------------------------------------------------------
@@ -55,6 +55,69 @@ const INTENSITY_BUCKET_SQL = `
     END
 `;
 
+/**
+ * Gait bands, for the pies. Walking speed in km/h: under 4 is a stroll, 5 and
+ * up is walking somewhere late. Step length in cm, around a typical 70.
+ */
+export const SPEED_BANDS: CadenceBand[] = [
+    { label: '< 4', min: 0, max: 4 },
+    { label: '4–4.5', min: 4, max: 4.5 },
+    { label: '4.5–5', min: 4.5, max: 5 },
+    { label: '5–5.5', min: 5, max: 5.5 },
+    { label: '5.5+', min: 5.5, max: Infinity },
+];
+
+export const STRIDE_BANDS: CadenceBand[] = [
+    { label: '< 60', min: 0, max: 60 },
+    { label: '60–70', min: 60, max: 70 },
+    { label: '70–80', min: 70, max: 80 },
+    { label: '80+', min: 80, max: Infinity },
+];
+
+/** The pies' label for a packet no gait reading fell in. */
+export const NOT_MEASURED = 'Not measured';
+
+function bandSql(column: string, bands: CadenceBand[]): string {
+    return `
+        CASE
+            WHEN ${column} IS NULL THEN '${NOT_MEASURED}'
+            ${bands
+                .filter((b) => Number.isFinite(b.max))
+                .map((b) => `WHEN ${column} < ${b.max} THEN '${b.label}'`)
+                .join('\n            ')}
+            ELSE '${bands[bands.length - 1].label}'
+        END
+    `;
+}
+
+/**
+ * The gait readings taken inside each packet's window, one median per metric.
+ *
+ * Gait is a property of the steps rather than a signal of its own: a phone
+ * measures it a few dozen times a day, each time over a stretch of a walk, so
+ * every reading belongs to the packet that counted those steps. Joined against
+ * the steps view rather than the phone's own packets, so a reading taken in an
+ * hour the watch holds describes the watch's packet for that hour.
+ *
+ * An export without gait has no table at all, hence the empty stand-in.
+ */
+async function gaitPerPacketSql(): Promise<string> {
+    if (!(await tableExists('gait_readings'))) {
+        return `SELECT NULL::INTEGER AS step_id, NULL::DOUBLE AS walking_speed, NULL::DOUBLE AS step_length WHERE false`;
+    }
+    return `
+        SELECT
+            s.step_id,
+            median(g.value) FILTER (WHERE g.metric = 'walking_speed') AS walking_speed,
+            median(g.value) FILTER (WHERE g.metric = 'step_length') AS step_length
+        FROM steps s
+        JOIN gait_readings g
+            ON g.timestamp >= s.start_timestamp AND g.timestamp <= s.timestamp
+        WHERE g.metric IN ('walking_speed', 'step_length')
+        GROUP BY s.step_id
+    `;
+}
+
 /** How long a packet's window ran, which is not how long it was moving. */
 const SPAN_BUCKET_SQL = `
     CASE
@@ -76,6 +139,8 @@ export interface StepBasePoint extends ConnectablePoint {
     fCadence: string; // cadence band, or Unknown
     fIntensity: string; // Sedentary | Moderate | Vigorous
     fSpan: string; // how long the packet's window ran
+    fSpeed: string; // walking speed band, or Not measured
+    fStride: string; // step length band, or Not measured
     dow: string;
     year: string;
     steps: number;
@@ -97,6 +162,10 @@ export interface StepBasePoint extends ConnectablePoint {
     runSteps: number;
     runActiveMins: number;
     runCadenceSpm: number | null;
+    /** Median of the gait readings taken in the window, km/h; null when none was. */
+    walkingSpeed: number | null;
+    /** Same, step length in cm. */
+    stepLength: number | null;
 }
 
 /**
@@ -106,6 +175,7 @@ export interface StepBasePoint extends ConnectablePoint {
  */
 export async function getStepBasePoints(): Promise<StepBasePoint[]> {
     const sql = `
+        WITH gait AS (${await gaitPerPacketSql()})
         SELECT
             step_id as stepId,
             CAST(epoch(DATE(timestamp)) * 1000 AS BIGINT) as x,
@@ -115,6 +185,10 @@ export async function getStepBasePoints(): Promise<StepBasePoint[]> {
             ${CADENCE_BUCKET_SQL} as fCadence,
             ${INTENSITY_BUCKET_SQL} as fIntensity,
             ${SPAN_BUCKET_SQL} as fSpan,
+            ${bandSql('gait.walking_speed', SPEED_BANDS)} as fSpeed,
+            ${bandSql('gait.step_length', STRIDE_BANDS)} as fStride,
+            gait.walking_speed as walkingSpeed,
+            gait.step_length as stepLength,
             CAST(DAYOFWEEK(timestamp) AS VARCHAR) as dow,
             CAST(YEAR(timestamp) AS VARCHAR) as year,
             CAST(steps AS INTEGER) as steps,
@@ -137,7 +211,8 @@ export async function getStepBasePoints(): Promise<StepBasePoint[]> {
                 WHEN COALESCE(running_active_seconds, 0) > 0
                 THEN CAST(running_steps / running_active_seconds * 60 AS DOUBLE)
             END as runCadenceSpm
-        FROM step_packets
+        FROM steps
+        LEFT JOIN gait USING (step_id)
         WHERE timestamp IS NOT NULL
         ORDER BY x ASC
     `;
@@ -165,6 +240,10 @@ export async function getStepBasePoints(): Promise<StepBasePoint[]> {
             fCadence: string;
             fIntensity: string;
             fSpan: string;
+            fSpeed: string;
+            fStride: string;
+            walkingSpeed: SqlNumber;
+            stepLength: SqlNumber;
         }>(sql);
         return result.map((row) => ({
             stepId: Number(row.stepId) || 0,
@@ -179,10 +258,14 @@ export async function getStepBasePoints(): Promise<StepBasePoint[]> {
                 cadenceSpm: row.cadenceSpm == null ? null : Number(row.cadenceSpm),
                 recordedAt: row.recordedAt,
                 startedAt: row.startedAt,
+                walkingSpeed: row.walkingSpeed == null ? null : Number(row.walkingSpeed),
+                stepLength: row.stepLength == null ? null : Number(row.stepLength),
             },
             fCadence: row.fCadence,
             fIntensity: row.fIntensity,
             fSpan: row.fSpan,
+            fSpeed: row.fSpeed,
+            fStride: row.fStride,
             dow: String(row.dow),
             year: String(row.year),
             steps: Number(row.steps) || 0,
@@ -196,6 +279,8 @@ export async function getStepBasePoints(): Promise<StepBasePoint[]> {
             runSteps: Number(row.runSteps) || 0,
             runActiveMins: Number(row.runActiveMins) || 0,
             runCadenceSpm: row.runCadenceSpm == null ? null : Number(row.runCadenceSpm),
+            walkingSpeed: row.walkingSpeed == null ? null : Number(row.walkingSpeed),
+            stepLength: row.stepLength == null ? null : Number(row.stepLength),
         }));
     } catch (error) {
         console.error('Failed to load step base points:', error);
@@ -209,7 +294,7 @@ export async function getStepsTimeDomain(): Promise<[number, number] | null> {
         SELECT
             CAST(epoch(DATE(MIN(timestamp))) * 1000 AS BIGINT) as lo,
             CAST(epoch(DATE(MAX(timestamp))) * 1000 AS BIGINT) as hi
-        FROM step_packets
+        FROM steps
         WHERE timestamp IS NOT NULL
     `;
 

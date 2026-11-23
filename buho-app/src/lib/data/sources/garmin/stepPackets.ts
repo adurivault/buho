@@ -4,9 +4,22 @@ import {
     localOffsetMinutes,
     makeTimestamp16Resolver,
 } from '#lib/data/formats/fit/units.ts';
+import type { HealthReading } from '#lib/types/health.ts';
 import type { StepPacket } from '#lib/types/steps.ts';
 import { STEP_ACTIVITY_TYPES, type StepSample } from './types';
 import { wallClock, wallClockDate } from '#lib/utils/wallClock.ts';
+
+/**
+ * A packet off the watch, which measures everything a phone leaves unknown: how
+ * much of the window was movement, how much of it running, what it burned.
+ */
+export type WatchStepPacket = StepPacket & {
+    activeSeconds: number;
+    distanceMeters: number;
+    calories: number;
+    runningSteps: number;
+    runningActiveSeconds: number;
+};
 
 const DAY_SECONDS = 86_400;
 
@@ -113,7 +126,7 @@ function since(sample: StepSample, previous: StepSample | null): CounterDelta {
  * wins — a counter only climbs within a day, so the lower one is a snapshot
  * taken mid-write.
  */
-export function buildStepPackets(samples: StepSample[]): StepPacket[] {
+export function buildStepPackets(samples: StepSample[]): WatchStepPacket[] {
     const series = new Map<string, Map<number, StepSample>>();
 
     for (const raw of samples) {
@@ -176,6 +189,7 @@ export function buildStepPackets(samples: StepSample[]): StepPacket[] {
         .map((m) => {
             const endMs = fitSecondsToMs(m.fitSeconds);
             return {
+                source: 'garmin',
                 timestamp: wallClock(endMs, m.offsetMinutes),
                 date: wallClockDate(endMs, m.offsetMinutes),
                 startTimestamp: wallClock(fitSecondsToMs(m.startSeconds), m.offsetMinutes),
@@ -190,7 +204,9 @@ export function buildStepPackets(samples: StepSample[]): StepPacket[] {
                 intensity: m.intensity,
                 runningSteps: m.runningSteps,
                 runningActiveSeconds: m.runningActiveSeconds,
-            } satisfies StepPacket;
+                // Settled against the heart-rate readings, see markWorn.
+                worn: null,
+            } satisfies WatchStepPacket;
         });
 
     return packets;
@@ -233,10 +249,38 @@ function add(into: Map<number, Merged>, part: Merged): void {
 }
 
 /** Every packet a set of monitoring files yielded. */
-export function stepPacketsFromFiles(files: DecodedFit[]): StepPacket[] {
+export function stepPacketsFromFiles(files: DecodedFit[]): WatchStepPacket[] {
     const samples: StepSample[] = [];
     for (const file of files) {
         for (const sample of collectStepSamples(file)) samples.push(sample);
     }
     return buildStepPackets(samples);
+}
+
+/**
+ * Flag each packet the watch was worn for: one with a heart-rate reading inside
+ * its window. A watch keeps writing its counters on a desk or on its charger,
+ * so a packet alone does not say it was on a wrist; a pulse does.
+ *
+ * An export without a single reading comes from a watch with no heart-rate
+ * sensor, which cannot tell — its packets are left null rather than all
+ * declared off the wrist.
+ */
+export function markWorn(packets: WatchStepPacket[], readings: HealthReading[]): WatchStepPacket[] {
+    const beats = readings
+        .filter((r) => r.metric === 'heart_rate')
+        .map((r) => r.timestamp)
+        .sort();
+    if (beats.length === 0) return packets;
+    return packets.map((packet) => {
+        // First reading at or after the window opens; worn if it falls inside.
+        let lo = 0;
+        let hi = beats.length;
+        while (lo < hi) {
+            const mid = (lo + hi) >> 1;
+            if (beats[mid] < packet.startTimestamp) lo = mid + 1;
+            else hi = mid;
+        }
+        return { ...packet, worn: lo < beats.length && beats[lo] <= packet.timestamp };
+    });
 }

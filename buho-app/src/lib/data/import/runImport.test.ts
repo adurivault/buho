@@ -10,6 +10,7 @@ const drop = vi.hoisted(() => ({
         activity: [] as unknown[],
         positions: [] as unknown[],
         steps: [] as unknown[],
+        gait: [] as unknown[],
         health: [] as unknown[],
         plays: [] as unknown[],
         unrecognisedFiles: 0,
@@ -66,6 +67,7 @@ beforeEach(() => {
         activity: [],
         positions: [],
         steps: [],
+        gait: [],
         health: [],
         plays: [],
         unrecognisedFiles: 0,
@@ -111,7 +113,7 @@ describe('runImport', () => {
     it('reports every module it filled, with the services behind each', async () => {
         drop.result.plays = [play('spotify'), play('deezer'), play('spotify')];
         drop.result.positions = [segment('garmin')];
-        drop.result.steps = [{}];
+        drop.result.steps = [{ source: 'garmin' }];
 
         const { h } = hooks();
         const { report, rowsByService } = await runImport([entry('a')], h);

@@ -18,11 +18,12 @@ import { PLAYS_TABLE } from './plays';
 import { LOCATION_SEGMENTS_TABLE } from './positions';
 import { STEP_PACKETS_TABLE } from './steps';
 import { HEALTH_READINGS_TABLE } from './health';
+import { GAIT_READINGS_TABLE } from './gait';
 import { MESSAGES_TABLE } from './messages';
 import { GOOGLE_ACTIVITY_TABLE } from './activity';
 import type { Play } from '#lib/types/play.ts';
 import type { LocationSegment } from '#lib/types/positions.ts';
-import type { StepPacket } from '#lib/types/steps.ts';
+import type { GaitReading, StepPacket } from '#lib/types/steps.ts';
 import type { HealthReading } from '#lib/types/health.ts';
 import type { MessageRow } from '#lib/types/messages.ts';
 import type { ActivityRow } from '#lib/types/googleActivity.ts';
@@ -103,6 +104,7 @@ const segment: LocationSegment = {
 };
 
 const packet: StepPacket = {
+    source: 'garmin',
     timestamp: '2024-05-01 10:15:00',
     date: '2024-05-01',
     startTimestamp: '2024-05-01 10:00:00',
@@ -115,6 +117,15 @@ const packet: StepPacket = {
     intensity: 2,
     runningSteps: 200,
     runningActiveSeconds: 60,
+    worn: true,
+};
+
+const gaitReading: GaitReading = {
+    source: 'apple-health',
+    timestamp: '2024-05-01 10:02:00',
+    date: '2024-05-01',
+    metric: 'walking_speed',
+    value: 4.7,
 };
 
 const reading: HealthReading = {
@@ -211,6 +222,7 @@ const CASES: Case[] = [
     caseOf(LOCATION_SEGMENTS_TABLE, segment, ['semantic_type', 'Home']),
     caseOf(STEP_PACKETS_TABLE, packet, ['running_steps', 200]),
     caseOf(HEALTH_READINGS_TABLE, reading, ['metric', 'heart_rate']),
+    caseOf(GAIT_READINGS_TABLE, gaitReading, ['metric', 'walking_speed']),
     caseOf(MESSAGES_TABLE, message, ['has_question', true], false),
     caseOf(GOOGLE_ACTIVITY_TABLE, activity, ['secondary', 'A channel']),
 ];

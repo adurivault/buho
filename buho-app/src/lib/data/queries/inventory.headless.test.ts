@@ -52,6 +52,7 @@ beforeEach(() => {
     conn.query('DROP TABLE IF EXISTS plays');
     conn.query('DROP TABLE IF EXISTS messages');
     conn.query('DROP TABLE IF EXISTS step_packets');
+    conn.query('DROP TABLE IF EXISTS health_readings');
 });
 
 describe('removing a source from a shared table', () => {
@@ -156,23 +157,29 @@ describe('removing a positions provider', () => {
     });
 });
 
-/** Garmin is the one export feeding two modules, so removing it reaches two tables. */
-describe('removing a source that fills two modules', () => {
-    it('clears both the tracks and the step counters', () => {
+/** Garmin feeds several modules, so removing it reaches several tables. */
+describe('removing a source that fills several modules', () => {
+    it('clears both its tracks and its step counters, and nothing else', () => {
         conn.query(`CREATE TABLE location_segments (
             source VARCHAR, timestamp TIMESTAMP, lat DOUBLE, lon DOUBLE, superseded BOOLEAN
         )`);
         conn.query(`INSERT INTO location_segments VALUES
             ('garmin', TIMESTAMP '2026-07-12 18:29:31', 46.89, 6.92, NULL),
             ('google-timeline', TIMESTAMP '2026-07-12 19:00:00', 48.85, 2.35, NULL)`);
-        conn.query('CREATE TABLE step_packets (timestamp TIMESTAMP, steps INTEGER)');
-        conn.query(`INSERT INTO step_packets VALUES (TIMESTAMP '2026-07-12 18:00:00', 412)`);
+        conn.query(
+            'CREATE TABLE step_packets (source VARCHAR, timestamp TIMESTAMP, steps INTEGER)'
+        );
+        conn.query(`INSERT INTO step_packets VALUES
+            ('garmin', TIMESTAMP '2026-07-12 18:00:00', 412),
+            ('apple-health', TIMESTAMP '2026-07-12 18:10:00', 380)`);
+        conn.query('CREATE TABLE health_readings (timestamp TIMESTAMP)');
 
         for (const store of storesFor('garmin')) removeFrom('garmin', store.table);
 
         expect(scalar('SELECT COUNT(*) AS n FROM location_segments')).toBe(1);
-        expect(
-            scalar(`SELECT COUNT(*) AS n FROM duckdb_tables() WHERE table_name = 'step_packets'`)
-        ).toBe(0);
+        expect(scalar(`SELECT COUNT(*) AS n FROM step_packets WHERE source = 'apple-health'`)).toBe(
+            1
+        );
+        expect(scalar('SELECT COUNT(*) AS n FROM step_packets')).toBe(1);
     });
 });

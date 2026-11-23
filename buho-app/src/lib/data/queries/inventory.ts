@@ -3,7 +3,13 @@ import type { Network } from '#lib/types/messages.ts';
 import { CATALOG_SOURCES } from '#lib/data/sources/catalog.ts';
 import type { ModuleId } from '#lib/data/modules.ts';
 import { storesFor } from '#lib/data/sources/storage.ts';
-import { countRows, deleteBy, dropTable, rebuildPositionsDerived } from '#lib/data/db/index.ts';
+import {
+    countRows,
+    deleteBy,
+    dropTable,
+    rebuildPositionsDerived,
+    rebuildStepsDerived,
+} from '#lib/data/db/index.ts';
 
 /**
  * What is currently loaded, source by source — and how to take one back out.
@@ -47,6 +53,7 @@ export async function getInventory(): Promise<LoadedSource[]> {
         const holdings: SourceHolding[] = [];
 
         for (const store of storesFor(source.id)) {
+            if (store.beside) continue;
             const rows = await countRows(store.table, store.scope);
             if (rows > 0) holdings.push({ module: store.module, rows });
         }
@@ -76,6 +83,7 @@ export async function removeSource(id: string): Promise<ModuleId[]> {
     const stores = storesFor(id);
     const touched = new Set<ModuleId>();
     let positionsChanged = false;
+    let stepsChanged = false;
 
     for (const store of stores) {
         if (store.scope) {
@@ -85,12 +93,15 @@ export async function removeSource(id: string): Promise<ModuleId[]> {
         }
         touched.add(store.module);
         if (store.table === 'location_segments') positionsChanged = true;
+        if (store.table === 'step_packets') stepsChanged = true;
     }
 
     // `superseded` is a statement about the whole table — which minutes a watch
     // covered — so removing either provider makes the stored flags wrong. See
     // rebuildPositionsDerived.
     if (positionsChanged) await rebuildPositionsDerived();
+    // Same for which recorder holds each hour of steps: see rebuildStepsDerived.
+    if (stepsChanged) await rebuildStepsDerived();
 
     return [...touched];
 }

@@ -21,6 +21,12 @@ export interface SourceStore {
      * when the whole table belongs to this source and nothing shares it.
      */
     scope?: { column: string; value: string };
+    /**
+     * Rows a module carries beside what it counts — Apple Health's gait readings
+     * next to its step packets. Taken out with the source like any other, but
+     * left out of the tallies, which count a module in one unit.
+     */
+    beside?: true;
 }
 
 const bySource = (value: string) => ({ column: 'source', value });
@@ -41,8 +47,12 @@ export const SOURCE_STORAGE: Record<string, SourceStore[]> = {
     // reach three tables.
     garmin: [
         { module: 'positions', table: 'location_segments', scope: bySource('garmin') },
-        { module: 'steps', table: 'step_packets' },
+        { module: 'steps', table: 'step_packets', scope: bySource('garmin') },
         { module: 'health', table: 'health_readings' },
+    ],
+    'apple-health': [
+        { module: 'steps', table: 'step_packets', scope: bySource('apple-health') },
+        { module: 'steps', table: 'gait_readings', beside: true },
     ],
     strava: [{ module: 'positions', table: 'location_segments', scope: bySource('strava') }],
 };

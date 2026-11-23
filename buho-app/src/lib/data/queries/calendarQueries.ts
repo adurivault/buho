@@ -65,8 +65,7 @@ const QUARTER_SQL = 'CAST(FLOOR((hour(timestamp) * 60 + minute(timestamp)) / 15)
 // ---------------------------------------------------------------------------
 
 interface YearTotal {
-    from:
-        'plays' | 'positions' | 'messages' | 'google_activity' | 'step_packets' | 'health_readings';
+    from: 'plays' | 'positions' | 'messages' | 'google_activity' | 'steps' | 'health_readings';
     total: string;
     where?: string;
 }
@@ -83,7 +82,7 @@ function yearTotal(module: ModuleId, measure: Measure): YearTotal {
         case 'activity':
             return { from: 'google_activity', total: 'COUNT(*)' };
         case 'steps':
-            return { from: 'step_packets', total: 'COALESCE(SUM(steps), 0)' };
+            return { from: 'steps', total: 'COALESCE(SUM(steps), 0)' };
         case 'health':
             return {
                 from: 'health_readings',
@@ -202,14 +201,14 @@ export async function getYearData(
     if (loaded.activity) {
         data.activity = await getDailyCounts('google_activity', 'COUNT(*)', range);
     }
-    if (loaded.steps) data.steps = await getDailyCounts('step_packets', 'SUM(steps)', range);
+    if (loaded.steps) data.steps = await getDailyCounts('steps', 'SUM(steps)', range);
     if (loaded.health) data.health = await getHeartRateZones(range, options.heartRateStops);
     return data;
 }
 
 /** One figure a day from one table, for the days in `range` that have rows. */
 async function getDailyCounts(
-    from: 'messages' | 'google_activity' | 'step_packets',
+    from: 'messages' | 'google_activity' | 'steps',
     figure: string,
     range: DateRange
 ): Promise<DayValue[]> {
@@ -344,7 +343,7 @@ const PER_QUARTER: Partial<
     positions: { from: 'positions', value: KM_SQL, where: PLACED_SQL },
     messages: { from: 'messages', value: 'COUNT(*)' },
     activity: { from: 'google_activity', value: 'COUNT(*)' },
-    steps: { from: 'step_packets', value: 'COALESCE(SUM(steps), 0)', least: WALKING_STEPS },
+    steps: { from: 'steps', value: 'COALESCE(SUM(steps), 0)', least: WALKING_STEPS },
     health: { from: 'health_readings', value: 'AVG(value)', where: `metric = '${HEART_RATE}'` },
 };
 
@@ -612,7 +611,7 @@ function toActivityEvent(row: Record<string, unknown>): ActivityEvent {
 
 const STEPS_SQL = `
     SELECT ${QUARTER_SQL} AS quarter, CAST(SUM(steps) AS DOUBLE) AS value
-    FROM step_packets
+    FROM steps
     WHERE date = CAST($1 AS DATE)
     GROUP BY 1
     ORDER BY 1

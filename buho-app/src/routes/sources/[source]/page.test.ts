@@ -87,7 +87,7 @@ describe('source detail page', () => {
 
         // The one export feeding three modules — all have to be reachable.
         for (const module of modulesFilledBy(garmin)) {
-            const links = screen.getAllByRole('link', { name: new RegExp(module.label) });
+            const links = screen.getAllByRole('link', { name: new RegExp(`^${module.label}`) });
             expect(links.length).toBe(1);
             expect(links[0]).toHaveAttribute('href', resolve(module.href));
             expect(screen.queryByText(module.table)).not.toBeInTheDocument();
