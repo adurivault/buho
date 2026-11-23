@@ -1,6 +1,5 @@
 <script lang="ts">
     import { page } from '$app/state';
-    import { trackEvent } from '#lib/analytics.ts';
 
     interface Tab {
         label: string;
@@ -21,7 +20,6 @@
             class="tab"
             class:active={isActive(tab.href)}
             aria-current={isActive(tab.href) ? 'page' : undefined}
-            onclick={() => trackEvent('source-nav', { to: tab.label.toLowerCase() })}
         >
             {tab.label}
         </a>

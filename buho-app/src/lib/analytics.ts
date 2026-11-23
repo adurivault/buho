@@ -52,26 +52,28 @@ type EventData = Record<string, string | number | boolean>;
  * and the dashboard never grows a near-duplicate name.
  */
 export type EventName =
-    // onboarding
-    | 'funnel-step'
-    // import funnel
-    | 'import-open'
-    | 'import-step'
-    | 'import-file-picked'
+    // The import funnel, one event per step so each one breaks down by
+    // `service` on its own: howto-open → export-open → import-start → upload.
+    //
+    // An export's guide was shown — onboarding, import dialog or /sources, which
+    // the page context tells apart.
+    | 'howto-open'
     // Left Buho for the provider's own export page — the step nothing after it
     // can observe, and the one the whole funnel waits on.
     | 'export-open'
+    // A drop, or a click on a file / folder button (the picker may still be
+    // cancelled). Starts and outcomes apart are the imports that killed the tab.
+    | 'import-start'
     | 'upload'
     | 'upload-error'
     // One service failed inside a drop the others may have survived — invisible
     // to `upload` / `upload-error`, which only see the drop's overall verdict.
     | 'parse-error'
-    | 'source-remove'
+    // The import dialog opened from inside a module.
+    | 'import-open'
     | 'geo-enrich'
     | 'demo-load'
-    | 'demo-clear'
-    // navigation & reading
-    | 'source-nav'
+    // reading
     | 'section-view'
     // exploration
     | 'filter-set'
@@ -94,8 +96,7 @@ export type EventName =
     | 'explore-anyway'
     // health
     | 'js-error'
-    | 'third-party-error'
-    | 'promise-rejection';
+    | 'third-party-error';
 
 /**
  * Which page an event was fired from, derived from the route.
@@ -258,6 +259,7 @@ export function initErrorTracking(): void {
         const name = event.error?.name ?? 'Error';
         const file = event.filename ? event.filename.split('/').pop() : 'unknown';
         trackThrottled('js-error', `${name}:${file}`, {
+            kind: 'error',
             name,
             file: file ?? 'unknown',
             // Enough to find it in the deployed chunk, which is reproducible from
@@ -266,10 +268,13 @@ export function initErrorTracking(): void {
         });
     });
 
+    // A rejected promise nobody caught is the same failure reached through an
+    // `await`, so the same event: `kind` tells the two apart. A rejection
+    // carries no file or position to send.
     window.addEventListener('unhandledrejection', (event) => {
         const reason = event.reason;
         const name = reason instanceof Error ? reason.name : 'UnhandledRejection';
-        trackThrottled('promise-rejection', name, { name });
+        trackThrottled('js-error', `rejection:${name}`, { kind: 'rejection', name });
     });
 }
 

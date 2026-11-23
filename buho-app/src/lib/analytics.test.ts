@@ -257,8 +257,27 @@ describe('error tracking', () => {
 
         expect(track).toHaveBeenCalledWith(
             'js-error',
-            expect.objectContaining({ name: 'RangeError', file: 'app.DEADBEEF.js', at: '12:34' })
+            expect.objectContaining({
+                kind: 'error',
+                name: 'RangeError',
+                file: 'app.DEADBEEF.js',
+                at: '12:34',
+            })
         );
+    });
+
+    it('reports an uncaught rejection as a crash of its own kind, without its message', () => {
+        const track = useTracker();
+        initErrorTracking();
+        window.dispatchEvent(
+            Object.assign(new Event('unhandledrejection'), { reason: new TypeError('secret') })
+        );
+
+        expect(track).toHaveBeenCalledWith(
+            'js-error',
+            expect.objectContaining({ kind: 'rejection', name: 'TypeError' })
+        );
+        expect(JSON.stringify(track.mock.calls)).not.toContain('secret');
     });
 
     it('never sends the message, which could hold user data', () => {

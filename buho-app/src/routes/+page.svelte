@@ -123,24 +123,6 @@
         else if (kind === 'export' && step.kind === 'drop' && step.source) pick(step.source);
         else if (kind === 'export') toPick();
     }
-
-    /**
-     * One event per step actually entered.
-     *
-     * Deliberately a plain variable rather than `$state`: it is a memo of what
-     * has already been reported, and making it reactive would put a write to a
-     * dependency inside the effect that reads it. Re-renders staying silent
-     * matters — `analytics.ts` caps events per page load, and the funnel is one
-     * page that never reloads.
-     */
-    let announced: string | null = null;
-    $effect(() => {
-        const source = step.kind === 'export' || step.kind === 'drop' ? step.source : undefined;
-        const key = `${step.kind}:${source?.id ?? ''}`;
-        if (announced === key) return;
-        announced = key;
-        trackEvent('funnel-step', { step: step.kind, service: source?.id ?? 'none' });
-    });
 </script>
 
 <Seo

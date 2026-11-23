@@ -96,7 +96,7 @@
         // Reading is left to the store, so a failure to unpack an archive is
         // reported like any other import error.
         const drop = collectDrop(event.dataTransfer);
-        trackEvent('import-file-picked', { pick: 'drop', surface: 'dialog' });
+        trackEvent('import-start', { pick: 'drop', surface: 'dialog' });
         close();
         await dataStore.handleImport(() => drop.read(), {
             pick: 'drop',
@@ -106,26 +106,24 @@
 
     function pickFile() {
         picked = 'file';
-        trackEvent('import-file-picked', { pick: 'file', surface: 'dialog' });
+        trackEvent('import-start', { pick: 'file', surface: 'dialog' });
         close();
         fileInput?.click();
     }
 
     function pickFolder() {
         picked = 'folder';
-        trackEvent('import-file-picked', { pick: 'folder', surface: 'dialog' });
+        trackEvent('import-start', { pick: 'folder', surface: 'dialog' });
         close();
         folderInput?.click();
     }
 
     function toggleHelp() {
         helpOpen = !helpOpen;
-        if (helpOpen) trackEvent('import-step', { step: 'help', service: helpFor });
     }
 
     function showGuide(id: string) {
         helpFor = id;
-        trackEvent('import-step', { step: 'help', service: id });
     }
 
     /**

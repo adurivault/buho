@@ -150,7 +150,6 @@
         progress = 0;
         error = null;
         result = null;
-        trackEvent('viz-share', { viz: vizId, format, outcome: 'start' });
 
         try {
             const captured = await capture(source, format, {

@@ -55,6 +55,15 @@
         trackEvent('export-open', { service: source.id, link });
     }
 
+    /**
+     * A guide put in front of someone, the step before `export-open`: the same
+     * `service`, and the same page context for where it was read. Again each
+     * time the dialog switches to another export's guide.
+     */
+    $effect(() => {
+        trackEvent('howto-open', { service: source.id });
+    });
+
     /** What makes a link look like one: saying where it lands. */
     function host(href: string): string {
         try {

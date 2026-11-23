@@ -24,6 +24,20 @@ describe('SourceHowTo', () => {
         delete (window as unknown as { umami?: unknown }).umami;
     });
 
+    /** The funnel step before leaving: which export's guide was put in front of someone. */
+    it('reports the guide it shows, and again for the next one', async () => {
+        const track = useTracker();
+        const { rerender } = render(SourceHowTo, { props: { source: sourceById('garmin') } });
+        expect(track).toHaveBeenCalledWith(
+            'howto-open',
+            expect.objectContaining({ service: 'garmin' })
+        );
+
+        await rerender({ source: sourceById('spotify') });
+        const opened = track.mock.calls.filter((call) => call[0] === 'howto-open');
+        expect(opened.map((call) => call[1].service)).toEqual(['garmin', 'spotify']);
+    });
+
     /**
      * The click that leaves for Garmin (or Spotify, or Takeout) is the last
      * thing we can see of an import that will only come back days later — every

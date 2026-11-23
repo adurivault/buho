@@ -100,7 +100,7 @@
         // reading is left to the store, where a failure to unpack an archive is
         // reported like any other import error.
         const drop = collectDrop(event.dataTransfer);
-        trackEvent('import-file-picked', { pick: 'drop', surface: 'window' });
+        trackEvent('import-start', { pick: 'drop', surface: 'window' });
         await dataStore.handleImport(() => drop.read(), {
             pick: 'drop',
             surface: 'window',

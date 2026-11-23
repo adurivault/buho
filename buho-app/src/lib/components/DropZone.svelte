@@ -62,7 +62,7 @@
 
         // Captured synchronously — the item list is emptied on the first await.
         const drop = collectDrop(event.dataTransfer);
-        trackEvent('import-file-picked', { pick: 'drop', surface });
+        trackEvent('import-start', { pick: 'drop', surface });
         await dataStore.handleImport(() => drop.read(), {
             pick: 'drop',
             surface,
@@ -81,7 +81,7 @@
 
     function pickFiles() {
         picked = 'file';
-        trackEvent('import-file-picked', { pick: 'file', surface });
+        trackEvent('import-start', { pick: 'file', surface });
         fileInput?.click();
     }
 
@@ -97,7 +97,7 @@
 
     function pickFolder() {
         picked = 'folder';
-        trackEvent('import-file-picked', { pick: 'folder', surface });
+        trackEvent('import-start', { pick: 'folder', surface });
         folderInput?.click();
     }
 </script>

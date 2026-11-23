@@ -383,8 +383,6 @@ class DataStore {
             this.lastImport = null;
             this.error = null;
             this.loading = null;
-
-            trackEvent('demo-clear', { module: module.id });
         } catch (e) {
             console.error(e);
             this.setError({
@@ -426,10 +424,6 @@ class DataStore {
             this.lastImport = null;
             this.error = null;
             this.loading = null;
-
-            // `id` is a catalog id — the same vocabulary `upload` reports under,
-            // so an export's imports and its removals sit on one axis.
-            trackEvent('source-remove', { service: id, modules: [...touched].sort().join('+') });
 
             // Whatever positions are left need re-enriching: the daily table has
             // just been dropped, and attribution ran over a row set that changed.
